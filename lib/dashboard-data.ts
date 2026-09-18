@@ -32,6 +32,14 @@ export type DashboardAlert = {
   severity: "critical" | "warning" | "info";
 };
 
+export type DashboardTraining = {
+  nextAt: string | null;
+  pendingAttendance: number;
+  personalRecorded: number;
+  personalAttended: number;
+  personalRate: number;
+};
+
 export type DashboardData = {
   members: number;
   teams: number;
@@ -45,6 +53,7 @@ export type DashboardData = {
   events: DashboardEvent[];
   integrations: DashboardIntegration[];
   alerts: DashboardAlert[];
+  training: DashboardTraining | null;
 };
 
 const emptyData: DashboardData = {
@@ -60,6 +69,7 @@ const emptyData: DashboardData = {
   events: [],
   integrations: [],
   alerts: [],
+  training: null,
 };
 
 function severityRank(value: string) {
@@ -69,7 +79,7 @@ function severityRank(value: string) {
 }
 
 export async function getDashboardData(
-  options: { includeSystem?: boolean } = {},
+  options: { includeSystem?: boolean; includeTraining?: boolean; memberId?: string | null } = {},
 ): Promise<DashboardData> {
   const sql = getDb();
   if (!sql) return emptyData;
@@ -247,6 +257,48 @@ export async function getDashboardData(
         `
       : [];
 
+    const trainingRows = options.includeTraining
+      ? await sql`
+          SELECT
+            (
+              SELECT scheduled_at
+              FROM training_sessions
+              WHERE scheduled_at>=now()
+                AND status<>'cancelled'
+              ORDER BY scheduled_at
+              LIMIT 1
+            ) AS next_training,
+            (
+              SELECT count(*)::int
+              FROM training_sessions
+              WHERE scheduled_at<now()
+                AND status<>'cancelled'
+                AND attendance_recorded_at IS NULL
+            ) AS pending_attendance,
+            (
+              SELECT count(s.id)::int
+              FROM training_attendance a
+              JOIN training_sessions s ON s.id=a.session_id
+              WHERE a.member_id=${options.memberId || null}::uuid
+                AND s.attendance_recorded_at IS NOT NULL
+                AND s.status='completed'
+                AND EXTRACT(YEAR FROM s.scheduled_at AT TIME ZONE 'Europe/Berlin')
+                    = EXTRACT(YEAR FROM CURRENT_DATE)
+            ) AS personal_recorded,
+            (
+              SELECT count(s.id)::int
+              FROM training_attendance a
+              JOIN training_sessions s ON s.id=a.session_id
+              WHERE a.member_id=${options.memberId || null}::uuid
+                AND a.attendance='present'
+                AND s.attendance_recorded_at IS NOT NULL
+                AND s.status='completed'
+                AND EXTRACT(YEAR FROM s.scheduled_at AT TIME ZONE 'Europe/Berlin')
+                    = EXTRACT(YEAR FROM CURRENT_DATE)
+            ) AS personal_attended
+        `
+      : [];
+
     const mergedAlerts = [...businessAlerts, ...systemAlerts]
       .sort((a, b) => {
         const severityDiff = severityRank(String(a.severity)) - severityRank(String(b.severity));
@@ -256,6 +308,9 @@ export async function getDashboardData(
       .slice(0, 8);
 
     const activityRow = activity[0] ?? {};
+    const trainingRow = trainingRows[0] ?? null;
+    const personalRecorded = Number(trainingRow?.personal_recorded ?? 0);
+    const personalAttended = Number(trainingRow?.personal_attended ?? 0);
 
     return {
       members: Number(members[0]?.count ?? 0),
@@ -295,6 +350,15 @@ export async function getDashboardData(
           ? String(row.severity) as DashboardAlert["severity"]
           : "info",
       })),
+      training: trainingRow ? {
+        nextAt: trainingRow.next_training ? String(trainingRow.next_training) : null,
+        pendingAttendance: Number(trainingRow.pending_attendance ?? 0),
+        personalRecorded,
+        personalAttended,
+        personalRate: personalRecorded
+          ? Math.round((personalAttended / personalRecorded) * 100)
+          : 0,
+      } : null,
     };
   } catch {
     return emptyData;
