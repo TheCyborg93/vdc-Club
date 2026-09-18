@@ -6,6 +6,7 @@ export type Permission =
   | "meetings.read" | "meetings.write"
   | "resolutions.read" | "resolutions.write"
   | "finance.read" | "finance.write"
+  | "sponsors.read" | "sponsors.write"
   | "documents.read" | "documents.write"
   | "statistics.read"
   | "settings.manage";
@@ -15,28 +16,31 @@ const rolePermissions: Record<string, Permission[] | ["*"]> = {
   board: [
     "members.read", "teams.read", "tasks.read", "tasks.write",
     "calendar.read", "meetings.read", "resolutions.read",
-    "documents.read", "statistics.read",
+    "sponsors.read", "documents.read", "statistics.read",
   ],
   chair: [
     "members.read", "members.write", "teams.read", "teams.write",
     "tasks.read", "tasks.write", "calendar.read", "calendar.write",
     "meetings.read", "meetings.write", "resolutions.read", "resolutions.write",
-    "finance.read", "documents.read", "documents.write", "statistics.read",
+    "finance.read", "sponsors.read", "sponsors.write",
+    "documents.read", "documents.write", "statistics.read",
   ],
   vice_chair: [
     "members.read", "members.write", "teams.read", "teams.write",
     "tasks.read", "tasks.write", "calendar.read", "calendar.write",
     "meetings.read", "meetings.write", "resolutions.read", "resolutions.write",
+    "sponsors.read", "sponsors.write",
     "documents.read", "documents.write", "statistics.read",
   ],
   treasurer: [
     "members.read", "calendar.read", "meetings.read",
-    "finance.read", "finance.write", "documents.read", "documents.write",
+    "finance.read", "finance.write", "sponsors.read", "sponsors.write",
+    "documents.read", "documents.write",
   ],
   secretary: [
     "members.read", "tasks.read", "tasks.write", "calendar.read", "calendar.write",
     "meetings.read", "meetings.write", "resolutions.read", "resolutions.write",
-    "documents.read", "documents.write",
+    "sponsors.read", "documents.read", "documents.write",
   ],
   sport_director: [
     "members.read", "teams.read", "teams.write", "tasks.read", "tasks.write",
