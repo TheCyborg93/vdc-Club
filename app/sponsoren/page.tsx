@@ -75,7 +75,7 @@ export default async function SponsorsPage({
       {params.error && (
         <div className="form-error">
           {params.error==="sponsor_delete"
-            ? "Dieser Sponsor kann nicht endgültig gelöscht werden. Nur Kontakte/Inaktive ohne verknüpfte Dokumente sind löschbar."
+            ? "Dieser Sponsor kann nicht in den Papierkorb verschoben werden. Nur Kontakte oder inaktive Sponsoren ohne verknüpfte Dokumente sind löschbar."
             : "Die Sponsorendaten konnten nicht gespeichert werden."}
         </div>
       )}
