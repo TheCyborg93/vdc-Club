@@ -3,7 +3,6 @@ import { notFound } from "next/navigation";
 import { getDb } from "@/lib/db";
 import { hasPermission, requirePermission } from "@/lib/permissions";
 import {
-import { meetingStatusLabel } from "@/lib/ui-labels";
   addAgendaItemAction,
   addAttendeeAction,
   createResolutionFromAgendaAction,
@@ -16,6 +15,7 @@ import { meetingStatusLabel } from "@/lib/ui-labels";
 } from "@/app/sitzungen/actions";
 import { moveToTrashAction } from "@/app/admin/papierkorb/actions";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
+import { meetingStatusLabel } from "@/lib/ui-labels";
 
 const attendanceLabels: Record<string, string> = {
   invited: "Eingeladen",
