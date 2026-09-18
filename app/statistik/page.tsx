@@ -32,12 +32,14 @@ export default async function StatisticsPage() {
             (SELECT count(*) FROM members WHERE status='active')::int AS members,
             (SELECT count(*) FROM teams WHERE status='active')::int AS teams,
             (SELECT count(*) FROM club_events
-             WHERE source='vdc_turnier'
+             WHERE deleted_at IS NULL
+               AND source='vdc_turnier'
                AND EXTRACT(YEAR FROM starts_at AT TIME ZONE 'Europe/Berlin')=EXTRACT(YEAR FROM CURRENT_DATE))::int AS tournaments,
             (SELECT count(*) FROM training_sessions
-             WHERE status<>'cancelled'
+             WHERE deleted_at IS NULL
+               AND status<>'cancelled'
                AND EXTRACT(YEAR FROM scheduled_at AT TIME ZONE 'Europe/Berlin')=EXTRACT(YEAR FROM CURRENT_DATE))::int AS trainings,
-            (SELECT count(*) FROM club_events WHERE source='vdc_tc' AND event_type='league')::int AS league_matches
+            (SELECT count(*) FROM club_events WHERE deleted_at IS NULL AND source='vdc_tc' AND event_type='league')::int AS league_matches
         `,
         sql`
           SELECT
@@ -94,7 +96,8 @@ export default async function StatisticsPage() {
           FROM training_sessions s
           LEFT JOIN training_attendance a ON a.session_id=s.id
           LEFT JOIN members m ON m.id=a.member_id
-          WHERE s.scheduled_at < now()
+          WHERE s.deleted_at IS NULL
+            AND s.scheduled_at < now()
           GROUP BY s.id
           ORDER BY s.scheduled_at DESC
           LIMIT 12
