@@ -4,12 +4,12 @@ import { getDb } from "@/lib/db";
 import { hasPermission, requirePermission } from "@/lib/permissions";
 import {
   addTeamMemberAction,
-  deleteUnusedTeamAction,
   removeTeamMemberAction,
   setTeamCaptainAction,
   updateTeamAction,
 } from "@/app/mannschaften/actions";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
+import { moveToTrashAction } from "@/app/admin/papierkorb/actions";
 
 export const dynamic = "force-dynamic";
 
@@ -51,6 +51,7 @@ export default async function TeamDetailPage({
         external_source,external_id
       FROM teams
       WHERE id = ${id}::uuid
+        AND deleted_at IS NULL
       LIMIT 1
     `,
     sql`
@@ -214,14 +215,14 @@ export default async function TeamDetailPage({
               {canWrite && <button className="primary-button">Änderungen speichern</button>}
             </form>
 
-            {isAdmin && roster.length===0 && !team.external_source && !team.external_id && (
-              <form action={deleteUnusedTeamAction} className="destructive-inline-form">
+            {canWrite && roster.length===0 && !team.external_source && !team.external_id && (
+              <form action={moveToTrashAction} className="destructive-inline-form">
+                <input type="hidden" name="type" value="team" />
                 <input type="hidden" name="id" value={id} />
                 <ConfirmSubmitButton
-                  message={"Mannschaft „"+String(team.name)+"“ endgültig löschen? Das ist nur möglich, wenn keinerlei Kader-, Termin- oder Importhistorie existiert."}
-                  requireText="LÖSCHEN"
+                  message={"Mannschaft „"+String(team.name)+"“ in den Papierkorb verschieben? Kader-, Termin- oder Importhistorie schützt die Mannschaft automatisch."}
                 >
-                  Mannschaft endgültig löschen
+                  Mannschaft löschen
                 </ConfirmSubmitButton>
               </form>
             )}
