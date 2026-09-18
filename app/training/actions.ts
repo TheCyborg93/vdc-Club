@@ -129,7 +129,7 @@ export async function resetTrainingAttendanceAction(formData: FormData) {
   const session=rows[0];
 
   if (!session || !session.attendance_recorded_at) {
-    redirect(${/training/${sessionId}?error=session}$);
+    redirect(`/training/${sessionId}?error=session`);
   }
 
   await sql`DELETE FROM training_attendance WHERE session_id=${sessionId}::uuid`;
@@ -162,9 +162,8 @@ export async function resetTrainingAttendanceAction(formData: FormData) {
   await writeAudit(actor.id,"training.attendance_reset","training_session",sessionId);
 
   revalidateTraining(sessionId);
-  redirect(${/training/${sessionId}?reset=1}$);
+  redirect(`/training/${sessionId}?reset=1`);
 }
-
 export async function cancelTrainingSessionAction(formData: FormData) {
   const actor = await requirePermission("training.write");
   const sql = getDb();
