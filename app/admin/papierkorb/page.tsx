@@ -46,7 +46,7 @@ export default async function TrashPage({
   const sql=getDb();
   const params=await searchParams;
 
-  const [tasks,documents,events,meetings,trainings]=sql
+  const [tasks,documents,events,meetings,trainings,pauses,seasons,sponsors,teams]=sql
     ? await Promise.all([
         sql`
           SELECT
@@ -126,8 +126,69 @@ export default async function TrashPage({
           WHERE s.deleted_at IS NOT NULL
           ORDER BY s.deleted_at DESC
         `,
+        sql`
+          SELECT
+            b.id::text,
+            'training_pause' AS type,
+            'Trainingspause' AS title,
+            to_char(b.starts_on,'DD.MM.YYYY') || ' – ' || to_char(b.ends_on,'DD.MM.YYYY') AS detail,
+            b.deleted_at,
+            b.delete_reason,
+            u.display_name AS deleted_by_name
+          FROM training_blackouts b
+          LEFT JOIN app_users u ON u.id=b.deleted_by
+          WHERE b.deleted_at IS NOT NULL
+          ORDER BY b.deleted_at DESC
+        `,
+        sql`
+          SELECT
+            s.id::text,
+            'training_season' AS type,
+            s.label AS title,
+            to_char(s.starts_on,'DD.MM.YYYY') || ' – ' || to_char(s.ends_on,'DD.MM.YYYY') AS detail,
+            s.deleted_at,
+            s.delete_reason,
+            u.display_name AS deleted_by_name
+          FROM training_seasons s
+          LEFT JOIN app_users u ON u.id=s.deleted_by
+          WHERE s.deleted_at IS NOT NULL
+          ORDER BY s.deleted_at DESC
+        `,
+        sql`
+          SELECT
+            s.id::text,
+            'sponsor' AS type,
+            s.name AS title,
+            CASE
+              WHEN s.status='lead' THEN 'Kontakt'
+              WHEN s.status='inactive' THEN 'Inaktiv'
+              ELSE s.status
+            END AS detail,
+            s.deleted_at,
+            s.delete_reason,
+            u.display_name AS deleted_by_name
+          FROM sponsors s
+          LEFT JOIN app_users u ON u.id=s.deleted_by
+          WHERE s.deleted_at IS NOT NULL
+          ORDER BY s.deleted_at DESC
+        `,
+        sql`
+          SELECT
+            t.id::text,
+            'team' AS type,
+            COALESCE(t.short_name,t.name) AS title,
+            COALESCE(t.league,'Mannschaft') ||
+              CASE WHEN t.season IS NOT NULL THEN ' · ' || t.season ELSE '' END AS detail,
+            t.deleted_at,
+            t.delete_reason,
+            u.display_name AS deleted_by_name
+          FROM teams t
+          LEFT JOIN app_users u ON u.id=t.deleted_by
+          WHERE t.deleted_at IS NOT NULL
+          ORDER BY t.deleted_at DESC
+        `,
       ])
-    : [[],[],[],[],[]];
+    : [[],[],[],[],[],[],[],[],[]];
 
   const groups:{label:string;items:TrashItem[]}[]=[
     {label:"Aufgaben",items:tasks as TrashItem[]},
@@ -135,6 +196,10 @@ export default async function TrashPage({
     {label:"Kalendertermine",items:events as TrashItem[]},
     {label:"Sitzungen",items:meetings as TrashItem[]},
     {label:"Sondertrainings",items:trainings as TrashItem[]},
+    {label:"Trainingspausen",items:pauses as TrashItem[]},
+    {label:"Trainingssaisons",items:seasons as TrashItem[]},
+    {label:"Sponsoren",items:sponsors as TrashItem[]},
+    {label:"Mannschaften",items:teams as TrashItem[]},
   ];
   const total=groups.reduce((sum,group)=>sum+group.items.length,0);
 
