@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { getDb } from "@/lib/db";
 import { requirePermission } from "@/lib/permissions";
 import { writeAudit } from "@/lib/audit";
+import { ensureTrainingSchedule } from "@/lib/training";
 import {
   deleteDocumentObject,
   isDocumentStorageConfigured,
@@ -23,7 +24,10 @@ function refreshAll() {
     "/kalender",
     "/sitzungen",
     "/training",
+    "/training/auswertung",
     "/statistik",
+    "/sponsoren",
+    "/mannschaften",
     "/suche",
     "/hinweise",
     "/admin/daten",
@@ -191,6 +195,150 @@ export async function moveToTrashAction(formData:FormData) {
     redirect("/training?deleted=1");
   }
 
+  if (type==="training_pause") {
+    const actor=await requirePermission("training.write");
+    const rows=await sql`
+      SELECT id::text,starts_on,ends_on,reason
+      FROM training_blackouts
+      WHERE id=${id}::uuid AND deleted_at IS NULL
+      LIMIT 1
+    `;
+    const pause=rows[0];
+    if (!pause) redirect("/training?error=pause");
+
+    await sql`
+      UPDATE training_sessions
+      SET status='planned',notes=NULL
+      WHERE source='schedule'
+        AND deleted_at IS NULL
+        AND notes LIKE ${"pause:" + id + "|%"}
+    `;
+
+    await sql`
+      UPDATE club_events e
+      SET
+        title='Vereinstraining',
+        description='Regeltraining · Beginn 19:00 Uhr · Ende offen',
+        updated_at=now()
+      FROM training_sessions s
+      WHERE s.event_id=e.id
+        AND s.deleted_at IS NULL
+        AND e.deleted_at IS NULL
+        AND s.source='schedule'
+        AND (s.scheduled_at AT TIME ZONE 'Europe/Berlin')::date
+            BETWEEN ${String(pause.starts_on)}::date AND ${String(pause.ends_on)}::date
+    `;
+
+    await sql`
+      UPDATE training_blackouts
+      SET deleted_at=now(),deleted_by=${actor.id}::uuid,delete_reason=${reason}
+      WHERE id=${id}::uuid
+    `;
+
+    await ensureTrainingSchedule(365);
+    await writeAudit(actor.id,"trash.moved","training_pause",id,{
+      startsOn:String(pause.starts_on),
+      endsOn:String(pause.ends_on),
+    });
+    refreshAll();
+    redirect("/training?pause_removed=1");
+  }
+
+  if (type==="training_season") {
+    const actor=await requirePermission("training.write");
+    const rows=await sql`
+      SELECT
+        s.id::text,s.label,s.is_active,
+        EXISTS(
+          SELECT 1 FROM teams t
+          WHERE t.deleted_at IS NULL AND t.season=s.label
+        ) AS has_teams
+      FROM training_seasons s
+      WHERE s.id=${id}::uuid AND s.deleted_at IS NULL
+      LIMIT 1
+    `;
+    const season=rows[0];
+    if (!season || season.is_active || season.has_teams) {
+      redirect(`/training/auswertung?mode=season&season=${id}&error=season_delete`);
+    }
+
+    await sql`
+      UPDATE training_seasons
+      SET deleted_at=now(),deleted_by=${actor.id}::uuid,delete_reason=${reason}
+      WHERE id=${id}::uuid
+    `;
+
+    await writeAudit(actor.id,"trash.moved","training_season",id,{label:String(season.label)});
+    refreshAll();
+    redirect("/training/auswertung?mode=season&deleted=1");
+  }
+
+  if (type==="sponsor") {
+    const actor=await requirePermission("sponsors.write");
+    const rows=await sql`
+      SELECT
+        s.id::text,s.name,s.status,
+        EXISTS(
+          SELECT 1 FROM documents d
+          WHERE d.sponsor_id=s.id AND d.deleted_at IS NULL
+        ) AS has_documents
+      FROM sponsors s
+      WHERE s.id=${id}::uuid AND s.deleted_at IS NULL
+      LIMIT 1
+    `;
+    const sponsor=rows[0];
+    if (
+      !sponsor ||
+      !["lead","inactive"].includes(String(sponsor.status)) ||
+      sponsor.has_documents
+    ) {
+      redirect("/sponsoren?error=sponsor_delete");
+    }
+
+    await sql`
+      UPDATE sponsors
+      SET deleted_at=now(),deleted_by=${actor.id}::uuid,delete_reason=${reason}
+      WHERE id=${id}::uuid
+    `;
+    await writeAudit(actor.id,"trash.moved","sponsor",id,{name:String(sponsor.name)});
+    refreshAll();
+    redirect("/sponsoren?deleted=1");
+  }
+
+  if (type==="team") {
+    const actor=await requirePermission("teams.write");
+    const rows=await sql`
+      SELECT
+        t.id::text,t.name,t.external_source,t.external_id,
+        EXISTS(SELECT 1 FROM team_members tm WHERE tm.team_id=t.id) AS has_members,
+        EXISTS(SELECT 1 FROM club_events e WHERE e.team_id=t.id) AS has_events,
+        EXISTS(SELECT 1 FROM integration_entity_links l WHERE l.local_id=t.id) AS has_integration
+      FROM teams t
+      WHERE t.id=${id}::uuid AND t.deleted_at IS NULL
+      LIMIT 1
+    `;
+    const team=rows[0];
+    if (
+      !team ||
+      team.external_source ||
+      team.external_id ||
+      team.has_members ||
+      team.has_events ||
+      team.has_integration
+    ) {
+      redirect(`/mannschaften/${id}?error=team_delete`);
+    }
+
+    await sql`
+      UPDATE teams
+      SET deleted_at=now(),deleted_by=${actor.id}::uuid,delete_reason=${reason}
+      WHERE id=${id}::uuid
+    `;
+    await writeAudit(actor.id,"trash.moved","team",id,{name:String(team.name)});
+    refreshAll();
+    redirect("/mannschaften?deleted=1");
+  }
+
   redirect("/?error=invalid_delete");
 }
 
@@ -221,6 +369,54 @@ export async function restoreTrashItemAction(formData:FormData) {
     if (rows[0]?.event_id) {
       await sql`UPDATE club_events SET deleted_at=NULL,deleted_by=NULL,delete_reason=NULL WHERE id=${String(rows[0].event_id)}::uuid`;
     }
+  } else if (type==="training_pause") {
+    const rows=await sql`
+      SELECT id::text,starts_on,ends_on,reason
+      FROM training_blackouts
+      WHERE id=${id}::uuid AND deleted_at IS NOT NULL
+      LIMIT 1
+    `;
+    const pause=rows[0];
+    if (!pause) redirect("/admin/papierkorb?error=missing");
+
+    await sql`
+      UPDATE training_blackouts
+      SET deleted_at=NULL,deleted_by=NULL,delete_reason=NULL
+      WHERE id=${id}::uuid
+    `;
+
+    await sql`
+      UPDATE training_sessions
+      SET
+        status='cancelled',
+        notes=${"pause:" + id + "|"} || COALESCE(${pause.reason ? String(pause.reason) : null},'Trainingspause'),
+        attendance_recorded_at=NULL,
+        completed_at=NULL
+      WHERE source='schedule'
+        AND deleted_at IS NULL
+        AND (scheduled_at AT TIME ZONE 'Europe/Berlin')::date
+            BETWEEN ${String(pause.starts_on)}::date AND ${String(pause.ends_on)}::date
+        AND scheduled_at>=now()
+    `;
+
+    await sql`
+      UPDATE club_events e
+      SET
+        title='Vereinstraining · PAUSE',
+        description=COALESCE(${pause.reason ? String(pause.reason) : null},'Trainingspause'),
+        updated_at=now()
+      FROM training_sessions s
+      WHERE s.event_id=e.id
+        AND s.deleted_at IS NULL
+        AND e.deleted_at IS NULL
+        AND s.notes LIKE ${"pause:" + id + "|%"}
+    `;
+  } else if (type==="training_season") {
+    await sql`UPDATE training_seasons SET deleted_at=NULL,deleted_by=NULL,delete_reason=NULL WHERE id=${id}::uuid`;
+  } else if (type==="sponsor") {
+    await sql`UPDATE sponsors SET deleted_at=NULL,deleted_by=NULL,delete_reason=NULL WHERE id=${id}::uuid`;
+  } else if (type==="team") {
+    await sql`UPDATE teams SET deleted_at=NULL,deleted_by=NULL,delete_reason=NULL WHERE id=${id}::uuid`;
   } else {
     redirect("/admin/papierkorb?error=invalid");
   }
@@ -316,6 +512,55 @@ export async function permanentlyDeleteTrashItemAction(formData:FormData) {
           AND NOT EXISTS(SELECT 1 FROM training_sessions WHERE event_id=club_events.id)
       `;
     }
+  } else if (type==="training_pause") {
+    const rows=await sql`SELECT id::text FROM training_blackouts WHERE id=${id}::uuid AND deleted_at IS NOT NULL LIMIT 1`;
+    if (!rows.length) redirect("/admin/papierkorb?error=missing");
+    await sql`DELETE FROM training_blackouts WHERE id=${id}::uuid AND deleted_at IS NOT NULL`;
+  } else if (type==="training_season") {
+    const rows=await sql`
+      SELECT
+        s.id::text,s.is_active,
+        EXISTS(SELECT 1 FROM teams t WHERE t.season=s.label) AS has_teams
+      FROM training_seasons s
+      WHERE s.id=${id}::uuid AND s.deleted_at IS NOT NULL
+      LIMIT 1
+    `;
+    const season=rows[0];
+    if (!season || season.is_active || season.has_teams) redirect("/admin/papierkorb?error=protected");
+    await sql`DELETE FROM training_seasons WHERE id=${id}::uuid AND deleted_at IS NOT NULL`;
+  } else if (type==="sponsor") {
+    const rows=await sql`
+      SELECT s.id::text,
+        EXISTS(SELECT 1 FROM documents d WHERE d.sponsor_id=s.id) AS has_documents
+      FROM sponsors s
+      WHERE s.id=${id}::uuid AND s.deleted_at IS NOT NULL
+      LIMIT 1
+    `;
+    if (!rows.length || rows[0].has_documents) redirect("/admin/papierkorb?error=protected");
+    await sql`DELETE FROM sponsors WHERE id=${id}::uuid AND deleted_at IS NOT NULL`;
+  } else if (type==="team") {
+    const rows=await sql`
+      SELECT
+        t.id::text,t.external_source,t.external_id,
+        EXISTS(SELECT 1 FROM team_members tm WHERE tm.team_id=t.id) AS has_members,
+        EXISTS(SELECT 1 FROM club_events e WHERE e.team_id=t.id) AS has_events,
+        EXISTS(SELECT 1 FROM integration_entity_links l WHERE l.local_id=t.id) AS has_integration
+      FROM teams t
+      WHERE t.id=${id}::uuid AND t.deleted_at IS NOT NULL
+      LIMIT 1
+    `;
+    const team=rows[0];
+    if (
+      !team ||
+      team.external_source ||
+      team.external_id ||
+      team.has_members ||
+      team.has_events ||
+      team.has_integration
+    ) {
+      redirect("/admin/papierkorb?error=protected");
+    }
+    await sql`DELETE FROM teams WHERE id=${id}::uuid AND deleted_at IS NOT NULL`;
   } else {
     redirect("/admin/papierkorb?error=invalid");
   }
