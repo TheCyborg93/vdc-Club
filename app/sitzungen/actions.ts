@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { getDb } from "@/lib/db";
 import { requirePermission } from "@/lib/permissions";
 import { hasPermission } from "@/lib/access";
+import { writeAudit } from "@/lib/audit";
 
 function value(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
@@ -144,26 +145,73 @@ export async function updateAttendanceAction(formData: FormData) {
 }
 
 export async function updateMeetingStatusAction(formData: FormData) {
-  await requirePermission("meetings.write");
-  const sql = getDb();
+  const actor=await requirePermission("meetings.write");
+  const sql=getDb();
   if (!sql) redirect("/sitzungen?error=database");
 
-  const meetingId = value(formData, "meetingId");
-  const statusRaw = value(formData, "status");
-  const status = ["planned", "running", "completed", "cancelled"].includes(statusRaw)
+  const meetingId=value(formData,"meetingId");
+  const statusRaw=value(formData,"status");
+  const status=["planned","running","completed","cancelled"].includes(statusRaw)
     ? statusRaw
     : "planned";
+
+  const before=await sql`
+    SELECT id::text,title,status,starts_at
+    FROM meetings
+    WHERE id=${meetingId}::uuid
+    LIMIT 1
+  `;
 
   await sql`
     UPDATE meetings
     SET
-      status = ${status},
-      ended_at = CASE WHEN ${status} = 'completed' THEN now() ELSE ended_at END
-    WHERE id = ${meetingId}::uuid
+      status=${status},
+      ended_at=CASE
+        WHEN ${status}='completed' THEN COALESCE(ended_at,now())
+        WHEN ${status}<>'completed' THEN NULL
+        ELSE ended_at
+      END
+    WHERE id=${meetingId}::uuid
   `;
+
+  if (status==="completed" && before[0]) {
+    await sql`
+      INSERT INTO documents (
+        title,category,storage_type,storage_ref,status,
+        document_date,meeting_id,notes
+      )
+      SELECT
+        'Protokoll · ' || m.title,
+        'Protokoll',
+        'internal',
+        '/sitzungen/' || m.id::text || '/protokoll',
+        'active',
+        (m.starts_at AT TIME ZONE 'Europe/Berlin')::date,
+        m.id,
+        'Automatisch beim Beenden der Sitzung registriert.'
+      FROM meetings m
+      WHERE m.id=${meetingId}::uuid
+        AND NOT EXISTS (
+          SELECT 1
+          FROM documents d
+          WHERE d.meeting_id=m.id
+            AND d.category='Protokoll'
+        )
+    `;
+  }
+
+  await writeAudit(actor.id,"meeting.status_changed","meeting",meetingId,{
+    title:String(before[0]?.title ?? ""),
+    before:String(before[0]?.status ?? ""),
+    after:status,
+    protocolRegistered:status==="completed",
+  });
 
   revalidatePath(`/sitzungen/${meetingId}`);
   revalidatePath("/sitzungen");
+  revalidatePath("/dokumente");
+  revalidatePath("/archiv");
+  revalidatePath("/");
   redirect(`/sitzungen/${meetingId}`);
 }
 
