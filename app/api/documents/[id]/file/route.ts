@@ -40,6 +40,7 @@ export async function GET(
       title
     FROM documents
     WHERE id=${id}::uuid
+      AND deleted_at IS NULL
     LIMIT 1
   `;
 
