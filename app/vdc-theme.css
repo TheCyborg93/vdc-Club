@@ -3070,3 +3070,70 @@ body{
   .document-filter-form label:first-child{grid-column:auto}
   .archive-row{align-items:flex-start;display:grid}
 }
+
+
+/* ---- Role-focused dashboard ------------------------------ */
+.role-focus-strip{
+  display:flex;
+  justify-content:space-between;
+  gap:16px;
+  align-items:center;
+  padding:13px 15px;
+  border:1px solid rgba(196,51,30,.14);
+  border-radius:12px;
+  background:
+    linear-gradient(90deg,rgba(196,51,30,.065),transparent 42%),
+    #18181c;
+}
+.role-focus-strip>div strong,
+.role-focus-strip>div p{display:block}
+.role-focus-strip>div strong{
+  margin-top:4px;
+  color:#f0ece7;
+  font-size:12px;
+  font-weight:900;
+}
+.role-focus-strip>div p{
+  margin:3px 0 0;
+  color:#777378;
+  font-size:8px;
+}
+.role-focus-strip nav{
+  display:flex;
+  gap:6px;
+  flex-wrap:wrap;
+  justify-content:flex-end;
+}
+.role-focus-strip nav a{
+  display:flex;
+  gap:8px;
+  align-items:center;
+  padding:7px 9px;
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:8px;
+  background:#212125;
+  color:#bbb6b1;
+  font-size:8px;
+  font-weight:850;
+}
+.role-focus-strip nav a:hover{
+  border-color:rgba(196,51,30,.22);
+  color:#fff;
+}
+.role-focus-strip nav span{color:#d36854}
+
+@media(max-width:720px){
+  .role-focus-strip{display:grid}
+  .role-focus-strip nav{justify-content:flex-start}
+}
+
+@media(max-width:480px){
+  .topbar-search{
+    width:110px;
+    border-radius:999px;
+  }
+  .topbar-search input{
+    display:block;
+    width:70px;
+  }
+}
