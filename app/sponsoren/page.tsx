@@ -113,27 +113,29 @@ export default async function SponsorsPage({
                   </div>
                 )}
                 {canWrite && (
-                  <form action={updateSponsorStatusAction} className="sponsor-status-form">
-                    <input type="hidden" name="id" value={String(s.id)} />
-                    <select name="status" defaultValue={String(s.status)}>
-                      <option value="lead">Kontakt</option>
-                      <option value="active">Aktiv</option>
-                      <option value="expired">Abgelaufen</option>
-                      <option value="inactive">Inaktiv</option>
-                    </select>
-                    <button className="mini-button">Status speichern</button>
-                  </form>
-                  {isAdmin && ["lead","inactive"].includes(String(s.status)) && (
-                    <form action={deleteUnusedSponsorAction}>
+                  <>
+                    <form action={updateSponsorStatusAction} className="sponsor-status-form">
                       <input type="hidden" name="id" value={String(s.id)} />
-                      <ConfirmSubmitButton
-                        message={"Sponsor „"+String(s.name)+"“ endgültig löschen? Das funktioniert nur ohne verknüpfte Dokumente."}
-                        requireText="LÖSCHEN"
-                      >
-                        Endgültig löschen
-                      </ConfirmSubmitButton>
+                      <select name="status" defaultValue={String(s.status)}>
+                        <option value="lead">Kontakt</option>
+                        <option value="active">Aktiv</option>
+                        <option value="expired">Abgelaufen</option>
+                        <option value="inactive">Inaktiv</option>
+                      </select>
+                      <button className="mini-button">Status speichern</button>
                     </form>
-                  )}
+                    {isAdmin && ["lead","inactive"].includes(String(s.status)) && (
+                      <form action={deleteUnusedSponsorAction} className="destructive-inline-form">
+                        <input type="hidden" name="id" value={String(s.id)} />
+                        <ConfirmSubmitButton
+                          message={"Sponsor „"+String(s.name)+"“ endgültig löschen? Das funktioniert nur ohne verknüpfte Dokumente."}
+                          requireText="LÖSCHEN"
+                        >
+                          Endgültig löschen
+                        </ConfirmSubmitButton>
+                      </form>
+                    )}
+                  </>
                 )}
               </article>
             ))}
