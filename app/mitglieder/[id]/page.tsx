@@ -80,7 +80,7 @@ export default async function MemberDetailPage({
   const query = await searchParams;
 
   const [memberRows, roleRows, userRows, feeRows, historyRows] = await Promise.all([
-    sql\`
+    sql`
       SELECT
         m.id::text,
         m.member_number,
@@ -101,12 +101,12 @@ export default async function MemberDetailPage({
       FROM members m
       LEFT JOIN team_members tm ON tm.member_id = m.id AND tm.is_active = true
       LEFT JOIN teams t ON t.id = tm.team_id AND t.status = 'active'
-      WHERE m.id = \${id}::uuid
+      WHERE m.id = ${id}::uuid
       GROUP BY m.id
       LIMIT 1
-    \`,
-    sql\`SELECT key, name FROM roles ORDER BY name\`,
-    sql\`
+    `,
+    sql`SELECT key, name FROM roles ORDER BY name`,
+    sql`
       SELECT
         u.id::text,
         u.email,
@@ -115,24 +115,24 @@ export default async function MemberDetailPage({
         COALESCE(array_agg(ur.role_key) FILTER (WHERE ur.role_key IS NOT NULL), ARRAY[]::text[]) AS roles
       FROM app_users u
       LEFT JOIN user_roles ur ON ur.user_id = u.id
-      WHERE u.member_id = \${id}::uuid
+      WHERE u.member_id = ${id}::uuid
       GROUP BY u.id
       LIMIT 1
-    \`,
-    sql\`
+    `,
+    sql`
       SELECT id::text,fiscal_year,amount,due_date,status,paid_on,notes
       FROM membership_fees
-      WHERE member_id=\${id}::uuid
+      WHERE member_id=${id}::uuid
       ORDER BY fiscal_year DESC
       LIMIT 4
-    \`,
-    sql\`
+    `,
+    sql`
       SELECT id::text,old_status,new_status,reason,effective_date,created_at
       FROM member_status_history
-      WHERE member_id=\${id}::uuid
+      WHERE member_id=${id}::uuid
       ORDER BY created_at DESC
       LIMIT 12
-    \`,
+    `,
   ]);
 
   const member = memberRows[0];
@@ -156,10 +156,10 @@ export default async function MemberDetailPage({
           <h1>{String(member.first_name)} {String(member.last_name)}</h1>
           <p>
             {membershipTypeLabels[String(member.membership_type ?? "regular")] ?? "Mitglied"}
-            {member.teams ? \` · \${member.teams}\` : " · keine Mannschaft"}
+            {member.teams ? ` · ${member.teams}` : " · keine Mannschaft"}
           </p>
         </div>
-        <b className={\`status-badge status-\${member.status}\`}>{statusLabels[String(member.status)] ?? String(member.status)}</b>
+        <b className={`status-badge status-${member.status}`}>{statusLabels[String(member.status)] ?? String(member.status)}</b>
       </section>
 
       {query.error && <div className="form-error">{errors[query.error] ?? "Die Aktion konnte nicht ausgeführt werden."}</div>}
@@ -300,7 +300,7 @@ export default async function MemberDetailPage({
               <div className="member-fee-row" key={String(fee.id)}>
                 <div><strong>{String(fee.fiscal_year)}</strong><span>Fällig {formatDate(fee.due_date)}</span></div>
                 <b>{money(fee.amount)}</b>
-                <span className={\`fee-status fee-\${fee.status}\`}>{feeLabels[String(fee.status)] ?? String(fee.status)}</span>
+                <span className={`fee-status fee-${fee.status}`}>{feeLabels[String(fee.status)] ?? String(fee.status)}</span>
               </div>
             ))}
           </div>
