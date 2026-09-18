@@ -11,6 +11,9 @@ const actionLabels: Record<string,string> = {
   "user.sessions_revoked":"Sessions widerrufen",
   "member.account_created":"Benutzerzugang erstellt",
   "member.roles_changed":"Rollen am Mitglied geändert",
+  "training.attendance_saved":"Trainingsanwesenheit gespeichert",
+  "training.cancelled":"Training abgesagt",
+  "training.restored":"Training wieder aktiviert",
 };
 
 function formatDateTime(value: unknown) {
