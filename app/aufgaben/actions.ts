@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getDb } from "@/lib/db";
 import { requirePermission } from "@/lib/permissions";
+import { writeAudit } from "@/lib/audit";
 
 function value(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
@@ -48,23 +49,66 @@ export async function createTaskAction(formData: FormData) {
 }
 
 export async function updateTaskStatusAction(formData: FormData) {
-  await requirePermission("tasks.write");
-  const sql = getDb();
+  const actor=await requirePermission("tasks.write");
+  const sql=getDb();
   if (!sql) redirect("/aufgaben?error=database");
 
-  const id = value(formData, "id");
-  const statusRaw = value(formData, "status");
-  const status = allowedStatuses.has(statusRaw) ? statusRaw : "open";
+  const id=value(formData,"id");
+  const statusRaw=value(formData,"status");
+  const status=allowedStatuses.has(statusRaw) ? statusRaw : "open";
 
   if (!id) redirect("/aufgaben?error=missing");
+
+  const before=await sql`
+    SELECT id::text,title,status,source_type,source_id::text
+    FROM tasks
+    WHERE id=${id}::uuid
+    LIMIT 1
+  `;
 
   await sql`
     UPDATE tasks
     SET
-      status = ${status},
-      completed_at = CASE WHEN ${status} = 'done' THEN now() ELSE NULL END
-    WHERE id = ${id}::uuid
+      status=${status},
+      completed_at=CASE WHEN ${status}='done' THEN COALESCE(completed_at,now()) ELSE NULL END
+    WHERE id=${id}::uuid
   `;
+
+  const task=before[0];
+  if (task?.source_type==="resolution" && task.source_id) {
+    if (status==="done") {
+      await sql`
+        UPDATE resolutions
+        SET status='implemented',implemented_at=COALESCE(implemented_at,now())
+        WHERE id=${String(task.source_id)}::uuid
+          AND status<>'withdrawn'
+      `;
+    } else if (["in_progress","blocked"].includes(status)) {
+      await sql`
+        UPDATE resolutions
+        SET status='in_progress',implemented_at=NULL
+        WHERE id=${String(task.source_id)}::uuid
+          AND status<>'withdrawn'
+      `;
+    } else if (status==="open") {
+      await sql`
+        UPDATE resolutions
+        SET status='open',implemented_at=NULL
+        WHERE id=${String(task.source_id)}::uuid
+          AND status<>'withdrawn'
+      `;
+    }
+
+    revalidatePath("/beschluesse");
+  }
+
+  await writeAudit(actor.id,"task.status_changed","task",id,{
+    title:String(task?.title ?? ""),
+    before:String(task?.status ?? ""),
+    after:status,
+    sourceType:String(task?.source_type ?? ""),
+    sourceId:task?.source_id ? String(task.source_id) : null,
+  });
 
   revalidatePath("/aufgaben");
   revalidatePath("/");
