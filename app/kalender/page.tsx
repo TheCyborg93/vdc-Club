@@ -1,9 +1,8 @@
 import { getDb } from "@/lib/db";
 import { hasPermission, requirePermission } from "@/lib/permissions";
-import {
-  createEventAction,
-  deleteEventAction,
-} from "@/app/kalender/actions";
+import { createEventAction } from "@/app/kalender/actions";
+import { moveToTrashAction } from "@/app/admin/papierkorb/actions";
+import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 import { ensureTrainingSchedule } from "@/lib/training";
 
 const typeLabels: Record<string, string> = {
@@ -17,6 +16,7 @@ const typeLabels: Record<string, string> = {
 const errors: Record<string, string> = {
   database: "Die Datenbankverbindung fehlt.",
   missing: "Titel und Startzeit sind erforderlich.",
+  protected_delete: "Dieser Termin wird von einem anderen Vereinsbereich verwaltet und kann hier nicht gelöscht werden.",
 };
 
 export const dynamic = "force-dynamic";
@@ -62,9 +62,10 @@ export default async function CalendarPage({
             ts.id::text AS training_session_id,
             ts.status AS training_status
           FROM club_events e
-          LEFT JOIN meetings m ON m.event_id = e.id
-          LEFT JOIN training_sessions ts ON ts.event_id = e.id
-          WHERE e.starts_at >= now() - interval '1 day'
+          LEFT JOIN meetings m ON m.event_id = e.id AND m.deleted_at IS NULL
+          LEFT JOIN training_sessions ts ON ts.event_id = e.id AND ts.deleted_at IS NULL
+          WHERE e.deleted_at IS NULL
+            AND e.starts_at >= now() - interval '1 day'
           ORDER BY e.starts_at ASC
           LIMIT 80
         `,
@@ -93,6 +94,7 @@ export default async function CalendarPage({
             )::int AS training,
             count(*) FILTER (WHERE event_type = 'board' AND starts_at >= now())::int AS board
           FROM club_events
+          WHERE deleted_at IS NULL
         `,
       ])
     : [[], [{ week: 0, league: 0, training: 0, board: 0 }]];
@@ -149,10 +151,13 @@ export default async function CalendarPage({
                 <div className="calendar-event-actions">
                   {event.meeting_id && <a className="mini-button" href={`/sitzungen/${event.meeting_id}`}>Sitzung öffnen</a>}
                   {event.training_session_id && <a className="mini-button" href={`/training/${event.training_session_id}`}>Training öffnen</a>}
-                  {canWrite && event.source === "club" && !event.meeting_id && (
-                    <form action={deleteEventAction}>
+                  {canWrite && event.source === "club" && !event.meeting_id && !event.training_session_id && (
+                    <form action={moveToTrashAction}>
+                      <input type="hidden" name="type" value="event" />
                       <input type="hidden" name="id" value={String(event.id)} />
-                      <button className="mini-button" type="submit">Löschen</button>
+                      <ConfirmSubmitButton message={"Termin „"+String(event.title)+"“ in den Papierkorb verschieben?"}>
+                        Löschen
+                      </ConfirmSubmitButton>
                     </form>
                   )}
                 </div>
