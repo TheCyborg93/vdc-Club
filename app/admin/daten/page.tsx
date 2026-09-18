@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getDb } from "@/lib/db";
+import { isDocumentStorageConfigured } from "@/lib/document-storage";
 
 export const dynamic="force-dynamic";
 
@@ -9,6 +10,7 @@ function checkState(count: number) {
 
 export default async function AdminDataQualityPage() {
   const sql=getDb();
+  const storageReady=isDocumentStorageConfigured();
 
   const [summary,missingMembers,noTeam,teamsWithoutCaptain,meetingsWithoutMinutes,resolutionsWithoutTask,documentIssues,pendingTraining,integrationErrors,roleIssues]=sql
     ? await Promise.all([
@@ -136,6 +138,7 @@ export default async function AdminDataQualityPage() {
     {label:"Trainingstage ohne Anwesenheit",count:pendingTraining.length,href:"/training"},
     {label:"Integrationen mit Fehler",count:integrationErrors.length,href:"/admin/integrationen"},
     {label:"Aktive Benutzer ohne Rolle",count:roleIssues.length,href:"/admin/benutzer"},
+    {label:"Privater Dokumentenspeicher",count:storageReady ? 0 : 1,href:"/admin/status"},
   ];
 
   const issueCount=checks.reduce((sum,item)=>sum+item.count,0);
