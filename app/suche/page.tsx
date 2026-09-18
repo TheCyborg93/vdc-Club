@@ -61,7 +61,8 @@ export default async function SearchPage({
       const rows=await sql`
         SELECT id::text,name,short_name,league,season
         FROM teams
-        WHERE status='active'
+        WHERE deleted_at IS NULL
+          AND status='active'
           AND (
             name ILIKE '%' || ${q} || '%'
             OR COALESCE(short_name,'') ILIKE '%' || ${q} || '%'
@@ -159,9 +160,10 @@ export default async function SearchPage({
       const rows=await sql`
         SELECT id::text,name,contact_name,status
         FROM sponsors
-        WHERE
+        WHERE deleted_at IS NULL
+          AND (
           name ILIKE '%' || ${q} || '%'
-          OR COALESCE(contact_name,'') ILIKE '%' || ${q} || '%'
+          OR COALESCE(contact_name,'') ILIKE '%' || ${q} || '%')
         ORDER BY name
         LIMIT 10
       `;
