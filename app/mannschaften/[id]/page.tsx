@@ -3,7 +3,6 @@ import { notFound } from "next/navigation";
 import { getDb } from "@/lib/db";
 import { hasPermission, requirePermission } from "@/lib/permissions";
 import {
-import { teamStatusLabel } from "@/lib/ui-labels";
   addTeamMemberAction,
   removeTeamMemberAction,
   setTeamCaptainAction,
@@ -11,6 +10,7 @@ import { teamStatusLabel } from "@/lib/ui-labels";
 } from "@/app/mannschaften/actions";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 import { moveToTrashAction } from "@/app/admin/papierkorb/actions";
+import { teamStatusLabel } from "@/lib/ui-labels";
 
 export const dynamic = "force-dynamic";
 
