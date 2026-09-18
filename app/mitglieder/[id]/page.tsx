@@ -1,0 +1,210 @@
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { getDb } from "@/lib/db";
+import { hasPermission, requirePermission } from "@/lib/permissions";
+import {
+  createMemberAccountAction,
+  updateMemberAction,
+  updateMemberRolesAction,
+} from "@/app/mitglieder/actions";
+
+const roleLabels: Record<string, string> = {
+  admin: "Administrator",
+  board: "Vorstand",
+  chair: "1. Vorsitz",
+  vice_chair: "2. Vorsitz",
+  treasurer: "Kassierer",
+  secretary: "Schriftführer",
+  sport_director: "Sportwart",
+  team_captain: "Team Captain",
+  tournament_director: "Turnierleitung",
+};
+
+const errors: Record<string, string> = {
+  missing: "Vor- und Nachname sind erforderlich.",
+  account: "Für den Zugang werden E-Mail und ein Passwort mit mindestens 12 Zeichen benötigt.",
+  account_exists: "Für dieses Mitglied oder diese E-Mail existiert bereits ein Benutzerzugang.",
+};
+
+export const dynamic = "force-dynamic";
+
+function dateValue(value: unknown) {
+  if (!value) return "";
+  const date = new Date(String(value));
+  return Number.isNaN(date.getTime()) ? "" : date.toISOString().slice(0, 10);
+}
+
+export default async function MemberDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ error?: string; saved?: string; account?: string; roles?: string }>;
+}) {
+  const actor = await requirePermission("members.read");
+  const sql = getDb();
+  if (!sql) notFound();
+
+  const { id } = await params;
+  const query = await searchParams;
+
+  const [memberRows, roleRows, userRows] = await Promise.all([
+    sql`
+      SELECT
+        m.id::text,
+        m.member_number,
+        m.first_name,
+        m.last_name,
+        m.email,
+        m.phone,
+        m.birth_date,
+        m.join_date,
+        m.status,
+        m.notes,
+        COALESCE(string_agg(DISTINCT t.name, ', ') FILTER (WHERE t.id IS NOT NULL), '') AS teams
+      FROM members m
+      LEFT JOIN team_members tm ON tm.member_id = m.id AND tm.is_active = true
+      LEFT JOIN teams t ON t.id = tm.team_id AND t.status = 'active'
+      WHERE m.id = ${id}::uuid
+      GROUP BY m.id
+      LIMIT 1
+    `,
+    sql`SELECT key, name FROM roles ORDER BY name`,
+    sql`
+      SELECT
+        u.id::text,
+        u.email,
+        u.status,
+        u.last_login_at,
+        COALESCE(array_agg(ur.role_key) FILTER (WHERE ur.role_key IS NOT NULL), ARRAY[]::text[]) AS roles
+      FROM app_users u
+      LEFT JOIN user_roles ur ON ur.user_id = u.id
+      WHERE u.member_id = ${id}::uuid
+      GROUP BY u.id
+      LIMIT 1
+    `,
+  ]);
+
+  const member = memberRows[0];
+  if (!member) notFound();
+
+  const appUser = userRows[0] ?? null;
+  const assignedRoles = new Set(
+    appUser && Array.isArray(appUser.roles) ? appUser.roles.map(String) : []
+  );
+
+  const canWrite = hasPermission(actor.roles, "members.write");
+  const canManageAccounts = hasPermission(actor.roles, "settings.manage");
+
+  return (
+    <div className="page-stack">
+      <section className="page-heading">
+        <div>
+          <Link href="/mitglieder" className="back-link">← Mitglieder</Link>
+          <span className="eyebrow">Mitgliedsprofil</span>
+          <h1>{String(member.first_name)} {String(member.last_name)}</h1>
+          <p>{member.teams ? String(member.teams) : "Noch keiner Mannschaft zugeordnet."}</p>
+        </div>
+        <b className={`status-badge status-${member.status}`}>{String(member.status)}</b>
+      </section>
+
+      {query.error && <div className="form-error">{errors[query.error] ?? "Die Aktion konnte nicht ausgeführt werden."}</div>}
+      {(query.saved || query.account || query.roles) && <div className="form-success">Änderungen wurden gespeichert.</div>}
+
+      <section className="panel-grid">
+        <article className="panel">
+          <div className="panel-head"><div><span className="eyebrow">Stammdaten</span><h2>Mitglied bearbeiten</h2></div></div>
+          <form action={updateMemberAction} className="form-stack">
+            <input type="hidden" name="id" value={id} />
+            <div className="form-grid">
+              <label>Vorname<input name="firstName" defaultValue={String(member.first_name)} disabled={!canWrite} required /></label>
+              <label>Nachname<input name="lastName" defaultValue={String(member.last_name)} disabled={!canWrite} required /></label>
+            </div>
+            <div className="form-grid">
+              <label>E-Mail<input name="email" type="email" defaultValue={member.email ? String(member.email) : ""} disabled={!canWrite} /></label>
+              <label>Telefon<input name="phone" defaultValue={member.phone ? String(member.phone) : ""} disabled={!canWrite} /></label>
+            </div>
+            <div className="form-grid">
+              <label>Mitgliedsnummer<input name="memberNumber" defaultValue={member.member_number ? String(member.member_number) : ""} disabled={!canWrite} /></label>
+              <label>Status
+                <select name="status" defaultValue={String(member.status)} disabled={!canWrite}>
+                  <option value="active">Aktiv</option>
+                  <option value="passive">Passiv</option>
+                  <option value="inactive">Inaktiv</option>
+                </select>
+              </label>
+            </div>
+            <div className="form-grid">
+              <label>Geburtsdatum<input name="birthDate" type="date" defaultValue={dateValue(member.birth_date)} disabled={!canWrite} /></label>
+              <label>Eintritt<input name="joinDate" type="date" defaultValue={dateValue(member.join_date)} disabled={!canWrite} /></label>
+            </div>
+            <label>Notizen<textarea name="notes" rows={4} defaultValue={member.notes ? String(member.notes) : ""} disabled={!canWrite} /></label>
+            {canWrite && <button className="primary-button" type="submit">Änderungen speichern</button>}
+          </form>
+        </article>
+
+        <article className="panel">
+          <div className="panel-head"><div><span className="eyebrow">Zugang</span><h2>Benutzer & Rollen</h2></div></div>
+          {appUser ? (
+            <>
+              <div className="account-summary">
+                <div><span>Login</span><strong>{String(appUser.email)}</strong></div>
+                <div><span>Status</span><strong>{String(appUser.status)}</strong></div>
+                <div><span>Letzte Anmeldung</span><strong>{appUser.last_login_at ? new Date(String(appUser.last_login_at)).toLocaleString("de-DE") : "Noch nie"}</strong></div>
+              </div>
+              <div className="role-chips">
+                {[...assignedRoles].map((role) => <span key={role}>{roleLabels[role] ?? role}</span>)}
+                {assignedRoles.size === 0 && <span>Keine Rolle</span>}
+              </div>
+
+              {canManageAccounts && (
+                <form action={updateMemberRolesAction} className="form-stack role-form">
+                  <input type="hidden" name="memberId" value={id} />
+                  <input type="hidden" name="userId" value={String(appUser.id)} />
+                  <div className="checkbox-grid">
+                    {roleRows.map((role) => (
+                      <label className="checkbox-row" key={String(role.key)}>
+                        <input
+                          type="checkbox"
+                          name="roles"
+                          value={String(role.key)}
+                          defaultChecked={assignedRoles.has(String(role.key))}
+                        />
+                        <span>{String(role.name)}</span>
+                      </label>
+                    ))}
+                  </div>
+                  <button className="primary-button" type="submit">Rollen speichern</button>
+                </form>
+              )}
+            </>
+          ) : (
+            <>
+              <p>Für dieses Mitglied existiert noch kein Login für VDC Club.</p>
+              {canManageAccounts && (
+                <form action={createMemberAccountAction} className="form-stack">
+                  <input type="hidden" name="memberId" value={id} />
+                  <label>Login-E-Mail
+                    <input name="email" type="email" defaultValue={member.email ? String(member.email) : ""} required />
+                  </label>
+                  <label>Startpasswort
+                    <input name="password" type="password" minLength={12} required />
+                  </label>
+                  <div className="checkbox-grid">
+                    {roleRows.map((role) => (
+                      <label className="checkbox-row" key={String(role.key)}>
+                        <input type="checkbox" name="roles" value={String(role.key)} />
+                        <span>{String(role.name)}</span>
+                      </label>
+                    ))}
+                  </div>
+                  <button className="primary-button" type="submit">Zugang anlegen</button>
+                </form>
+              )}
+            </>
+          )}
+        </article>
+      </section>
+    </div>
+  );
+}
