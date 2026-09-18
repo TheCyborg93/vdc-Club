@@ -18,6 +18,7 @@ export const navigation: NavItem[] = [
   { href: "/sitzungen", label: "Sitzungen", short: "SI", group: "Organisation", permission: "meetings.read" },
   { href: "/beschluesse", label: "Beschlüsse", short: "BE", group: "Organisation", permission: "resolutions.read" },
   { href: "/finanzen", label: "Finanzen", short: "FI", group: "Finanzen", permission: "finance.read" },
+  { href: "/sponsoren", label: "Sponsoren", short: "SP", group: "Finanzen", permission: "sponsors.read" },
   { href: "/dokumente", label: "Dokumente", short: "DO", group: "Organisation", permission: "documents.read" },
   { href: "/statistik", label: "Vereinsstatistik", short: "ST", group: "Auswertung", permission: "statistics.read" },
   { href: "/einstellungen", label: "Einstellungen", short: "ES", group: "System", permission: "settings.manage" },
