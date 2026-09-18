@@ -2,8 +2,8 @@ import { createHash, randomBytes, scryptSync, timingSafeEqual } from "node:crypt
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { getDb } from "@/lib/db";
+import { SESSION_COOKIE } from "@/lib/auth-constants";
 
-export const SESSION_COOKIE = "vdc_session";
 const SESSION_DAYS = 30;
 
 export type CurrentUser = {
