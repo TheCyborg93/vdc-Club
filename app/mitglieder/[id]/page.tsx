@@ -44,6 +44,7 @@ const errors: Record<string, string> = {
   missing: "Bitte die Pflichtfelder korrekt ausfüllen.",
   account: "Für den Zugang werden E-Mail und ein Passwort mit mindestens 12 Zeichen benötigt.",
   account_exists: "Für dieses Mitglied oder diese E-Mail existiert bereits ein Benutzerzugang.",
+  last_admin: "Der letzte aktive Administrator kann seine Adminrolle nicht verlieren.",
 };
 
 export const dynamic = "force-dynamic";
