@@ -117,7 +117,7 @@ export default async function DocumentsPage({
         sql`SELECT id::text,title,starts_at FROM meetings WHERE deleted_at IS NULL ORDER BY starts_at DESC LIMIT 40`,
         sql`SELECT id::text,resolution_number,title FROM resolutions ORDER BY decided_at DESC LIMIT 60`,
         sql`SELECT id::text,booked_on,description FROM finance_entries WHERE status='booked' ORDER BY booked_on DESC LIMIT 60`,
-        sql`SELECT id::text,name FROM sponsors ORDER BY name`,
+        sql`SELECT id::text,name FROM sponsors WHERE deleted_at IS NULL ORDER BY name`,
         sql`SELECT DISTINCT category FROM documents WHERE deleted_at IS NULL ORDER BY category`,
       ])
     : [[],[{total:0,minutes:0,contracts:0,review:0,archived:0}],[],[],[],[],[],[]];
