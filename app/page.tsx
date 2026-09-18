@@ -99,6 +99,40 @@ export default async function DashboardPage() {
         ))}
       </section>
 
+      <section className="attention-panel">
+        <div className="attention-panel-head">
+          <div>
+            <span className="eyebrow">Fristen & Hinweise</span>
+            <h2>Achtung erforderlich</h2>
+          </div>
+          <span className={`attention-count ${data.alerts.length ? "has-alerts" : ""}`}>{data.alerts.length}</span>
+        </div>
+
+        {data.alerts.length === 0 ? (
+          <div className="attention-clear">
+            <i />
+            <div><strong>Keine dringenden Hinweise</strong><span>Beiträge, Fristen, Verträge und Aufgaben sind aktuell unauffällig.</span></div>
+          </div>
+        ) : (
+          <div className="attention-list">
+            {data.alerts.map((alert,index) => (
+              <Link
+                href={alert.href}
+                className={`attention-row attention-${alert.severity}`}
+                key={alert.kind + alert.title + index}
+              >
+                <span className="attention-dot" />
+                <div>
+                  <strong>{alert.title}</strong>
+                  <span>{alert.detail}</span>
+                </div>
+                <b>Öffnen ›</b>
+              </Link>
+            ))}
+          </div>
+        )}
+      </section>
+
       <section className="dashboard-grid">
         <article className="panel panel-wide">
           <div className="panel-head">
