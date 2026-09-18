@@ -32,6 +32,8 @@ const actionLabels: Record<string,string> = {
   "trash.restored":"Aus Papierkorb wiederhergestellt",
   "trash.permanently_deleted":"Endgültig gelöscht",
   "trash.storage_cleanup_failed":"Storage-Bereinigung fehlgeschlagen",
+  "agenda.deleted":"TOP gelöscht",
+  "training.attendance_reset":"Trainingsanwesenheit zurückgesetzt",
 };
 
 function formatDateTime(value: unknown) {
