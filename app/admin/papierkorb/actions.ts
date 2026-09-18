@@ -449,16 +449,31 @@ export async function permanentlyDeleteTrashItemAction(formData:FormData) {
     const doc=rows[0];
     if (!doc) redirect("/admin/papierkorb?error=missing");
 
+    const versionFiles=await sql`
+      SELECT storage_ref
+      FROM document_versions
+      WHERE document_id=${id}::uuid
+        AND storage_type='upload'
+        AND storage_ref IS NOT NULL
+    `;
+
+    const storageRefs=[
+      ...(doc.storage_type==="upload" && doc.storage_ref ? [String(doc.storage_ref)] : []),
+      ...versionFiles.map((row)=>String(row.storage_ref)),
+    ];
+
     await sql`DELETE FROM documents WHERE id=${id}::uuid AND deleted_at IS NOT NULL`;
 
-    if (doc.storage_type==="upload" && doc.storage_ref && isDocumentStorageConfigured()) {
-      try {
-        await deleteDocumentObject(String(doc.storage_ref));
-      } catch (error) {
-        await writeAudit(actor.id,"trash.storage_cleanup_failed","document",id,{
-          storageRef:String(doc.storage_ref),
-          message:error instanceof Error ? error.message : "unknown",
-        });
+    if (storageRefs.length && isDocumentStorageConfigured()) {
+      for (const storageRef of storageRefs) {
+        try {
+          await deleteDocumentObject(storageRef);
+        } catch (error) {
+          await writeAudit(actor.id,"trash.storage_cleanup_failed","document",id,{
+            storageRef,
+            message:error instanceof Error ? error.message : "unknown",
+          });
+        }
       }
     }
   } else if (type==="event") {
