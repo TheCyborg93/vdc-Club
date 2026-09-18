@@ -200,6 +200,7 @@ export async function updateDocumentStatusAction(formData: FormData) {
     SELECT status,title
     FROM documents
     WHERE id=${id}::uuid
+      AND deleted_at IS NULL
     LIMIT 1
   `;
 
@@ -210,6 +211,7 @@ export async function updateDocumentStatusAction(formData: FormData) {
       archived_at=CASE WHEN ${status}='archived' THEN COALESCE(archived_at,now()) ELSE NULL END,
       archived_by=CASE WHEN ${status}='archived' THEN ${actor.id}::uuid ELSE NULL END
     WHERE id=${id}::uuid
+      AND deleted_at IS NULL
   `;
 
   await writeAudit(actor.id,"document.status_changed","document",id,{
@@ -234,6 +236,7 @@ export async function archiveDocumentAction(formData: FormData) {
     UPDATE documents
     SET status='archived',archived_at=now(),archived_by=${actor.id}::uuid
     WHERE id=${id}::uuid
+      AND deleted_at IS NULL
     RETURNING title
   `;
 
