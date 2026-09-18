@@ -147,7 +147,9 @@ export function AppShell({
           </div>
 
           <div className="topbar-actions">
-            <div className="system-live"><i /> LIVE</div>
+            {user.roles.includes("admin") && (
+              <Link href="/admin" className="admin-topbar-link">ADMIN</Link>
+            )}
             <div className="topbar-user">
               <div className="avatar avatar-small">{initials}</div>
               <div>
