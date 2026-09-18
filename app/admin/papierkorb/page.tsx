@@ -184,7 +184,7 @@ export default async function TrashPage({
                     Gelöscht {formatDateTime(item.deleted_at)}
                     {item.deleted_by_name ? " · "+String(item.deleted_by_name) : ""}
                   </small>
-                  {item.delete_reason && <p>{String(item.delete_reason)}</p>}
+                  {Boolean(item.delete_reason) && <p>{String(item.delete_reason)}</p>}
                 </div>
 
                 <div className="trash-row-actions">
