@@ -104,3 +104,36 @@ export async function activateTrainingSeasonAction(formData: FormData) {
   revalidatePath("/training/auswertung");
   redirect(`/training/auswertung?mode=season&season=${id}&active=1`);
 }
+
+
+export async function deleteTrainingSeasonAction(formData: FormData) {
+  const actor=await requirePermission("training.write");
+  const sql=getDb();
+  if (!sql) redirect("/training/auswertung?error=database");
+
+  const id=value(formData,"id");
+  if (!id) redirect("/training/auswertung?error=season");
+
+  const rows=await sql`
+    SELECT
+      id::text,label,is_active,
+      EXISTS(SELECT 1 FROM teams t WHERE t.season=training_seasons.label) AS has_teams
+    FROM training_seasons
+    WHERE id=${id}::uuid
+    LIMIT 1
+  `;
+  const season=rows[0];
+
+  if (!season || season.is_active || season.has_teams) {
+    redirect(`/training/auswertung?mode=season&season=${id}&error=season_delete`);
+  }
+
+  await sql`DELETE FROM training_seasons WHERE id=${id}::uuid`;
+  await writeAudit(actor.id,"training.season_deleted","training_season",id,{
+    label:String(season.label),
+  });
+
+  revalidatePath("/training");
+  revalidatePath("/training/auswertung");
+  redirect("/training/auswertung?mode=season&deleted=1");
+}
