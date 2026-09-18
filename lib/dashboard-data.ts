@@ -98,8 +98,8 @@ export async function getDashboardData(
     ] = await Promise.all([
       sql`SELECT count(*)::int AS count FROM members WHERE status = 'active'`,
       sql`SELECT count(*)::int AS count FROM teams WHERE status = 'active'`,
-      sql`SELECT count(*)::int AS count FROM tasks WHERE status IN ('open','in_progress','blocked')`,
-      sql`SELECT count(*)::int AS count FROM club_events WHERE starts_at >= now() AND starts_at < now() + interval '14 days'`,
+      sql`SELECT count(*)::int AS count FROM tasks WHERE deleted_at IS NULL AND status IN ('open','in_progress','blocked')`,
+      sql`SELECT count(*)::int AS count FROM club_events WHERE deleted_at IS NULL AND starts_at >= now() AND starts_at < now() + interval '14 days'`,
       sql`
         SELECT
           count(*) FILTER (
@@ -109,16 +109,19 @@ export async function getDashboardData(
           (
             SELECT count(*)::int
             FROM training_sessions
-            WHERE status<>'cancelled'
+            WHERE deleted_at IS NULL
+              AND status<>'cancelled'
               AND EXTRACT(YEAR FROM scheduled_at AT TIME ZONE 'Europe/Berlin') = EXTRACT(YEAR FROM CURRENT_DATE)
           ) AS training_days_year,
           count(*) FILTER (WHERE source='vdc_tc' AND event_type='league')::int AS league_events
         FROM club_events
+        WHERE deleted_at IS NULL
       `,
       sql`
         SELECT title, COALESCE(category, 'Allgemein') AS category, due_date, priority
         FROM tasks
-        WHERE status IN ('open','in_progress','blocked')
+        WHERE deleted_at IS NULL
+          AND status IN ('open','in_progress','blocked')
         ORDER BY
           CASE priority WHEN 'urgent' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 ELSE 4 END,
           due_date NULLS LAST
@@ -134,7 +137,8 @@ export async function getDashboardData(
           t.short_name AS team
         FROM club_events e
         LEFT JOIN teams t ON t.id=e.team_id
-        WHERE e.starts_at >= now()
+        WHERE e.deleted_at IS NULL
+          AND e.starts_at >= now()
         ORDER BY e.starts_at ASC
         LIMIT 5
       `,
@@ -165,7 +169,8 @@ export async function getDashboardData(
             CASE WHEN t.priority IN ('urgent','high') THEN 'critical' ELSE 'warning' END,
             t.due_date::timestamp
           FROM tasks t
-          WHERE t.status IN ('open','in_progress','blocked')
+          WHERE t.deleted_at IS NULL
+            AND t.status IN ('open','in_progress','blocked')
             AND t.due_date IS NOT NULL
             AND t.due_date < CURRENT_DATE
 
@@ -219,7 +224,8 @@ export async function getDashboardData(
             CASE WHEN d.valid_until < CURRENT_DATE THEN 'critical' ELSE 'warning' END,
             d.valid_until::timestamp
           FROM documents d
-          WHERE d.status='active'
+          WHERE d.deleted_at IS NULL
+            AND d.status='active'
             AND d.valid_until IS NOT NULL
             AND d.valid_until <= CURRENT_DATE + interval '30 days'
         ) warnings
@@ -263,7 +269,8 @@ export async function getDashboardData(
             (
               SELECT scheduled_at
               FROM training_sessions
-              WHERE scheduled_at>=now()
+              WHERE deleted_at IS NULL
+                AND scheduled_at>=now()
                 AND status<>'cancelled'
               ORDER BY scheduled_at
               LIMIT 1
@@ -271,7 +278,8 @@ export async function getDashboardData(
             (
               SELECT count(*)::int
               FROM training_sessions
-              WHERE scheduled_at<now()
+              WHERE deleted_at IS NULL
+                AND scheduled_at<now()
                 AND status<>'cancelled'
                 AND attendance_recorded_at IS NULL
             ) AS pending_attendance,
@@ -280,6 +288,7 @@ export async function getDashboardData(
               FROM training_attendance a
               JOIN training_sessions s ON s.id=a.session_id
               WHERE a.member_id=${options.memberId || null}::uuid
+                AND s.deleted_at IS NULL
                 AND s.attendance_recorded_at IS NOT NULL
                 AND s.status='completed'
                 AND EXTRACT(YEAR FROM s.scheduled_at AT TIME ZONE 'Europe/Berlin')
