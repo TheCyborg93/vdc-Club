@@ -1,78 +1,103 @@
 import Link from "next/link";
+import type { CSSProperties } from "react";
 import { getDashboardData } from "@/lib/dashboard-data";
 import { requireUser } from "@/lib/auth";
 import { hasPermission } from "@/lib/access";
+import { updateTaskStatusInlineAction } from "@/app/aufgaben/actions";
+import { resolutionStatusLabel,taskStatusLabel } from "@/lib/ui-labels";
 
 export const dynamic = "force-dynamic";
 
-function formatDate(value: string | null) {
-  if (!value) return "Ohne Frist";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat("de-DE", {
-    day: "2-digit",
-    month: "2-digit",
-    timeZone: "Europe/Berlin",
-  }).format(date);
-}
-
-function formatEventDate(value: string) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return { day: "--", month: "---", time: "" };
-  const day = new Intl.DateTimeFormat("de-DE", { day: "2-digit", timeZone: "Europe/Berlin" }).format(date);
-  const month = new Intl.DateTimeFormat("de-DE", { month: "short", timeZone: "Europe/Berlin" }).format(date).replace(".", "").toUpperCase();
-  const time = new Intl.DateTimeFormat("de-DE", { hour: "2-digit", minute: "2-digit", timeZone: "Europe/Berlin" }).format(date);
-  return { day, month, time };
-}
-
-function formatSync(value: string | null) {
-  if (!value) return "Noch nie";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Noch nie";
-  return new Intl.DateTimeFormat("de-DE", {
-    day: "2-digit",
-    month: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone: "Europe/Berlin",
-  }).format(date);
-}
-
-function visibleNavigationAccess(href: string, roles: string[]) {
-  const requirements: Record<string, Parameters<typeof hasPermission>[1]> = {
-    "/admin/daten":"settings.manage",
-    "/admin/integrationen":"settings.manage",
-    "/admin/benutzer":"settings.manage",
-    "/finanzen":"finance.read",
-    "/mitglieder":"members.read",
-    "/dokumente":"documents.read",
-    "/sitzungen":"meetings.read",
-    "/beschluesse":"resolutions.read",
-    "/aufgaben":"tasks.read",
-    "/mannschaften":"teams.read",
-    "/training":"training.read",
-    "/statistik":"statistics.read",
-    "/kalender":"calendar.read",
-  };
-  const permission=requirements[href];
-  return permission ? hasPermission(roles,permission) : true;
-}
-
-const eventTypeLabels: Record<string,string> = {
-  league: "Ligaspiel",
-  training: "Training",
-  tournament: "Turnier",
-  board: "Vorstand",
-  club: "Verein",
+const eventTypeLabels:Record<string,string>={
+  league:"Liga",
+  training:"Training",
+  tournament:"Turnier",
+  board:"Vorstand",
+  club:"Verein",
 };
 
-export default async function DashboardPage() {
-  const user = await requireUser();
-  const isAdmin = user.roles.includes("admin");
-  const canTraining = hasPermission(user.roles,"training.read");
-  const canTrainingWrite = hasPermission(user.roles,"training.write");
+const priorityLabels:Record<string,string>={
+  low:"Niedrig",
+  medium:"Mittel",
+  high:"Hoch",
+  urgent:"Dringend",
+};
 
-  const primaryRole =
+function formatDate(value:string | null) {
+  if (!value) return "Ohne Frist";
+  const date=new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("de-DE",{
+    day:"2-digit",
+    month:"2-digit",
+    timeZone:"Europe/Berlin",
+  }).format(date);
+}
+
+function formatFullDate(value:string) {
+  const date=new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("de-DE",{
+    weekday:"short",
+    day:"2-digit",
+    month:"short",
+    year:"numeric",
+    timeZone:"Europe/Berlin",
+  }).format(date);
+}
+
+function formatTime(value:string) {
+  const date=new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("de-DE",{
+    hour:"2-digit",
+    minute:"2-digit",
+    timeZone:"Europe/Berlin",
+  }).format(date);
+}
+
+function formatSync(value:string | null) {
+  if (!value) return "Noch nie";
+  const date=new Date(value);
+  if (Number.isNaN(date.getTime())) return "Noch nie";
+  return new Intl.DateTimeFormat("de-DE",{
+    day:"2-digit",
+    month:"2-digit",
+    hour:"2-digit",
+    minute:"2-digit",
+    timeZone:"Europe/Berlin",
+  }).format(date);
+}
+
+function daysUntil(value:string) {
+  const target=new Date(value).getTime();
+  const now=Date.now();
+  if (!Number.isFinite(target)) return "";
+  const days=Math.ceil((target-now)/(1000*60*60*24));
+  if (days<=0) return "Heute";
+  if (days===1) return "Morgen";
+  return "In "+days+" Tagen";
+}
+
+export default async function DashboardPage() {
+  const user=await requireUser();
+
+  const isAdmin=user.roles.includes("admin");
+  const canTasks=hasPermission(user.roles,"tasks.read");
+  const canTasksWrite=hasPermission(user.roles,"tasks.write");
+  const canCalendar=hasPermission(user.roles,"calendar.read");
+  const canCalendarWrite=hasPermission(user.roles,"calendar.write");
+  const canTraining=hasPermission(user.roles,"training.read");
+  const canTrainingWrite=hasPermission(user.roles,"training.write");
+  const canMeetings=hasPermission(user.roles,"meetings.read");
+  const canMeetingsWrite=hasPermission(user.roles,"meetings.write");
+  const canResolutions=hasPermission(user.roles,"resolutions.read");
+  const canResolutionsWrite=hasPermission(user.roles,"resolutions.write");
+  const canDocuments=hasPermission(user.roles,"documents.read");
+  const canDocumentsWrite=hasPermission(user.roles,"documents.write");
+  const canMembersWrite=hasPermission(user.roles,"members.write");
+
+  const primaryRole=
     user.roles.includes("admin") ? "admin" :
     user.roles.includes("chair") ? "chair" :
     user.roles.includes("vice_chair") ? "vice_chair" :
@@ -83,173 +108,300 @@ export default async function DashboardPage() {
     user.roles.includes("tournament_director") ? "tournament_director" :
     user.roles.includes("board") ? "board" : "member";
 
-  const data = await getDashboardData({
-    includeSystem: isAdmin,
-    includeTraining: canTraining,
-    memberId: user.memberId,
-    primaryRole,
-  });
-  const canTasks = hasPermission(user.roles,"tasks.read");
-  const canTeams = hasPermission(user.roles,"teams.read");
-  const canCalendar = hasPermission(user.roles,"calendar.read");
-  const canStatistics = hasPermission(user.roles,"statistics.read");
-  const canMeetings = hasPermission(user.roles,"meetings.read");
-  const canFinance = hasPermission(user.roles,"finance.read");
-  const canSponsors = hasPermission(user.roles,"sponsors.read");
-  const canDocuments = hasPermission(user.roles,"documents.read");
-  const canMembers = hasPermission(user.roles,"members.read");
-
-  const alerts = data.alerts.filter((alert) => {
-    if (alert.kind === "fee") return canFinance;
-    if (alert.kind === "task") return canTasks;
-    if (alert.kind === "sponsor") return canSponsors;
-    if (alert.kind === "document") return canDocuments;
-    if (alert.kind === "member_leave" || alert.kind === "member_notice") return canMembers;
-    if (alert.kind === "integration") return isAdmin;
-    return false;
-  });
-
-  const now = new Date();
-  const today = new Intl.DateTimeFormat("de-DE", {
-    weekday: "long",
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
-    timeZone: "Europe/Berlin",
-  }).format(now);
-
-  const roleFocus: Record<string,{ label:string; text:string; links:{ href:string; label:string }[] }> = {
-    admin:{
-      label:"Administration",
-      text:"System, Datenqualität und Benutzerverwaltung im Blick behalten.",
-      links:[
-        {href:"/admin/daten",label:"Daten & Qualität"},
-        {href:"/admin/integrationen",label:"Integrationen"},
-        {href:"/admin/benutzer",label:"Benutzer & Rollen"},
-      ],
-    },
-    chair:{
-      label:"Vorsitz",
-      text:"Vorstandsarbeit, Beschlüsse und offene Aufgaben steuern.",
-      links:[
-        {href:"/sitzungen",label:"Sitzungen"},
-        {href:"/beschluesse",label:"Beschlüsse"},
-        {href:"/aufgaben",label:"Aufgaben"},
-      ],
-    },
-    vice_chair:{
-      label:"Stellv. Vorsitz",
-      text:"Organisation, Sitzungen und Vereinsaufgaben koordinieren.",
-      links:[
-        {href:"/sitzungen",label:"Sitzungen"},
-        {href:"/aufgaben",label:"Aufgaben"},
-        {href:"/mitglieder",label:"Mitglieder"},
-      ],
-    },
-    treasurer:{
-      label:"Kasse",
-      text:"Beiträge, Buchungen und finanzielle Fristen stehen im Mittelpunkt.",
-      links:[
-        {href:"/finanzen",label:"Finanzen & Beiträge"},
-        {href:"/mitglieder",label:"Mitglieder"},
-        {href:"/dokumente",label:"Belege & Dokumente"},
-      ],
-    },
-    secretary:{
-      label:"Schriftführung",
-      text:"Sitzungen, Protokolle, Beschlüsse und Dokumente zentral bearbeiten.",
-      links:[
-        {href:"/sitzungen",label:"Sitzungen"},
-        {href:"/beschluesse",label:"Beschlüsse"},
-        {href:"/dokumente",label:"Dokumente"},
-      ],
-    },
-    sport_director:{
-      label:"Sportwart",
-      text:"Mannschaften, Training und sportliche Entwicklung im Überblick.",
-      links:[
-        {href:"/mannschaften",label:"Mannschaften"},
-        {href:"/training",label:"Training"},
-        {href:"/statistik",label:"Statistik"},
-      ],
-    },
-    team_captain:{
-      label:"Team Captain",
-      text:"Mannschaft, kommende Termine und Trainingsaktivität schnell erreichen.",
-      links:[
-        {href:"/mannschaften",label:"Mannschaft"},
-        {href:"/kalender",label:"Kalender"},
-        {href:"/training",label:"Training"},
-      ],
-    },
-    tournament_director:{
-      label:"Turnierleitung",
-      text:"Turniertermine, Aufgaben und notwendige Vereinsunterlagen im Zugriff.",
-      links:[
-        {href:"/kalender",label:"Kalender"},
-        {href:"/aufgaben",label:"Aufgaben"},
-        {href:"/dokumente",label:"Dokumente"},
-      ],
-    },
-    board:{
-      label:"Vorstand",
-      text:"Aufgaben, Sitzungen und Vereinsunterlagen für die Vorstandsarbeit.",
-      links:[
-        {href:"/aufgaben",label:"Aufgaben"},
-        {href:"/sitzungen",label:"Sitzungen"},
-        {href:"/dokumente",label:"Dokumente"},
-      ],
-    },
-    member:{
-      label:"Vereinszugang",
-      text:"Deine freigegebenen Vereinsbereiche auf einen Blick.",
-      links:[
-        {href:"/kalender",label:"Kalender"},
-      ],
-    },
+  const roleLabels:Record<string,string>={
+    admin:"Administration",
+    chair:"1. Vorsitz",
+    vice_chair:"2. Vorsitz",
+    treasurer:"Kasse",
+    secretary:"Schriftführung",
+    sport_director:"Sportwart",
+    team_captain:"Team Captain",
+    tournament_director:"Turnierleitung",
+    board:"Vorstand",
+    member:"Vereinszugang",
   };
 
-  const focus=roleFocus[primaryRole];
+  const data=await getDashboardData({
+    includeSystem:isAdmin,
+    includeTraining:canTraining,
+    memberId:user.memberId,
+    primaryRole,
+  });
 
-  const stats = [
-    canMembers ? { label: "Mitglieder", value: String(data.members), note: "aktive Mitglieder" } : null,
-    canTeams ? { label: "Mannschaften", value: String(data.teams), note: "aktive Teams" } : null,
-    canTasks ? { label: "Offene Aufgaben", value: String(data.openTasks), note: "noch zu erledigen" } : null,
-    canCalendar ? { label: "Nächste Termine", value: String(data.upcomingEvents), note: "in den nächsten 14 Tagen" } : null,
-  ].filter((item): item is { label:string; value:string; note:string } => Boolean(item));
+  const nextEvent=data.events[0] ?? null;
+  const trainingRate=Math.max(0,Math.min(100,data.training?.personalRate ?? 0));
+
+  const today=new Intl.DateTimeFormat("de-DE",{
+    weekday:"long",
+    day:"2-digit",
+    month:"long",
+    year:"numeric",
+    timeZone:"Europe/Berlin",
+  }).format(new Date());
+
+  const quickActions=[
+    canTasksWrite ? {href:"/aufgaben",label:"Aufgabe",sub:"anlegen",icon:"✓"} : null,
+    canCalendarWrite ? {href:"/kalender",label:"Termin",sub:"anlegen",icon:"▣"} : null,
+    canMeetingsWrite ? {href:"/sitzungen",label:"Sitzung",sub:"planen",icon:"◎"} : null,
+    canResolutionsWrite ? {href:"/beschluesse",label:"Beschluss",sub:"öffnen",icon:"≡"} : null,
+    canDocumentsWrite ? {href:"/dokumente",label:"Dokument",sub:"hochladen",icon:"⇧"} : null,
+    canTrainingWrite ? {href:"/training",label:"Training",sub:"verwalten",icon:"↔"} : null,
+    canMembersWrite ? {href:"/mitglieder",label:"Mitglied",sub:"verwalten",icon:"+"} : null,
+  ].filter((item):item is {href:string;label:string;sub:string;icon:string}=>Boolean(item));
 
   return (
-    <div className="page-stack">
-      <section className="hero">
-        <div>
+    <div className="page-stack control-dashboard">
+      <section className="control-hero">
+        <div className="control-hero-copy">
           <span className="eyebrow">{today}</span>
-          <h1>Vereinszentrale</h1>
-          <p>Vorstand, Mannschaften, Training, Turniere, Termine und Finanzen laufen hier in einer gemeinsamen Vereinsansicht zusammen.</p>
+          <h1>Gemeinsam. Präzise. Stark.</h1>
+          <p>Vestischer Dart Club e.V. · Vereinszentrale</p>
         </div>
-        <div className="hero-badge">
-          <span>VDC</span>
-          <strong>Club Control</strong>
-          <small>{isAdmin ? `${data.connectedIntegrations}/3 Fachsysteme verbunden` : "Saison 2026/27"}</small>
+        <div className="control-hero-role">
+          <img src="/vdc-logo.svg" alt="" />
+          <div>
+            <span>Dein Bereich</span>
+            <strong>{roleLabels[primaryRole]}</strong>
+          </div>
         </div>
       </section>
 
-      <section className="role-focus-strip">
-        <div>
-          <span className="eyebrow">Dein Bereich</span>
-          <strong>{focus.label}</strong>
-          <p>{focus.text}</p>
+      <section className="today-control">
+        <div className="today-control-head">
+          <div>
+            <span className="today-control-icon">◎</span>
+            <div>
+              <h2>Heute wichtig</h2>
+              <p>Aufgaben, Termine und Trainingshinweise auf einen Blick.</p>
+            </div>
+          </div>
+          <span>{today}</span>
         </div>
-        <nav>
-          {focus.links
-            .filter((item)=>visibleNavigationAccess(item.href,user.roles))
-            .map((item)=>(
-              <Link key={item.href} href={item.href}>{item.label}<span>›</span></Link>
+
+        <div className="today-control-grid">
+          {canTasks && (
+            <article className="today-card today-tasks-card">
+              <div className="today-card-head">
+                <div>
+                  <span className="card-icon">✓</span>
+                  <strong>{data.openTasks} offene Aufgaben</strong>
+                </div>
+                <Link href="/aufgaben">Alle anzeigen →</Link>
+              </div>
+
+              <div className="dashboard-task-list">
+                {data.tasks.length===0 ? (
+                  <div className="compact-empty">Keine offenen Aufgaben.</div>
+                ) : data.tasks.map((task)=>(
+                  <div className="dashboard-task-row" key={task.id}>
+                    <div className="dashboard-task-main">
+                      <span className={`task-check-dot task-${task.status}`} />
+                      <div>
+                        <strong>{task.title}</strong>
+                        <small>{task.category}</small>
+                      </div>
+                    </div>
+                    <span className="dashboard-task-date">{formatDate(task.dueDate)}</span>
+                    <span className={`priority priority-${task.priority}`}>
+                      {priorityLabels[task.priority] ?? task.priority}
+                    </span>
+                    {canTasksWrite ? (
+                      <form action={updateTaskStatusInlineAction} className="dashboard-task-status-form">
+                        <input type="hidden" name="id" value={task.id} />
+                        <select name="status" defaultValue={task.status} aria-label={"Status "+task.title}>
+                          <option value="open">Offen</option>
+                          <option value="in_progress">In Arbeit</option>
+                          <option value="blocked">Blockiert</option>
+                          <option value="done">Erledigt</option>
+                        </select>
+                        <button title="Status speichern">✓</button>
+                      </form>
+                    ) : (
+                      <span className="dashboard-task-status">{taskStatusLabel(task.status)}</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </article>
+          )}
+
+          {canCalendar && (
+            <article className="today-card next-event-card">
+              <div className="today-card-head">
+                <div>
+                  <span className="card-icon">▣</span>
+                  <strong>Nächster Termin</strong>
+                </div>
+                {nextEvent && <span className="countdown-chip">{daysUntil(nextEvent.startsAt)}</span>}
+              </div>
+
+              {nextEvent ? (
+                <>
+                  <div className={`next-event-main event-accent-${nextEvent.eventType}`}>
+                    <span className={`event-type-chip event-type-${nextEvent.eventType}`}>
+                      {eventTypeLabels[nextEvent.eventType] ?? "Termin"}
+                    </span>
+                    <h3>{nextEvent.title}</h3>
+                    <p>{formatFullDate(nextEvent.startsAt)}</p>
+                    <p>{formatTime(nextEvent.startsAt)} Uhr</p>
+                    <small>{nextEvent.location ?? "Ort noch offen"}</small>
+                    {nextEvent.team && <b>{nextEvent.team}</b>}
+                  </div>
+                  <div className="next-event-actions">
+                    <Link href="/kalender" className="primary-button">Details anzeigen</Link>
+                    <Link href="/kalender" className="ghost-button">Zum Kalender</Link>
+                  </div>
+                </>
+              ) : (
+                <div className="compact-empty">Keine kommenden Termine.</div>
+              )}
+            </article>
+          )}
+
+          {canTraining && data.training && (
+            <article className="today-card training-hint-card">
+              <div className="today-card-head">
+                <div>
+                  <span className="card-icon">↔</span>
+                  <strong>Trainingshinweise</strong>
+                </div>
+                <Link href="/training">Details →</Link>
+              </div>
+
+              <div className="training-next-compact">
+                <span className="training-live-dot" />
+                <div>
+                  <small>Nächstes Training</small>
+                  <strong>
+                    {data.training.nextAt
+                      ? formatFullDate(data.training.nextAt)+" · "+formatTime(data.training.nextAt)+" Uhr"
+                      : "Kein Termin geplant"}
+                  </strong>
+                </div>
+              </div>
+
+              {user.memberId && (
+                <div className="training-rate-block">
+                  <div
+                    className="training-rate-ring"
+                    style={{"--training-rate":trainingRate+"%"} as CSSProperties}
+                  >
+                    <strong>{trainingRate}%</strong>
+                  </div>
+                  <div>
+                    <span>Anwesenheit dieses Jahr</span>
+                    <strong>{data.training.personalAttended} / {data.training.personalRecorded}</strong>
+                    <small>erfasste Trainingstage</small>
+                  </div>
+                </div>
+              )}
+
+              <div className={`training-hint ${data.training.pendingAttendance ? "is-warning" : ""}`}>
+                <span>!</span>
+                <p>
+                  {data.training.pendingAttendance
+                    ? data.training.pendingAttendance+" Trainingstage warten noch auf Anwesenheit."
+                    : "Alle erfassten Trainingstage sind aktuell gepflegt."}
+                </p>
+              </div>
+            </article>
+          )}
+        </div>
+      </section>
+
+      {quickActions.length>0 && (
+        <section className="quick-control-panel">
+          <div className="section-title-row">
+            <div>
+              <span className="eyebrow">Schnellaktionen</span>
+              <h2>Mit einem Klick weiter</h2>
+            </div>
+          </div>
+          <div className="quick-control-grid">
+            {quickActions.map((item)=>(
+              <Link href={item.href} key={item.label}>
+                <span>{item.icon}</span>
+                <div><strong>{item.label}</strong><small>{item.sub}</small></div>
+              </Link>
             ))}
-        </nav>
+          </div>
+        </section>
+      )}
+
+      <section className="dashboard-board-grid">
+        {canCalendar && (
+          <article className="panel compact-board-card">
+            <div className="panel-head">
+              <div><span className="eyebrow">Kalender</span><h2>Nächste Termine</h2></div>
+              <Link href="/kalender" className="text-link">Alle anzeigen →</Link>
+            </div>
+            <div className="compact-event-list">
+              {data.events.length===0 ? (
+                <div className="compact-empty">Keine kommenden Termine.</div>
+              ) : data.events.slice(0,5).map((event)=>(
+                <Link href="/kalender" className="compact-event-row" key={event.title+event.startsAt}>
+                  <i className={`event-dot event-type-${event.eventType}`} />
+                  <span>{formatDate(event.startsAt)}</span>
+                  <div><strong>{event.title}</strong><small>{formatTime(event.startsAt)} Uhr</small></div>
+                  <b>{eventTypeLabels[event.eventType] ?? "Termin"}</b>
+                </Link>
+              ))}
+            </div>
+          </article>
+        )}
+
+        {canResolutions && (
+          <article className="panel compact-board-card">
+            <div className="panel-head">
+              <div><span className="eyebrow">Vorstandsarbeit</span><h2>Aktuelle Beschlüsse</h2></div>
+              <Link href="/beschluesse" className="text-link">Alle anzeigen →</Link>
+            </div>
+            <div className="compact-resolution-list">
+              {data.resolutions.length===0 ? (
+                <div className="compact-empty">Noch keine Beschlüsse vorhanden.</div>
+              ) : data.resolutions.map((resolution)=>(
+                <Link
+                  href={resolution.number ? "/beschluesse?q="+encodeURIComponent(resolution.number) : "/beschluesse"}
+                  key={resolution.id}
+                >
+                  <span className={`resolution-dot resolution-${resolution.status}`} />
+                  <div>
+                    <strong>{resolution.number ? resolution.number+" · " : ""}{resolution.title}</strong>
+                    <small>{resolutionStatusLabel(resolution.status)}</small>
+                  </div>
+                  <time>{formatDate(resolution.decidedAt)}</time>
+                </Link>
+              ))}
+            </div>
+          </article>
+        )}
+
+        {canDocuments && (
+          <article className="panel compact-board-card">
+            <div className="panel-head">
+              <div><span className="eyebrow">Dokumente</span><h2>Zur Prüfung</h2></div>
+              <Link href="/dokumente" className="text-link">Alle anzeigen →</Link>
+            </div>
+            <div className="compact-document-list">
+              {data.reviewDocuments.length===0 ? (
+                <div className="compact-empty">Keine Dokumente zur Prüfung.</div>
+              ) : data.reviewDocuments.map((doc)=>(
+                <Link href={"/dokumente/"+doc.id} key={doc.id}>
+                  <span className="document-mini-icon">▤</span>
+                  <div>
+                    <strong>{doc.title}</strong>
+                    <small>{doc.category}</small>
+                  </div>
+                  <b>Zu prüfen</b>
+                </Link>
+              ))}
+            </div>
+          </article>
+        )}
       </section>
 
       {data.roleMetrics.length>0 && (
-        <section className="role-metric-grid">
+        <section className="role-metric-grid control-role-metrics">
           {data.roleMetrics.map((metric)=>(
             <Link
               href={metric.href}
@@ -265,186 +417,36 @@ export default async function DashboardPage() {
         </section>
       )}
 
-      <section className="stat-grid">
-        {stats.map((item) => (
-          <article className="stat-card" key={item.label}>
-            <span>{item.label}</span>
-            <strong>{item.value}</strong>
-            <small>{item.note}</small>
-          </article>
-        ))}
-      </section>
-
-      {isAdmin && (
-        <section className="source-health-strip">
-          {data.integrations.map((integration) => (
+      {isAdmin && data.integrations.length>0 && (
+        <section className="source-health-strip control-system-strip">
+          {data.integrations.map((integration)=>(
             <article key={integration.key}>
               <div>
-                <span className={`sync-run-dot sync-run-${integration.status === "connected" ? "success" : integration.status === "error" ? "error" : "partial"}`} />
+                <span className={`sync-run-dot sync-run-${integration.status==="connected" ? "success" : integration.status==="error" ? "error" : "partial"}`} />
                 <strong>{integration.name}</strong>
               </div>
-              <b>{integration.status === "connected" ? "Verbunden" : integration.status}</b>
+              <b>{integration.status==="connected" ? "Verbunden" : integration.status}</b>
               <small>Sync {formatSync(integration.lastSyncAt)}</small>
             </article>
           ))}
         </section>
       )}
 
-      <section className="attention-panel">
-        <div className="attention-panel-head">
+      {data.alerts.length>0 && (
+        <section className="control-alert-strip">
           <div>
-            <span className="eyebrow">Fristen & Hinweise</span>
-            <h2>Achtung erforderlich</h2>
+            <span className="eyebrow">Hinweise</span>
+            <strong>{data.alerts.length} Vorgänge brauchen Aufmerksamkeit</strong>
           </div>
-          <span className={`attention-count ${alerts.length ? "has-alerts" : ""}`}>{alerts.length}</span>
-        </div>
-
-        {alerts.length === 0 ? (
-          <div className="attention-clear">
-            <i />
-            <div><strong>Keine dringenden Hinweise</strong><span>Für deine Rolle liegen aktuell keine offenen Warnungen oder Fristen vor.</span></div>
-          </div>
-        ) : (
-          <div className="attention-list">
-            {alerts.map((alert,index) => (
-              <Link
-                href={alert.href}
-                className={`attention-row attention-${alert.severity}`}
-                key={alert.kind + alert.title + index}
-              >
-                <span className="attention-dot" />
-                <div>
-                  <strong>{alert.title}</strong>
-                  <span>{alert.detail}</span>
-                </div>
-                <b>Öffnen ›</b>
+          <div>
+            {data.alerts.slice(0,3).map((alert,index)=>(
+              <Link href={alert.href} className={"alert-pill alert-"+alert.severity} key={alert.kind+index}>
+                {alert.title}
               </Link>
             ))}
           </div>
-        )}
-      </section>
-
-      <section className="dashboard-grid">
-        {canTasks && (
-          <article className="panel panel-wide">
-            <div className="panel-head">
-              <div><span className="eyebrow">Organisation</span><h2>Offene Aufgaben</h2></div>
-              <Link className="ghost-button" href="/aufgaben">Alle anzeigen</Link>
-            </div>
-            <div className="table-list">
-              {data.tasks.length === 0 ? (
-                <div className="empty-state">Noch keine offenen Aufgaben vorhanden.</div>
-              ) : data.tasks.map((task) => (
-                <div className="table-row" key={task.title}>
-                  <div><strong>{task.title}</strong><span>{task.category}</span></div>
-                  <span>{formatDate(task.dueDate)}</span>
-                  <span className={`priority priority-${task.priority.toLowerCase()}`}>{task.priority}</span>
-                </div>
-              ))}
-            </div>
-          </article>
-        )}
-
-        {canCalendar && (
-        <article className="panel">
-          <div className="panel-head">
-            <div><span className="eyebrow">Kalender</span><h2>Nächste Termine</h2></div>
-            <Link className="text-link" href="/kalender">Kalender</Link>
-          </div>
-          <div className="timeline">
-            {data.events.length === 0 ? (
-              <div className="empty-state">Noch keine kommenden Termine vorhanden.</div>
-            ) : data.events.map((event) => {
-              const d = formatEventDate(event.startsAt);
-              return (
-                <div key={event.title + event.startsAt}>
-                  <span>{d.day} {d.month}</span>
-                  <p>
-                    <strong>{event.title}</strong>
-                    <small>
-                      {event.team ? `${event.team} · ` : ""}
-                      {eventTypeLabels[event.eventType] ?? "Vereinstermin"} · {event.location ?? "Ort offen"} · {d.time}
-                    </small>
-                  </p>
-                </div>
-              );
-            })}
-          </div>
-        </article>
-        )}
-
-        {canStatistics && (
-        <article className="panel">
-          <div className="panel-head">
-            <div><span className="eyebrow">Sport & Verein</span><h2>Aktivität 2026</h2></div>
-            <Link className="text-link" href="/statistik">Statistik</Link>
-          </div>
-          <div className="activity-kpi-list">
-            <div><span>Ligaspiele im Club-Kalender</span><strong>{data.leagueEvents}</strong></div>
-            <div><span>Interne Turniere</span><strong>{data.tournamentsYear}</strong></div>
-            <div><span>Trainingstage</span><strong>{data.trainingDaysYear}</strong></div>
-          </div>
-        </article>
-        )}
-
-        {canTraining && data.training && (
-          <article className="panel training-dashboard-card">
-            <div className="panel-head">
-              <div><span className="eyebrow">Training</span><h2>Dein Training</h2></div>
-              <Link className="text-link" href="/training">Training</Link>
-            </div>
-            <div className="training-dashboard-next">
-              <span>Nächster Termin</span>
-              <strong>
-                {data.training.nextAt
-                  ? new Intl.DateTimeFormat("de-DE",{
-                      weekday:"short",day:"2-digit",month:"2-digit",
-                      hour:"2-digit",minute:"2-digit",
-                      timeZone:"Europe/Berlin",
-                    }).format(new Date(data.training.nextAt))
-                  : "Kein Termin"}
-              </strong>
-              <small>Dienstag & Freitag · 19:00 Uhr · Ende offen</small>
-            </div>
-            {user.memberId && (
-              <div className="training-dashboard-personal">
-                <div>
-                  <span>Aktivität {new Date().getFullYear()}</span>
-                  <strong>{data.training.personalRate}%</strong>
-                </div>
-                <div>
-                  <span>Besucht</span>
-                  <strong>{data.training.personalAttended}/{data.training.personalRecorded}</strong>
-                </div>
-              </div>
-            )}
-            {canTrainingWrite && data.training.pendingAttendance > 0 && (
-              <Link href="/training" className="training-dashboard-alert">
-                <span>Anwesenheit offen</span>
-                <strong>{data.training.pendingAttendance} Trainingstage prüfen ›</strong>
-              </Link>
-            )}
-          </article>
-        )}
-
-        {(canMembers || canTeams || canCalendar) && (
-          <article className="panel">
-            <div className="panel-head"><div><span className="eyebrow">Verein</span><h2>Auf einen Blick</h2></div></div>
-            {canMembers && <div className="team-card"><div><strong>{data.members} Mitglieder</strong><span>aktiver Vereinsbestand</span></div><b>VDC</b></div>}
-            {canTeams && <div className="team-card"><div><strong>{data.teams} Mannschaften</strong><span>im aktuellen Spielbetrieb</span></div><b>SPORT</b></div>}
-            {canCalendar && <div className="team-card"><div><strong>{data.upcomingEvents} Termine</strong><span>in den nächsten 14 Tagen</span></div><b>PLAN</b></div>}
-          </article>
-        )}
-
-        {canMeetings && (
-          <article className="panel panel-accent">
-            <span className="eyebrow">Sitzungsmodus</span>
-            <h2>Vorstandssitzung vorbereiten</h2>
-            <p>Tagesordnung, Beschlüsse und Aufgaben werden direkt miteinander verknüpft.</p>
-            <Link className="light-button" href="/sitzungen">Sitzungen öffnen</Link>
-          </article>
-        )}
-      </section>
+        </section>
+      )}
     </div>
   );
 }
