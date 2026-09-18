@@ -521,11 +521,7 @@ export async function createResolutionFromAgendaAction(formData: FormData) {
     SET status = 'done'
     WHERE id = ${agendaItemId}::uuid
       AND meeting_id = ${meetingId}::uuid
-      AND EXISTS (
-        SELECT 1 FROM meetings m
-        WHERE m.id=${meetingId}::uuid
-          AND m.deleted_at IS NULL
-      )
+      AND EXISTS (SELECT 1 FROM new_resolution)
   `;
 
   const created=await sql`
