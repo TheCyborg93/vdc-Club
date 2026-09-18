@@ -1,4 +1,5 @@
 import { getDb } from "@/lib/db";
+import { ensureTrainingSchedule } from "@/lib/training";
 
 export type DashboardTask = {
   title: string;
@@ -72,6 +73,7 @@ export async function getDashboardData(
 ): Promise<DashboardData> {
   const sql = getDb();
   if (!sql) return emptyData;
+  await ensureTrainingSchedule(365);
 
   try {
     const [
@@ -94,10 +96,12 @@ export async function getDashboardData(
             WHERE source='vdc_turnier'
               AND EXTRACT(YEAR FROM starts_at AT TIME ZONE 'Europe/Berlin') = EXTRACT(YEAR FROM CURRENT_DATE)
           )::int AS tournaments_year,
-          count(*) FILTER (
-            WHERE source='vdc_training'
-              AND EXTRACT(YEAR FROM starts_at AT TIME ZONE 'Europe/Berlin') = EXTRACT(YEAR FROM CURRENT_DATE)
-          )::int AS training_days_year,
+          (
+            SELECT count(*)::int
+            FROM training_sessions
+            WHERE status<>'cancelled'
+              AND EXTRACT(YEAR FROM scheduled_at AT TIME ZONE 'Europe/Berlin') = EXTRACT(YEAR FROM CURRENT_DATE)
+          ) AS training_days_year,
           count(*) FILTER (WHERE source='vdc_tc' AND event_type='league')::int AS league_events
         FROM club_events
       `,
