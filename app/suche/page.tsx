@@ -150,7 +150,7 @@ export default async function SearchPage({
       `;
       addRows(
         results,rows,"Dokument",
-        ()=>"/dokumente",
+        (row)=>"/dokumente/"+String(row.id),
         (row)=>String(row.title),
         (row)=>String(row.category)+" · "+String(row.status),
       );
