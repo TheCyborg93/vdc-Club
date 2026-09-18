@@ -54,7 +54,7 @@ export default async function MembersPage({
             ) AS teams
           FROM members m
           LEFT JOIN team_members tm ON tm.member_id = m.id AND tm.is_active = true
-          LEFT JOIN teams t ON t.id = tm.team_id AND t.status = 'active'
+          LEFT JOIN teams t ON t.id = tm.team_id AND t.status = 'active' AND t.deleted_at IS NULL
           GROUP BY m.id
           ORDER BY
             CASE m.status WHEN 'active' THEN 0 WHEN 'passive' THEN 1 ELSE 2 END,
