@@ -10,6 +10,8 @@ import {
   updateAttendanceAction,
   updateMeetingStatusAction,
 } from "@/app/sitzungen/actions";
+import { moveToTrashAction } from "@/app/admin/papierkorb/actions";
+import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 
 const attendanceLabels: Record<string, string> = {
   invited: "Eingeladen",
@@ -29,6 +31,7 @@ const errors: Record<string, string> = {
   missing: "Bitte alle erforderlichen Angaben ausfüllen.",
   attendee: "Teilnehmer konnte nicht hinzugefügt werden.",
   resolution: "Für einen Beschluss werden Titel und Beschlusstext benötigt.",
+  protected_delete: "Diese Sitzung kann nicht gelöscht werden, weil sie bereits abgeschlossen ist oder Beschlüsse/Dokumente enthält.",
 };
 
 export const dynamic = "force-dynamic";
@@ -76,6 +79,7 @@ export default async function MeetingDetailPage({
       FROM meetings m
       LEFT JOIN club_events e ON e.id = m.event_id
       WHERE m.id = ${id}::uuid
+        AND m.deleted_at IS NULL
       LIMIT 1
     `,
     sql`
@@ -98,7 +102,7 @@ export default async function MeetingDetailPage({
         t.status AS task_status
       FROM agenda_items ai
       LEFT JOIN resolutions r ON r.agenda_item_id = ai.id
-      LEFT JOIN tasks t ON t.source_type = 'resolution' AND t.source_id = r.id
+      LEFT JOIN tasks t ON t.source_type = 'resolution' AND t.source_id = r.id AND t.deleted_at IS NULL
       WHERE ai.meeting_id = ${id}::uuid
       ORDER BY ai.position
     `,
@@ -160,6 +164,17 @@ export default async function MeetingDetailPage({
                   <input type="hidden" name="meetingId" value={id} />
                   <input type="hidden" name="status" value="completed" />
                   <button className="light-button">Sitzung beenden</button>
+                </form>
+              )}
+              {["planned","cancelled"].includes(String(meeting.status)) && (
+                <form action={moveToTrashAction}>
+                  <input type="hidden" name="type" value="meeting" />
+                  <input type="hidden" name="id" value={id} />
+                  <ConfirmSubmitButton
+                    message={"Sitzung „"+String(meeting.title)+"“ in den Papierkorb verschieben? Bereits verknüpfte Beschlüsse oder Dokumente verhindern das Löschen."}
+                  >
+                    Löschen
+                  </ConfirmSubmitButton>
                 </form>
               )}
             </div>
