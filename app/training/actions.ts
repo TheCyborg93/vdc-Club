@@ -38,7 +38,7 @@ export async function saveTrainingAttendanceAction(formData: FormData) {
   const members = await sql`
     SELECT id::text
     FROM members
-    WHERE status='active'
+    WHERE status IN ('active','passive')
       AND (join_date IS NULL OR join_date <= (${String(session.scheduled_at)}::timestamptz AT TIME ZONE 'Europe/Berlin')::date)
       AND (leave_date IS NULL OR leave_date >= (${String(session.scheduled_at)}::timestamptz AT TIME ZONE 'Europe/Berlin')::date)
     ORDER BY last_name,first_name
