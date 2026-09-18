@@ -1,7 +1,11 @@
 import Link from "next/link";
 import { getDb } from "@/lib/db";
-import { requirePermission } from "@/lib/permissions";
+import { hasPermission, requirePermission } from "@/lib/permissions";
 import { PrintReportButton } from "@/components/print-report-button";
+import {
+  activateTrainingSeasonAction,
+  saveTrainingSeasonAction,
+} from "@/app/training/auswertung/actions";
 
 export const dynamic = "force-dynamic";
 
@@ -30,9 +34,17 @@ function monthLabel(value: unknown) {
 export default async function TrainingReportPage({
   searchParams,
 }: {
-  searchParams: Promise<{ year?: string }>;
+  searchParams: Promise<{
+    mode?: string;
+    year?: string;
+    season?: string;
+    saved?: string;
+    active?: string;
+    error?: string;
+  }>;
 }) {
-  await requirePermission("training.read");
+  const actor=await requirePermission("training.read");
+  const canWrite=hasPermission(actor.roles,"training.write");
   const sql=getDb();
   const params=await searchParams;
 
@@ -41,6 +53,31 @@ export default async function TrainingReportPage({
   const selectedYear=Number.isInteger(requested) && requested>=2020 && requested<=nowYear+1
     ? requested
     : nowYear;
+
+  const seasons=sql
+    ? await sql`
+        SELECT id::text,label,starts_on,ends_on,is_active,notes
+        FROM training_seasons
+        ORDER BY is_active DESC,starts_on DESC
+      `
+    : [];
+
+  const requestedSeason=seasons.find((row)=>String(row.id)===params.season);
+  const activeSeason=requestedSeason
+    ?? seasons.find((row)=>Boolean(row.is_active))
+    ?? seasons[0]
+    ?? null;
+
+  const mode=params.mode==="season" && activeSeason ? "season" : "year";
+  const rangeStart=mode==="season"
+    ? String(activeSeason!.starts_on)
+    : ${selectedYear}-01-01;
+  const rangeEnd=mode==="season"
+    ? String(activeSeason!.ends_on)
+    : ${selectedYear}-12-31;
+  const teamSeasonFilter=mode==="season" ? String(activeSeason!.label) : null;
+  const reportLabel=mode==="season" ? ${Saison ${activeSeason!.label}} : String(selectedYear);
+  const periodLabel=${${formatDate(rangeStart)} – ${formatDate(rangeEnd)}};
 
   const [yearRows,summaryRows,teams,monthly,teamMonthly,members]=sql
     ? await Promise.all([
@@ -61,7 +98,8 @@ export default async function TrainingReportPage({
             LEFT JOIN training_attendance a ON a.session_id=s.id
             WHERE s.attendance_recorded_at IS NOT NULL
               AND s.status='completed'
-              AND EXTRACT(YEAR FROM s.scheduled_at AT TIME ZONE 'Europe/Berlin')=${selectedYear}
+              AND (s.scheduled_at AT TIME ZONE 'Europe/Berlin')::date
+                  BETWEEN ${rangeStart}::date AND ${rangeEnd}::date
             GROUP BY s.id
           )
           SELECT
@@ -82,7 +120,8 @@ export default async function TrainingReportPage({
               WHERE a2.attendance='present'
                 AND s2.attendance_recorded_at IS NOT NULL
                 AND s2.status='completed'
-                AND EXTRACT(YEAR FROM s2.scheduled_at AT TIME ZONE 'Europe/Berlin')=${selectedYear}
+                AND (s2.scheduled_at AT TIME ZONE 'Europe/Berlin')::date
+                    BETWEEN ${rangeStart}::date AND ${rangeEnd}::date
             ) AS unique_members
           FROM per_session
         `,
@@ -92,19 +131,17 @@ export default async function TrainingReportPage({
             FROM training_sessions
             WHERE attendance_recorded_at IS NOT NULL
               AND status='completed'
-              AND EXTRACT(YEAR FROM scheduled_at AT TIME ZONE 'Europe/Berlin')=${selectedYear}
+              AND (scheduled_at AT TIME ZONE 'Europe/Berlin')::date
+                  BETWEEN ${rangeStart}::date AND ${rangeEnd}::date
           ),
           roster AS (
             SELECT
-              t.id,
-              t.name,
-              t.short_name,
-              t.league,
-              t.season,
+              t.id,t.name,t.short_name,t.league,t.season,
               count(tm.member_id)::int AS roster_count
             FROM teams t
             JOIN team_members tm ON tm.team_id=t.id AND tm.is_active=true
             WHERE t.status='active'
+              AND (${teamSeasonFilter}::text IS NULL OR t.season=${teamSeasonFilter})
             GROUP BY t.id
           ),
           team_session AS (
@@ -116,9 +153,7 @@ export default async function TrainingReportPage({
               count(a.member_id) FILTER (WHERE a.attendance='excused')::int AS excused_count
             FROM roster r
             CROSS JOIN recorded s
-            LEFT JOIN team_members tm
-              ON tm.team_id=r.id
-             AND tm.is_active=true
+            LEFT JOIN team_members tm ON tm.team_id=r.id AND tm.is_active=true
             LEFT JOIN training_attendance a
               ON a.session_id=s.id
              AND a.member_id=tm.member_id
@@ -139,12 +174,7 @@ export default async function TrainingReportPage({
             GROUP BY team_id
           )
           SELECT
-            r.id::text AS id,
-            r.name,
-            r.short_name,
-            r.league,
-            r.season,
-            r.roster_count,
+            r.id::text AS id,r.name,r.short_name,r.league,r.season,r.roster_count,
             COALESCE(a.trainings,0)::int AS trainings,
             COALESCE(a.avg_present,0) AS avg_present,
             COALESCE(a.present_total,0)::int AS present_total,
@@ -171,7 +201,8 @@ export default async function TrainingReportPage({
           LEFT JOIN training_attendance a ON a.session_id=s.id
           WHERE s.attendance_recorded_at IS NOT NULL
             AND s.status='completed'
-            AND EXTRACT(YEAR FROM s.scheduled_at AT TIME ZONE 'Europe/Berlin')=${selectedYear}
+            AND (s.scheduled_at AT TIME ZONE 'Europe/Berlin')::date
+                BETWEEN ${rangeStart}::date AND ${rangeEnd}::date
           GROUP BY 1
           ORDER BY 1
         `,
@@ -181,7 +212,8 @@ export default async function TrainingReportPage({
             FROM training_sessions
             WHERE attendance_recorded_at IS NOT NULL
               AND status='completed'
-              AND EXTRACT(YEAR FROM scheduled_at AT TIME ZONE 'Europe/Berlin')=${selectedYear}
+              AND (scheduled_at AT TIME ZONE 'Europe/Berlin')::date
+                  BETWEEN ${rangeStart}::date AND ${rangeEnd}::date
           )
           SELECT
             t.id::text AS team_id,
@@ -203,6 +235,7 @@ export default async function TrainingReportPage({
             ON a.session_id=s.id
            AND a.member_id=tm.member_id
           WHERE t.status='active'
+            AND (${teamSeasonFilter}::text IS NULL OR t.season=${teamSeasonFilter})
           GROUP BY
             t.id,t.short_name,t.name,
             date_trunc('month',s.scheduled_at AT TIME ZONE 'Europe/Berlin')
@@ -231,13 +264,17 @@ export default async function TrainingReportPage({
             END AS activity_rate
           FROM members m
           LEFT JOIN team_members tm ON tm.member_id=m.id AND tm.is_active=true
-          LEFT JOIN teams t ON t.id=tm.team_id AND t.status='active'
+          LEFT JOIN teams t
+            ON t.id=tm.team_id
+           AND t.status='active'
+           AND (${teamSeasonFilter}::text IS NULL OR t.season=${teamSeasonFilter})
           LEFT JOIN training_attendance a ON a.member_id=m.id
           LEFT JOIN training_sessions s
             ON s.id=a.session_id
            AND s.attendance_recorded_at IS NOT NULL
            AND s.status='completed'
-           AND EXTRACT(YEAR FROM s.scheduled_at AT TIME ZONE 'Europe/Berlin')=${selectedYear}
+           AND (s.scheduled_at AT TIME ZONE 'Europe/Berlin')::date
+               BETWEEN ${rangeStart}::date AND ${rangeEnd}::date
           WHERE m.status IN ('active','passive')
           GROUP BY m.id
           ORDER BY activity_rate DESC,attended DESC,m.last_name,m.first_name
@@ -261,33 +298,66 @@ export default async function TrainingReportPage({
   const monthKeys=monthly.map((row)=>new Date(String(row.month_start)).toISOString().slice(0,7));
   const maxOverall=Math.max(1,...monthly.map((row)=>Number(row.avg_present ?? 0)));
 
+  const errorLabels: Record<string,string> = {
+    database:"Datenbank ist nicht verfügbar.",
+    season:"Saison konnte nicht gespeichert werden. Bitte Zeitraum prüfen.",
+  };
+
   return (
     <div className="page-stack training-report-page">
       <section className="page-heading training-report-heading">
         <div>
           <Link href="/training" className="back-link">← Training</Link>
           <span className="eyebrow">Auswertung</span>
-          <h1>Trainingsbericht {selectedYear}</h1>
-          <p>Jahresauswertung für Vorstand und Sportbetrieb mit Mannschaftsvergleich und Mitgliederaktivität.</p>
+          <h1>Trainingsbericht · {reportLabel}</h1>
+          <p>Auswertung für Vorstand und Sportbetrieb mit Mannschaftsvergleich und Mitgliederaktivität.</p>
         </div>
+
         <div className="training-report-actions">
-          <form method="get">
+          <form method="get" className="training-report-switcher">
             <label>
-              Jahr
-              <select name="year" defaultValue={selectedYear}>
-                {yearOptions.map((year)=>(
-                  <option key={year} value={year}>{year}</option>
-                ))}
+              Ansicht
+              <select name="mode" defaultValue={mode}>
+                <option value="year">Kalenderjahr</option>
+                <option value="season" disabled={!seasons.length}>Saison</option>
               </select>
             </label>
+
+            {mode==="year" ? (
+              <label>
+                Jahr
+                <select name="year" defaultValue={selectedYear}>
+                  {yearOptions.map((year)=>(
+                    <option key={year} value={year}>{year}</option>
+                  ))}
+                </select>
+              </label>
+            ) : (
+              <label>
+                Saison
+                <select name="season" defaultValue={String(activeSeason?.id ?? "")}>
+                  {seasons.map((season)=>(
+                    <option key={String(season.id)} value={String(season.id)}>
+                      {String(season.label)}{season.is_active ? " · aktiv" : ""}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+
             <button className="mini-button">Anzeigen</button>
           </form>
           <PrintReportButton />
         </div>
       </section>
 
+      {params.error && <div className="form-error">{errorLabels[params.error] ?? "Aktion fehlgeschlagen."}</div>}
+      {params.saved && <div className="form-success">Saison wurde gespeichert.</div>}
+      {params.active && <div className="form-success">Aktive Trainingssaison wurde geändert.</div>}
+
       <section className="training-report-meta">
-        <div><span>Zeitraum</span><strong>01.01.–31.12.{selectedYear}</strong></div>
+        <div><span>Auswertung</span><strong>{reportLabel}</strong></div>
+        <div><span>Zeitraum</span><strong>{periodLabel}</strong></div>
         <div><span>Regeltraining</span><strong>Dienstag & Freitag · 19:00 Uhr</strong></div>
         <div><span>Basis</span><strong>Nur gespeicherte Anwesenheiten</strong></div>
       </section>
@@ -309,9 +379,11 @@ export default async function TrainingReportPage({
         </article>
 
         <article className="panel">
-          <div className="panel-head"><div><span className="eyebrow">Saison</span><h2>Aktive Mannschaften</h2></div></div>
+          <div className="panel-head"><div><span className="eyebrow">Mannschaften</span><h2>{mode==="season" ? ${Saison ${activeSeason?.label}} : "Aktive Teams"}</h2></div></div>
           <div className="training-report-seasons">
-            {teams.map((team)=>(
+            {teams.length===0 ? (
+              <div className="empty-state">Für diesen Zeitraum ist keine passende aktive Mannschaft hinterlegt.</div>
+            ) : teams.map((team)=>(
               <div key={String(team.id)}>
                 <strong>{String(team.short_name ?? team.name)}</strong>
                 <span>{String(team.season ?? "Keine Saison")} · {String(team.league ?? "Keine Liga")}</span>
@@ -323,11 +395,11 @@ export default async function TrainingReportPage({
 
       <article className="panel training-report-section">
         <div className="panel-head"><div><span className="eyebrow">Vergleich</span><h2>Mannschaften</h2></div></div>
-        <p className="training-report-note">Die Mannschaftsauswertung verwendet die aktuell aktive Kaderzuordnung.</p>
+        <p className="training-report-note">Die Mannschaftsauswertung verwendet die aktuell aktive Kaderzuordnung{mode==="season" ? ${ und Teams der Saison ${activeSeason?.label}} : ""}.</p>
 
         <div className="training-team-comparison">
           {teams.length===0 ? (
-            <div className="empty-state">Keine aktiven Mannschaften vorhanden.</div>
+            <div className="empty-state">Keine passenden Mannschaften vorhanden.</div>
           ) : teams.map((team)=>(
             <div className="training-team-card" key={String(team.id)}>
               <div className="training-team-head">
@@ -343,7 +415,7 @@ export default async function TrainingReportPage({
                 <div><span>Teilnahmen</span><strong>{Number(team.present_total ?? 0)}</strong></div>
                 <div><span>Entschuldigt</span><strong>{Number(team.excused_total ?? 0)}</strong></div>
               </div>
-              <div className="training-team-rate"><i style={{width:`${pct(team.attendance_rate)}%`}} /></div>
+              <div className="training-team-rate"><i style={{width:${pct(team.attendance_rate)}%}} /></div>
             </div>
           ))}
         </div>
@@ -352,7 +424,7 @@ export default async function TrainingReportPage({
       <article className="panel training-report-section">
         <div className="panel-head"><div><span className="eyebrow">Entwicklung</span><h2>Monatsverlauf</h2></div></div>
         {monthly.length===0 ? (
-          <div className="empty-state">Für {selectedYear} sind noch keine Anwesenheiten erfasst.</div>
+          <div className="empty-state">Für {reportLabel} sind noch keine Anwesenheiten erfasst.</div>
         ) : (
           <div className="training-report-months">
             {monthly.map((row)=>(
@@ -363,7 +435,7 @@ export default async function TrainingReportPage({
                 </div>
                 <b>{Number(row.avg_present ?? 0).toLocaleString("de-DE")} Ø</b>
                 <div className="training-report-month-track">
-                  <i style={{width:`${Math.round((Number(row.avg_present ?? 0)/maxOverall)*100)}%`}} />
+                  <i style={{width:${Math.round((Number(row.avg_present ?? 0)/maxOverall)*100)}%}} />
                 </div>
               </div>
             ))}
@@ -405,7 +477,7 @@ export default async function TrainingReportPage({
             <span>Mitglied</span><span>Mannschaft</span><span>Besucht</span><span>Quote</span><span>Zuletzt da</span>
           </div>
           {members.map((member)=>(
-            <Link href={`/mitglieder/${member.id}`} className="training-report-member-row" key={String(member.id)}>
+            <Link href={${/mitglieder/${member.id}}} className="training-report-member-row" key={String(member.id)}>
               <strong>{String(member.first_name)} {String(member.last_name)}</strong>
               <span>{String(member.teams)}</span>
               <span>{Number(member.attended ?? 0)}/{Number(member.recorded ?? 0)}</span>
@@ -415,6 +487,68 @@ export default async function TrainingReportPage({
           ))}
         </div>
       </article>
+
+      {canWrite && (
+        <article className="panel training-report-section training-season-management">
+          <div className="panel-head">
+            <div><span className="eyebrow">Verwaltung</span><h2>Trainingssaisons</h2></div>
+          </div>
+          <p className="training-report-note">Start und Ende sind frei definierbar. Die aktive Saison wird beim Öffnen der Saisonauswertung vorausgewählt.</p>
+
+          <div className="training-season-list">
+            {seasons.map((season)=>(
+              <form action={saveTrainingSeasonAction} className="training-season-row" key={String(season.id)}>
+                <input type="hidden" name="id" value={String(season.id)} />
+                <label>Saison<input name="label" defaultValue={String(season.label)} required /></label>
+                <label>Start<input name="startsOn" type="date" defaultValue={String(season.starts_on).slice(0,10)} required /></label>
+                <label>Ende<input name="endsOn" type="date" defaultValue={String(season.ends_on).slice(0,10)} required /></label>
+                <label>Aktiv
+                  <select name="isActive" defaultValue={season.is_active ? "true" : "false"}>
+                    <option value="false">Nein</option>
+                    <option value="true">Ja</option>
+                  </select>
+                </label>
+                <label className="training-season-note">Notiz<input name="notes" defaultValue={season.notes ? String(season.notes) : ""} /></label>
+                <div className="training-season-actions">
+                  <button className="mini-button">Speichern</button>
+                </div>
+              </form>
+            ))}
+          </div>
+
+          <form action={saveTrainingSeasonAction} className="training-season-new">
+            <div>
+              <span className="eyebrow">Neu</span>
+              <strong>Weitere Saison anlegen</strong>
+            </div>
+            <label>Saison<input name="label" placeholder="2027/28" required /></label>
+            <label>Start<input name="startsOn" type="date" required /></label>
+            <label>Ende<input name="endsOn" type="date" required /></label>
+            <label>Aktiv
+              <select name="isActive" defaultValue="false">
+                <option value="false">Nein</option>
+                <option value="true">Ja</option>
+              </select>
+            </label>
+            <label className="training-season-note">Notiz<input name="notes" /></label>
+            <button className="primary-button">Saison anlegen</button>
+          </form>
+
+          {seasons.some((season)=>!season.is_active) && (
+            <div className="training-season-activate-list">
+              <span className="eyebrow">Schnell aktivieren</span>
+              <div>
+                {seasons.filter((season)=>!season.is_active).map((season)=>(
+                  <form action={activateTrainingSeasonAction} key={String(season.id)}>
+                    <input type="hidden" name="id" value={String(season.id)} />
+                    <button className="mini-button">{String(season.label)} aktivieren</button>
+                  </form>
+                ))}
+              </div>
+            </div>
+          )}
+        </article>
+      )}
 
       <section className="training-report-footer">
         <p>Hinweis: Entfallene Trainings und Termine ohne gespeicherte Anwesenheitsliste fließen nicht in die Quoten ein.</p>
