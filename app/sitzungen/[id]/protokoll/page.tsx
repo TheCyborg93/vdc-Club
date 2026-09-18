@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getDb } from "@/lib/db";
 import { requirePermission } from "@/lib/permissions";
+import { meetingStatusLabel } from "@/lib/ui-labels";
 
 export const dynamic = "force-dynamic";
 
@@ -109,7 +110,7 @@ export default async function MinutesPage({
           <div><span>Beginn</span><strong>{formatDateTime(meeting.starts_at)}</strong></div>
           <div><span>Ende</span><strong>{meeting.ended_at ? formatDateTime(meeting.ended_at) : "Noch nicht beendet"}</strong></div>
           <div><span>Ort</span><strong>{meeting.location ? String(meeting.location) : "–"}</strong></div>
-          <div><span>Status</span><strong>{String(meeting.status)}</strong></div>
+          <div><span>Status</span><strong>{meetingStatusLabel(meeting.status)}</strong></div>
         </section>
 
         <section className="minutes-section">
