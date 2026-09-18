@@ -21,6 +21,7 @@ export async function GET() {
     LEFT JOIN meetings m ON m.id=d.meeting_id
     LEFT JOIN resolutions r ON r.id=d.resolution_id
     LEFT JOIN sponsors s ON s.id=d.sponsor_id
+    WHERE d.deleted_at IS NULL
     ORDER BY COALESCE(d.document_date,d.created_at::date) DESC
   `;
 
