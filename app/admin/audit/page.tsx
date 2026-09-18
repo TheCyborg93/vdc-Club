@@ -21,6 +21,8 @@ const actionLabels: Record<string,string> = {
   "training.season_updated":"Trainingssaison geändert",
   "training.season_activated":"Trainingssaison aktiviert",
   "document.created":"Dokument registriert",
+  "document.metadata_updated":"Dokumentdaten geändert",
+  "document.version_replaced":"Neue Dokumentversion hinterlegt",
   "document.status_changed":"Dokumentstatus geändert",
   "document.archived":"Dokument archiviert",
   "document.restored":"Dokument wiederhergestellt",
