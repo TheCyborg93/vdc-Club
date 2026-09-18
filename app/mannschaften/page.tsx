@@ -21,7 +21,7 @@ function formatDateTime(value: unknown) {
 export default async function TeamsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string }>;
+  searchParams: Promise<{ error?: string; deleted?: string }>;
 }) {
   const actor = await requirePermission("teams.read");
   const sql = getDb();
@@ -59,6 +59,7 @@ export default async function TeamsPage({
             SELECT e.starts_at, e.title
             FROM club_events e
             WHERE e.team_id = t.id
+              AND e.deleted_at IS NULL
               AND e.starts_at >= now()
             ORDER BY e.starts_at
             LIMIT 1
@@ -74,7 +75,8 @@ export default async function TeamsPage({
             (SELECT count(DISTINCT member_id)::int FROM team_members WHERE is_active = true) AS players,
             (SELECT count(DISTINCT member_id)::int FROM team_members WHERE is_active = true AND is_captain = true) AS captains,
             (SELECT count(*)::int FROM club_events
-             WHERE team_id IS NOT NULL
+             WHERE deleted_at IS NULL
+               AND team_id IS NOT NULL
                AND starts_at >= now()
                AND starts_at < now() + interval '14 days') AS next_matches
           FROM teams
@@ -95,6 +97,7 @@ export default async function TeamsPage({
       </section>
 
       {params.error && <div className="form-error">Die Mannschaft konnte nicht verarbeitet werden.</div>}
+      {params.deleted && <div className="form-success">Unbenutzte Mannschaft wurde endgültig gelöscht.</div>}
 
       <section className="stat-grid">
         <article className="stat-card"><span>Mannschaften</span><strong>{Number(c.teams ?? 0)}</strong><small>aktiv</small></article>
