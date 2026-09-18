@@ -14,6 +14,7 @@ export async function GET() {
   const rows=await sql`
     SELECT
       d.title,d.category,d.status,d.document_date,d.review_on,d.valid_until,
+      d.original_filename,d.file_size_bytes,d.mime_type,
       d.created_at,d.archived_at,m.title AS meeting_title,
       r.resolution_number,s.name AS sponsor_name
     FROM documents d
@@ -24,9 +25,10 @@ export async function GET() {
   `;
 
   const csv=toCsv(
-    ["Titel","Kategorie","Status","Dokumentdatum","Prüfen am","Gültig bis","Angelegt","Archiviert","Sitzung","Beschluss","Sponsor"],
+    ["Titel","Kategorie","Status","Dokumentdatum","Prüfen am","Gültig bis","Dateiname","Dateigröße Bytes","MIME-Typ","Angelegt","Archiviert","Sitzung","Beschluss","Sponsor"],
     rows.map((row)=>[
       row.title,row.category,row.status,row.document_date,row.review_on,row.valid_until,
+      row.original_filename,row.file_size_bytes,row.mime_type,
       row.created_at,row.archived_at,row.meeting_title,row.resolution_number,row.sponsor_name,
     ]),
   );
