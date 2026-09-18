@@ -4,10 +4,13 @@ import {
   createTaskAction,
   updateTaskStatusAction,
 } from "@/app/aufgaben/actions";
+import { moveToTrashAction } from "@/app/admin/papierkorb/actions";
+import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 
 const errors: Record<string, string> = {
   database: "Die Datenbankverbindung fehlt.",
   missing: "Ein Aufgabentitel ist erforderlich.",
+  linked_delete: "Diese Aufgabe gehört zu einem Vereinsvorgang und kann nicht gelöscht werden. Nutze stattdessen den passenden Status.",
 };
 
 const statusLabels: Record<string, string> = {
@@ -37,7 +40,7 @@ function formatDate(value: unknown) {
 export default async function TasksPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; created?: string }>;
+  searchParams: Promise<{ error?: string; created?: string; deleted?: string }>;
 }) {
   const actor = await requirePermission("tasks.read");
   const sql = getDb();
@@ -55,11 +58,13 @@ export default async function TasksPage({
             t.priority,
             t.due_date,
             t.created_at,
+            t.source_type,
             m.first_name,
             m.last_name
           FROM tasks t
           LEFT JOIN members m ON m.id = t.owner_member_id
           WHERE t.status <> 'cancelled'
+            AND t.deleted_at IS NULL
           ORDER BY
             CASE t.priority
               WHEN 'urgent' THEN 1
@@ -83,6 +88,7 @@ export default async function TasksPage({
             count(*) FILTER (WHERE status = 'in_progress')::int AS progress,
             count(*) FILTER (WHERE status = 'done' AND completed_at >= DATE '2026-07-01')::int AS done
           FROM tasks
+          WHERE deleted_at IS NULL
         `,
       ])
     : [[], [], [{ open: 0, high: 0, progress: 0, done: 0 }]];
@@ -104,6 +110,7 @@ export default async function TasksPage({
 
       {params.error && <div className="form-error">{errors[params.error] ?? "Die Aktion konnte nicht ausgeführt werden."}</div>}
       {params.created && <div className="form-success">Aufgabe wurde angelegt.</div>}
+      {params.deleted && <div className="form-success">Aufgabe wurde in den Papierkorb verschoben.</div>}
 
       <section className="stat-grid">
         <article className="stat-card"><span>Offen</span><strong>{Number(count.open ?? 0)}</strong><small>noch nicht begonnen</small></article>
@@ -199,6 +206,15 @@ export default async function TasksPage({
                             <input type="hidden" name="id" value={String(task.id)} />
                             <input type="hidden" name="status" value="done" />
                             <button className="mini-button task-done-button">Erledigt</button>
+                          </form>
+                        )}
+                        {!task.source_type && (
+                          <form action={moveToTrashAction}>
+                            <input type="hidden" name="type" value="task" />
+                            <input type="hidden" name="id" value={String(task.id)} />
+                            <ConfirmSubmitButton message={"Aufgabe „"+String(task.title)+"“ in den Papierkorb verschieben?"}>
+                              Löschen
+                            </ConfirmSubmitButton>
                           </form>
                         )}
                       </div>
