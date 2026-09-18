@@ -68,7 +68,8 @@ export default async function StatisticsPage() {
         sql`
           SELECT event_type,count(*)::int AS count
           FROM club_events
-          WHERE EXTRACT(YEAR FROM starts_at AT TIME ZONE 'Europe/Berlin')=EXTRACT(YEAR FROM CURRENT_DATE)
+          WHERE deleted_at IS NULL
+            AND EXTRACT(YEAR FROM starts_at AT TIME ZONE 'Europe/Berlin')=EXTRACT(YEAR FROM CURRENT_DATE)
           GROUP BY event_type
           ORDER BY count(*) DESC,event_type
         `,
@@ -79,7 +80,7 @@ export default async function StatisticsPage() {
             l.metadata->>'format' AS format,
             COALESCE((l.metadata->>'participants')::int,0) AS participants
           FROM integration_entity_links l
-          JOIN club_events e ON e.id=l.local_id
+          JOIN club_events e ON e.id=l.local_id AND e.deleted_at IS NULL
           WHERE l.integration_key='vdc_turnier' AND l.entity_type='tournament'
           ORDER BY e.starts_at DESC
           LIMIT 8
