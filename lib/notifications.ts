@@ -40,6 +40,7 @@ export async function getNotifications(
         COALESCE(due_date::timestamp,created_at) AS sort_at
       FROM tasks
       WHERE owner_member_id=${user.memberId}::uuid
+        AND deleted_at IS NULL
         AND status IN ('open','in_progress','blocked')
         AND (
           priority IN ('high','urgent')
@@ -61,6 +62,7 @@ export async function getNotifications(
         m.starts_at AS sort_at
       FROM meetings m
       WHERE m.status='planned'
+        AND m.deleted_at IS NULL
         AND m.starts_at BETWEEN now() AND now()+interval '7 days'
         AND (
           ${user.memberId || null}::uuid IS NULL
@@ -101,6 +103,7 @@ export async function getNotifications(
         COALESCE(review_on,valid_until,CURRENT_DATE)::timestamp AS sort_at
       FROM documents
       WHERE status IN ('active','review')
+        AND deleted_at IS NULL
         AND (
           (review_on IS NOT NULL AND review_on<=CURRENT_DATE+interval '30 days')
           OR
@@ -132,6 +135,7 @@ export async function getNotifications(
         ON t.source_type='resolution'
        AND t.source_id=r.id
        AND t.status<>'cancelled'
+       AND t.deleted_at IS NULL
       WHERE r.status IN ('open','in_progress')
         AND (
           t.owner_member_id=${user.memberId || null}::uuid
@@ -167,7 +171,8 @@ export async function getNotifications(
         CASE WHEN scheduled_at<now()-interval '3 days' THEN 'warning' ELSE 'info' END AS severity,
         scheduled_at AS sort_at
       FROM training_sessions
-      WHERE scheduled_at<now()
+      WHERE deleted_at IS NULL
+        AND scheduled_at<now()
         AND status<>'cancelled'
         AND attendance_recorded_at IS NULL
       ORDER BY scheduled_at DESC
