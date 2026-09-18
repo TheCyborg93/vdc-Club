@@ -23,6 +23,14 @@ export type DashboardIntegration = {
   lastSyncAt: string | null;
 };
 
+export type DashboardAlert = {
+  kind: string;
+  title: string;
+  detail: string;
+  href: string;
+  severity: "critical" | "warning" | "info";
+};
+
 export type DashboardData = {
   members: number;
   teams: number;
@@ -35,6 +43,7 @@ export type DashboardData = {
   tasks: DashboardTask[];
   events: DashboardEvent[];
   integrations: DashboardIntegration[];
+  alerts: DashboardAlert[];
 };
 
 const emptyData: DashboardData = {
@@ -49,6 +58,7 @@ const emptyData: DashboardData = {
   tasks: [],
   events: [],
   integrations: [],
+  alerts: [],
 };
 
 export async function getDashboardData(): Promise<DashboardData> {
@@ -56,12 +66,22 @@ export async function getDashboardData(): Promise<DashboardData> {
   if (!sql) return emptyData;
 
   try {
-    const [members, teams, taskCount, eventCount, activity, tasks, events, integrations] = await Promise.all([
-      sql`SELECT count(*)::int AS count FROM members WHERE status = 'active'`,
-      sql`SELECT count(*)::int AS count FROM teams WHERE status = 'active'`,
-      sql`SELECT count(*)::int AS count FROM tasks WHERE status IN ('open','in_progress','blocked')`,
-      sql`SELECT count(*)::int AS count FROM club_events WHERE starts_at >= now() AND starts_at < now() + interval '14 days'`,
-      sql`
+    const [
+      members,
+      teams,
+      taskCount,
+      eventCount,
+      activity,
+      tasks,
+      events,
+      integrations,
+      alerts,
+    ] = await Promise.all([
+      sql\`SELECT count(*)::int AS count FROM members WHERE status = 'active'\`,
+      sql\`SELECT count(*)::int AS count FROM teams WHERE status = 'active'\`,
+      sql\`SELECT count(*)::int AS count FROM tasks WHERE status IN ('open','in_progress','blocked')\`,
+      sql\`SELECT count(*)::int AS count FROM club_events WHERE starts_at >= now() AND starts_at < now() + interval '14 days'\`,
+      sql\`
         SELECT
           count(*) FILTER (
             WHERE source='vdc_turnier'
@@ -73,8 +93,8 @@ export async function getDashboardData(): Promise<DashboardData> {
           )::int AS training_days_year,
           count(*) FILTER (WHERE source='vdc_tc' AND event_type='league')::int AS league_events
         FROM club_events
-      `,
-      sql`
+      \`,
+      sql\`
         SELECT title, COALESCE(category, 'Allgemein') AS category, due_date, priority
         FROM tasks
         WHERE status IN ('open','in_progress','blocked')
@@ -82,8 +102,8 @@ export async function getDashboardData(): Promise<DashboardData> {
           CASE priority WHEN 'urgent' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 ELSE 4 END,
           due_date NULLS LAST
         LIMIT 4
-      `,
-      sql`
+      \`,
+      sql\`
         SELECT
           e.title,
           e.starts_at,
@@ -96,8 +116,8 @@ export async function getDashboardData(): Promise<DashboardData> {
         WHERE e.starts_at >= now()
         ORDER BY e.starts_at ASC
         LIMIT 5
-      `,
-      sql`
+      \`,
+      sql\`
         SELECT integration_key,display_name,status,last_sync_at
         FROM integration_connections
         ORDER BY
@@ -106,7 +126,109 @@ export async function getDashboardData(): Promise<DashboardData> {
             WHEN 'vdc_turnier' THEN 1
             ELSE 2
           END
-      `,
+      \`,
+      sql\`
+        SELECT kind,title,detail,href,severity
+        FROM (
+          SELECT
+            'fee'::text AS kind,
+            m.first_name || ' ' || m.last_name || ': Beitrag überfällig' AS title,
+            'Fällig seit ' || to_char(mf.due_date,'DD.MM.YYYY') || ' · ' ||
+              to_char(mf.amount,'FM999999990D00') || ' €' AS detail,
+            '/mitglieder/' || m.id::text AS href,
+            'critical'::text AS severity,
+            mf.due_date::timestamp AS sort_date
+          FROM membership_fees mf
+          JOIN members m ON m.id=mf.member_id
+          WHERE mf.status='open'
+            AND mf.due_date IS NOT NULL
+            AND mf.due_date < CURRENT_DATE
+
+          UNION ALL
+
+          SELECT
+            'task',
+            'Aufgabe überfällig: ' || t.title,
+            'Fällig seit ' || to_char(t.due_date,'DD.MM.YYYY'),
+            '/aufgaben',
+            CASE WHEN t.priority IN ('urgent','high') THEN 'critical' ELSE 'warning' END,
+            t.due_date::timestamp
+          FROM tasks t
+          WHERE t.status IN ('open','in_progress','blocked')
+            AND t.due_date IS NOT NULL
+            AND t.due_date < CURRENT_DATE
+
+          UNION ALL
+
+          SELECT
+            'member_leave',
+            m.first_name || ' ' || m.last_name || ': Austritt vorgemerkt',
+            'Austritt zum ' || to_char(m.leave_date,'DD.MM.YYYY'),
+            '/mitglieder/' || m.id::text,
+            'warning',
+            m.leave_date::timestamp
+          FROM members m
+          WHERE m.leave_date BETWEEN CURRENT_DATE AND CURRENT_DATE + interval '90 days'
+
+          UNION ALL
+
+          SELECT
+            'member_notice',
+            m.first_name || ' ' || m.last_name || ': Kündigung ohne Austrittsdatum',
+            'Kündigung eingegangen am ' || to_char(m.notice_date,'DD.MM.YYYY'),
+            '/mitglieder/' || m.id::text,
+            'warning',
+            m.notice_date::timestamp
+          FROM members m
+          WHERE m.notice_date IS NOT NULL
+            AND m.leave_date IS NULL
+            AND m.status <> 'inactive'
+
+          UNION ALL
+
+          SELECT
+            'sponsor',
+            'Sponsorvertrag läuft aus: ' || s.name,
+            'Vertragsende ' || to_char(s.contract_end,'DD.MM.YYYY'),
+            '/sponsoren',
+            CASE WHEN s.contract_end < CURRENT_DATE THEN 'critical' ELSE 'warning' END,
+            s.contract_end::timestamp
+          FROM sponsors s
+          WHERE s.status='active'
+            AND s.contract_end IS NOT NULL
+            AND s.contract_end <= CURRENT_DATE + interval '60 days'
+
+          UNION ALL
+
+          SELECT
+            'document',
+            'Dokument prüfen: ' || d.title,
+            'Gültig bis ' || to_char(d.valid_until,'DD.MM.YYYY'),
+            '/dokumente',
+            CASE WHEN d.valid_until < CURRENT_DATE THEN 'critical' ELSE 'warning' END,
+            d.valid_until::timestamp
+          FROM documents d
+          WHERE d.status='active'
+            AND d.valid_until IS NOT NULL
+            AND d.valid_until <= CURRENT_DATE + interval '30 days'
+
+          UNION ALL
+
+          SELECT
+            'integration',
+            display_name || ': Integration gestört',
+            COALESCE(last_error,'Status: ' || status),
+            '/einstellungen',
+            'critical',
+            COALESCE(last_sync_at,updated_at)
+          FROM integration_connections
+          WHERE status='error'
+        ) warnings
+        ORDER BY
+          CASE severity WHEN 'critical' THEN 0 WHEN 'warning' THEN 1 ELSE 2 END,
+          sort_date NULLS LAST
+        LIMIT 8
+      \`,
     ]);
 
     const activityRow = activity[0] ?? {};
@@ -139,6 +261,15 @@ export async function getDashboardData(): Promise<DashboardData> {
         name: String(row.display_name),
         status: String(row.status),
         lastSyncAt: row.last_sync_at ? String(row.last_sync_at) : null,
+      })),
+      alerts: alerts.map((row) => ({
+        kind: String(row.kind),
+        title: String(row.title),
+        detail: String(row.detail),
+        href: String(row.href),
+        severity: ["critical","warning","info"].includes(String(row.severity))
+          ? String(row.severity) as DashboardAlert["severity"]
+          : "info",
       })),
     };
   } catch {
