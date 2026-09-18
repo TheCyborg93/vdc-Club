@@ -14,6 +14,9 @@ const actionLabels: Record<string,string> = {
   "training.attendance_saved":"Trainingsanwesenheit gespeichert",
   "training.cancelled":"Training abgesagt",
   "training.restored":"Training wieder aktiviert",
+  "training.special_created":"Sondertraining angelegt",
+  "training.pause_created":"Trainingspause angelegt",
+  "training.pause_deleted":"Trainingspause aufgehoben",
 };
 
 function formatDateTime(value: unknown) {
