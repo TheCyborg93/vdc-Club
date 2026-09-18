@@ -2,9 +2,9 @@ import { getDb } from "@/lib/db";
 import { hasPermission, requirePermission } from "@/lib/permissions";
 import {
   createSponsorAction,
-  deleteUnusedSponsorAction,
   updateSponsorStatusAction,
 } from "@/app/sponsoren/actions";
+import { moveToTrashAction } from "@/app/admin/papierkorb/actions";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 
 export const dynamic = "force-dynamic";
@@ -31,7 +31,6 @@ export default async function SponsorsPage({
   const sql = getDb();
   const params = await searchParams;
   const canWrite = hasPermission(actor.roles, "sponsors.write");
-  const isAdmin = actor.roles.includes("admin");
 
   const [sponsors, counts] = sql
     ? await Promise.all([
@@ -40,6 +39,7 @@ export default async function SponsorsPage({
             id::text, name, contact_name, email, phone,
             contract_start, contract_end, contribution_text, club_benefits, status
           FROM sponsors
+          WHERE deleted_at IS NULL
           ORDER BY
             CASE status WHEN 'active' THEN 0 WHEN 'lead' THEN 1 ELSE 2 END,
             name
@@ -55,6 +55,7 @@ export default async function SponsorsPage({
                 AND contract_end <= CURRENT_DATE + interval '60 days'
             )::int AS expiring
           FROM sponsors
+          WHERE deleted_at IS NULL
         `,
       ])
     : [[], [{ total:0, active:0, leads:0, expiring:0 }]];
@@ -79,7 +80,7 @@ export default async function SponsorsPage({
         </div>
       )}
       {params.created && <div className="form-success">Sponsor wurde angelegt.</div>}
-      {params.deleted && <div className="form-success">Unbenutzter Sponsor wurde endgültig gelöscht.</div>}
+      {params.deleted && <div className="form-success">Sponsor wurde in den Papierkorb verschoben.</div>}
 
       <section className="stat-grid">
         <article className="stat-card"><span>Sponsoren</span><strong>{Number(c.total ?? 0)}</strong><small>gesamt</small></article>
@@ -124,14 +125,14 @@ export default async function SponsorsPage({
                       </select>
                       <button className="mini-button">Status speichern</button>
                     </form>
-                    {isAdmin && ["lead","inactive"].includes(String(s.status)) && (
-                      <form action={deleteUnusedSponsorAction} className="destructive-inline-form">
+                    {["lead","inactive"].includes(String(s.status)) && (
+                      <form action={moveToTrashAction} className="destructive-inline-form">
+                        <input type="hidden" name="type" value="sponsor" />
                         <input type="hidden" name="id" value={String(s.id)} />
                         <ConfirmSubmitButton
-                          message={"Sponsor „"+String(s.name)+"“ endgültig löschen? Das funktioniert nur ohne verknüpfte Dokumente."}
-                          requireText="LÖSCHEN"
+                          message={"Sponsor „"+String(s.name)+"“ in den Papierkorb verschieben? Verknüpfte Dokumente schützen den Eintrag vor dem Löschen."}
                         >
-                          Endgültig löschen
+                          Löschen
                         </ConfirmSubmitButton>
                       </form>
                     )}
