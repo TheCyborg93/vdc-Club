@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getDb } from "@/lib/db";
 import { hasPermission, requirePermission } from "@/lib/permissions";
 import {
+import { meetingStatusLabel } from "@/lib/ui-labels";
   addAgendaItemAction,
   addAttendeeAction,
   createResolutionFromAgendaAction,
@@ -181,7 +182,7 @@ export default async function MeetingDetailPage({
         <div className="meeting-hero-side">
           <div className="meeting-hero-links">
             <Link href={`/sitzungen/${id}/protokoll`} className="ghost-button">Protokoll</Link>
-            <b className={`status-badge status-${meeting.status}`}>{String(meeting.status)}</b>
+            <b className={`status-badge status-${meeting.status}`}>{meetingStatusLabel(meeting.status)}</b>
           </div>
           {canWrite && (
             <div className="meeting-status-actions">
@@ -275,7 +276,7 @@ export default async function MeetingDetailPage({
         <article><span>TOPs</span><strong>{agenda.length}</strong><small>{openAgendaCount} offen</small></article>
         <article><span>Teilnehmer</span><strong>{attendees.length}</strong><small>{presentCount} anwesend{unresolvedAttendanceCount ? " · "+unresolvedAttendanceCount+" offen" : ""}</small></article>
         <article><span>Beschlüsse</span><strong>{agenda.filter((row) => row.resolution_id).length}</strong><small>in dieser Sitzung</small></article>
-        <article><span>Status</span><strong>{String(meeting.status)}</strong><small>{meeting.ended_at ? `beendet ${formatDateTime(meeting.ended_at)}` : "laufend / geplant"}</small></article>
+        <article><span>Status</span><strong>{meetingStatusLabel(meeting.status)}</strong><small>{meeting.ended_at ? `beendet ${formatDateTime(meeting.ended_at)}` : "laufend / geplant"}</small></article>
       </section>
 
       <section className="meeting-workspace">
