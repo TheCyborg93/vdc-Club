@@ -35,7 +35,7 @@ export default async function MembersPage({
 
   const [members, counts] = sql
     ? await Promise.all([
-        sql\`
+        sql`
           SELECT
             m.id::text,
             m.member_number,
@@ -58,8 +58,8 @@ export default async function MembersPage({
           ORDER BY
             CASE m.status WHEN 'active' THEN 0 WHEN 'passive' THEN 1 ELSE 2 END,
             m.last_name, m.first_name
-        \`,
-        sql\`
+        `,
+        sql`
           SELECT
             count(*) FILTER (WHERE status = 'active')::int AS active,
             count(*) FILTER (WHERE status = 'passive')::int AS passive,
@@ -71,7 +71,7 @@ export default async function MembersPage({
                 AND (leave_date IS NULL OR leave_date >= CURRENT_DATE)
             )::int AS notices
           FROM members
-        \`,
+        `,
       ])
     : [[], [{ active: 0, passive: 0, joined_year: 0, notices: 0 }]];
 
@@ -108,26 +108,26 @@ export default async function MembersPage({
             {members.length === 0 ? (
               <div className="empty-state">Noch keine Mitglieder vorhanden.</div>
             ) : members.map((member) => (
-              <Link className="member-row" key={String(member.id)} href={\`/mitglieder/\${member.id}\`}>
+              <Link className="member-row" key={String(member.id)} href={`/mitglieder/${member.id}`}>
                 <div className="member-avatar">
                   {String(member.first_name).slice(0,1)}{String(member.last_name).slice(0,1)}
                 </div>
                 <div className="member-main">
                   <strong>{String(member.first_name)} {String(member.last_name)}</strong>
                   <span>
-                    {member.member_number ? \`#\${member.member_number} · \` : ""}
+                    {member.member_number ? `#${member.member_number} · ` : ""}
                     {membershipTypeLabels[String(member.membership_type ?? "regular")] ?? "Mitglied"}
-                    {member.teams ? \` · \${member.teams}\` : ""}
+                    {member.teams ? ` · ${member.teams}` : ""}
                   </span>
                   {member.notice_date && (
                     <small className="member-notice">
-                      Kündigung {member.leave_date ? \`zum \${new Intl.DateTimeFormat("de-DE").format(new Date(String(member.leave_date)))}\` : "vorgemerkt"}
+                      Kündigung {member.leave_date ? `zum ${new Intl.DateTimeFormat("de-DE").format(new Date(String(member.leave_date)))}` : "vorgemerkt"}
                     </small>
                   )}
                 </div>
                 <div className="member-meta">
                   <span>{member.email ? String(member.email) : "Keine E-Mail"}</span>
-                  <b className={\`status-badge status-\${member.status}\`}>{statusLabels[String(member.status)] ?? String(member.status)}</b>
+                  <b className={`status-badge status-${member.status}`}>{statusLabels[String(member.status)] ?? String(member.status)}</b>
                 </div>
               </Link>
             ))}
