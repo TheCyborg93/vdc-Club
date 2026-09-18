@@ -1,0 +1,326 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+import { getDb } from "@/lib/db";
+import { requirePermission } from "@/lib/permissions";
+import { writeAudit } from "@/lib/audit";
+import {
+  deleteDocumentObject,
+  isDocumentStorageConfigured,
+} from "@/lib/document-storage";
+
+function value(formData:FormData,key:string) {
+  return String(formData.get(key) ?? "").trim();
+}
+
+function refreshAll() {
+  for (const path of [
+    "/",
+    "/aufgaben",
+    "/dokumente",
+    "/archiv",
+    "/kalender",
+    "/sitzungen",
+    "/training",
+    "/statistik",
+    "/suche",
+    "/hinweise",
+    "/admin/daten",
+    "/admin/papierkorb",
+  ]) {
+    revalidatePath(path);
+  }
+}
+
+export async function moveToTrashAction(formData:FormData) {
+  const type=value(formData,"type");
+  const id=value(formData,"id");
+  const reason=value(formData,"reason") || "Vom Benutzer in den Papierkorb verschoben.";
+
+  if (!id) redirect("/?error=missing");
+
+  const sql=getDb();
+  if (!sql) redirect("/?error=database");
+
+  if (type==="task") {
+    const actor=await requirePermission("tasks.write");
+    const rows=await sql`
+      SELECT id::text,title,source_type
+      FROM tasks
+      WHERE id=${id}::uuid AND deleted_at IS NULL
+      LIMIT 1
+    `;
+    const task=rows[0];
+    if (!task) redirect("/aufgaben?error=missing");
+    if (task.source_type) redirect("/aufgaben?error=linked_delete");
+
+    await sql`
+      UPDATE tasks
+      SET deleted_at=now(),deleted_by=${actor.id}::uuid,delete_reason=${reason}
+      WHERE id=${id}::uuid
+    `;
+    await writeAudit(actor.id,"trash.moved","task",id,{title:String(task.title)});
+    refreshAll();
+    redirect("/aufgaben?deleted=1");
+  }
+
+  if (type==="document") {
+    const actor=await requirePermission("documents.write");
+    const rows=await sql`
+      SELECT id::text,title,category
+      FROM documents
+      WHERE id=${id}::uuid AND deleted_at IS NULL
+      LIMIT 1
+    `;
+    const doc=rows[0];
+    if (!doc) redirect("/dokumente?error=missing");
+
+    await sql`
+      UPDATE documents
+      SET deleted_at=now(),deleted_by=${actor.id}::uuid,delete_reason=${reason}
+      WHERE id=${id}::uuid
+    `;
+    await writeAudit(actor.id,"trash.moved","document",id,{
+      title:String(doc.title),
+      category:String(doc.category),
+    });
+    refreshAll();
+    redirect("/dokumente?deleted=1");
+  }
+
+  if (type==="event") {
+    const actor=await requirePermission("calendar.write");
+    const rows=await sql`
+      SELECT e.id::text,e.title,e.source,
+        EXISTS(SELECT 1 FROM meetings m WHERE m.event_id=e.id AND m.deleted_at IS NULL) AS has_meeting,
+        EXISTS(SELECT 1 FROM training_sessions s WHERE s.event_id=e.id AND s.deleted_at IS NULL) AS has_training
+      FROM club_events e
+      WHERE e.id=${id}::uuid AND e.deleted_at IS NULL
+      LIMIT 1
+    `;
+    const event=rows[0];
+    if (!event) redirect("/kalender?error=missing");
+    if (event.source!=="club" || event.has_meeting || event.has_training) {
+      redirect("/kalender?error=protected_delete");
+    }
+
+    await sql`
+      UPDATE club_events
+      SET deleted_at=now(),deleted_by=${actor.id}::uuid,delete_reason=${reason}
+      WHERE id=${id}::uuid
+    `;
+    await writeAudit(actor.id,"trash.moved","club_event",id,{title:String(event.title)});
+    refreshAll();
+    redirect("/kalender?deleted=1");
+  }
+
+  if (type==="meeting") {
+    const actor=await requirePermission("meetings.write");
+    const rows=await sql`
+      SELECT
+        m.id::text,m.title,m.status,m.event_id::text,
+        EXISTS(SELECT 1 FROM resolutions r WHERE r.meeting_id=m.id) AS has_resolutions,
+        EXISTS(SELECT 1 FROM documents d WHERE d.meeting_id=m.id AND d.deleted_at IS NULL) AS has_documents
+      FROM meetings m
+      WHERE m.id=${id}::uuid AND m.deleted_at IS NULL
+      LIMIT 1
+    `;
+    const meeting=rows[0];
+    if (!meeting) redirect("/sitzungen?error=missing");
+    if (!["planned","cancelled"].includes(String(meeting.status)) || meeting.has_resolutions || meeting.has_documents) {
+      redirect("/sitzungen?error=protected_delete");
+    }
+
+    await sql`
+      UPDATE meetings
+      SET deleted_at=now(),deleted_by=${actor.id}::uuid,delete_reason=${reason}
+      WHERE id=${id}::uuid
+    `;
+
+    if (meeting.event_id) {
+      await sql`
+        UPDATE club_events
+        SET deleted_at=now(),deleted_by=${actor.id}::uuid,delete_reason='Mit Sitzung in Papierkorb verschoben.'
+        WHERE id=${String(meeting.event_id)}::uuid
+      `;
+    }
+
+    await writeAudit(actor.id,"trash.moved","meeting",id,{title:String(meeting.title)});
+    refreshAll();
+    redirect("/sitzungen?deleted=1");
+  }
+
+  if (type==="training") {
+    const actor=await requirePermission("training.write");
+    const rows=await sql`
+      SELECT
+        s.id::text,s.scheduled_at,s.source,s.status,s.event_id::text,s.attendance_recorded_at,
+        EXISTS(SELECT 1 FROM training_attendance a WHERE a.session_id=s.id) AS has_attendance
+      FROM training_sessions s
+      WHERE s.id=${id}::uuid AND s.deleted_at IS NULL
+      LIMIT 1
+    `;
+    const session=rows[0];
+    if (!session) redirect("/training?error=missing");
+    if (
+      session.source!=="special" ||
+      session.status==="completed" ||
+      session.attendance_recorded_at ||
+      session.has_attendance
+    ) {
+      redirect(`/training/${id}?error=protected_delete`);
+    }
+
+    await sql`
+      UPDATE training_sessions
+      SET deleted_at=now(),deleted_by=${actor.id}::uuid,delete_reason=${reason}
+      WHERE id=${id}::uuid
+    `;
+
+    if (session.event_id) {
+      await sql`
+        UPDATE club_events
+        SET deleted_at=now(),deleted_by=${actor.id}::uuid,delete_reason='Mit Sondertraining in Papierkorb verschoben.'
+        WHERE id=${String(session.event_id)}::uuid
+      `;
+    }
+
+    await writeAudit(actor.id,"trash.moved","training_session",id,{source:"special"});
+    refreshAll();
+    redirect("/training?deleted=1");
+  }
+
+  redirect("/?error=invalid_delete");
+}
+
+export async function restoreTrashItemAction(formData:FormData) {
+  const actor=await requirePermission("settings.manage");
+  const sql=getDb();
+  if (!sql) redirect("/admin/papierkorb?error=database");
+
+  const type=value(formData,"type");
+  const id=value(formData,"id");
+  if (!id) redirect("/admin/papierkorb?error=missing");
+
+  if (type==="task") {
+    await sql`UPDATE tasks SET deleted_at=NULL,deleted_by=NULL,delete_reason=NULL WHERE id=${id}::uuid`;
+  } else if (type==="document") {
+    await sql`UPDATE documents SET deleted_at=NULL,deleted_by=NULL,delete_reason=NULL WHERE id=${id}::uuid`;
+  } else if (type==="event") {
+    await sql`UPDATE club_events SET deleted_at=NULL,deleted_by=NULL,delete_reason=NULL WHERE id=${id}::uuid`;
+  } else if (type==="meeting") {
+    const rows=await sql`SELECT event_id::text FROM meetings WHERE id=${id}::uuid LIMIT 1`;
+    await sql`UPDATE meetings SET deleted_at=NULL,deleted_by=NULL,delete_reason=NULL WHERE id=${id}::uuid`;
+    if (rows[0]?.event_id) {
+      await sql`UPDATE club_events SET deleted_at=NULL,deleted_by=NULL,delete_reason=NULL WHERE id=${String(rows[0].event_id)}::uuid`;
+    }
+  } else if (type==="training") {
+    const rows=await sql`SELECT event_id::text FROM training_sessions WHERE id=${id}::uuid LIMIT 1`;
+    await sql`UPDATE training_sessions SET deleted_at=NULL,deleted_by=NULL,delete_reason=NULL WHERE id=${id}::uuid`;
+    if (rows[0]?.event_id) {
+      await sql`UPDATE club_events SET deleted_at=NULL,deleted_by=NULL,delete_reason=NULL WHERE id=${String(rows[0].event_id)}::uuid`;
+    }
+  } else {
+    redirect("/admin/papierkorb?error=invalid");
+  }
+
+  await writeAudit(actor.id,"trash.restored",type,id);
+  refreshAll();
+  redirect("/admin/papierkorb?restored=1");
+}
+
+export async function permanentlyDeleteTrashItemAction(formData:FormData) {
+  const actor=await requirePermission("settings.manage");
+  const sql=getDb();
+  if (!sql) redirect("/admin/papierkorb?error=database");
+
+  const type=value(formData,"type");
+  const id=value(formData,"id");
+  if (!id) redirect("/admin/papierkorb?error=missing");
+
+  if (type==="task") {
+    const rows=await sql`SELECT source_type FROM tasks WHERE id=${id}::uuid AND deleted_at IS NOT NULL LIMIT 1`;
+    if (!rows.length || rows[0].source_type) redirect("/admin/papierkorb?error=protected");
+    await sql`DELETE FROM tasks WHERE id=${id}::uuid AND deleted_at IS NOT NULL`;
+  } else if (type==="document") {
+    const rows=await sql`
+      SELECT storage_type,storage_ref,title
+      FROM documents
+      WHERE id=${id}::uuid AND deleted_at IS NOT NULL
+      LIMIT 1
+    `;
+    const doc=rows[0];
+    if (!doc) redirect("/admin/papierkorb?error=missing");
+
+    await sql`DELETE FROM documents WHERE id=${id}::uuid AND deleted_at IS NOT NULL`;
+
+    if (doc.storage_type==="upload" && doc.storage_ref && isDocumentStorageConfigured()) {
+      try {
+        await deleteDocumentObject(String(doc.storage_ref));
+      } catch (error) {
+        await writeAudit(actor.id,"trash.storage_cleanup_failed","document",id,{
+          storageRef:String(doc.storage_ref),
+          message:error instanceof Error ? error.message : "unknown",
+        });
+      }
+    }
+  } else if (type==="event") {
+    const linked=await sql`
+      SELECT
+        EXISTS(SELECT 1 FROM meetings WHERE event_id=${id}::uuid) AS has_meeting,
+        EXISTS(SELECT 1 FROM training_sessions WHERE event_id=${id}::uuid) AS has_training
+    `;
+    if (linked[0]?.has_meeting || linked[0]?.has_training) redirect("/admin/papierkorb?error=protected");
+    await sql`DELETE FROM club_events WHERE id=${id}::uuid AND deleted_at IS NOT NULL`;
+  } else if (type==="meeting") {
+    const rows=await sql`
+      SELECT event_id::text,
+        EXISTS(SELECT 1 FROM resolutions r WHERE r.meeting_id=meetings.id) AS has_resolutions,
+        EXISTS(SELECT 1 FROM documents d WHERE d.meeting_id=meetings.id) AS has_documents
+      FROM meetings
+      WHERE id=${id}::uuid AND deleted_at IS NOT NULL
+      LIMIT 1
+    `;
+    const meeting=rows[0];
+    if (!meeting || meeting.has_resolutions || meeting.has_documents) redirect("/admin/papierkorb?error=protected");
+    await sql`DELETE FROM meetings WHERE id=${id}::uuid AND deleted_at IS NOT NULL`;
+    if (meeting.event_id) {
+      await sql`
+        DELETE FROM club_events
+        WHERE id=${String(meeting.event_id)}::uuid
+          AND deleted_at IS NOT NULL
+          AND NOT EXISTS(SELECT 1 FROM meetings WHERE event_id=club_events.id)
+          AND NOT EXISTS(SELECT 1 FROM training_sessions WHERE event_id=club_events.id)
+      `;
+    }
+  } else if (type==="training") {
+    const rows=await sql`
+      SELECT event_id::text,source,attendance_recorded_at,
+        EXISTS(SELECT 1 FROM training_attendance a WHERE a.session_id=training_sessions.id) AS has_attendance
+      FROM training_sessions
+      WHERE id=${id}::uuid AND deleted_at IS NOT NULL
+      LIMIT 1
+    `;
+    const session=rows[0];
+    if (!session || session.source!=="special" || session.attendance_recorded_at || session.has_attendance) {
+      redirect("/admin/papierkorb?error=protected");
+    }
+    await sql`DELETE FROM training_sessions WHERE id=${id}::uuid AND deleted_at IS NOT NULL`;
+    if (session.event_id) {
+      await sql`
+        DELETE FROM club_events
+        WHERE id=${String(session.event_id)}::uuid
+          AND deleted_at IS NOT NULL
+          AND NOT EXISTS(SELECT 1 FROM meetings WHERE event_id=club_events.id)
+          AND NOT EXISTS(SELECT 1 FROM training_sessions WHERE event_id=club_events.id)
+      `;
+    }
+  } else {
+    redirect("/admin/papierkorb?error=invalid");
+  }
+
+  await writeAudit(actor.id,"trash.permanently_deleted",type,id);
+  refreshAll();
+  redirect("/admin/papierkorb?deleted=1");
+}
