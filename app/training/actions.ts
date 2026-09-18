@@ -93,6 +93,7 @@ export async function saveTrainingAttendanceAction(formData: FormData) {
         : "Training durchgeführt · Anwesenheit erfasst"},
         updated_at=now()
       WHERE id=${String(session.event_id)}::uuid
+        AND deleted_at IS NULL
     `;
   }
 
@@ -179,6 +180,7 @@ export async function cancelTrainingSessionAction(formData: FormData) {
       attendance_recorded_at=NULL,
       completed_at=NULL
     WHERE id=${sessionId}::uuid
+      AND deleted_at IS NULL
   `;
   await sql`DELETE FROM training_attendance WHERE session_id=${sessionId}::uuid`;
 
@@ -190,7 +192,9 @@ export async function cancelTrainingSessionAction(formData: FormData) {
       updated_at=now()
     FROM training_sessions s
     WHERE s.id=${sessionId}::uuid
+      AND s.deleted_at IS NULL
       AND e.id=s.event_id
+      AND e.deleted_at IS NULL
   `;
 
   await writeAudit(actor.id,"training.cancelled","training_session",sessionId);
@@ -211,6 +215,7 @@ export async function restoreTrainingSessionAction(formData: FormData) {
     UPDATE training_sessions
     SET status='planned'
     WHERE id=${sessionId}::uuid
+      AND deleted_at IS NULL
   `;
 
   await sql`
