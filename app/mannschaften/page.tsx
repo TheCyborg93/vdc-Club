@@ -64,6 +64,7 @@ export default async function TeamsPage({
             ORDER BY e.starts_at
             LIMIT 1
           ) next_event ON true
+          WHERE t.deleted_at IS NULL
           GROUP BY t.id, next_event.starts_at, next_event.title
           ORDER BY
             CASE t.team_type WHEN 'first' THEN 0 WHEN 'second' THEN 1 ELSE 2 END,
@@ -80,6 +81,7 @@ export default async function TeamsPage({
                AND starts_at >= now()
                AND starts_at < now() + interval '14 days') AS next_matches
           FROM teams
+          WHERE deleted_at IS NULL
         `,
       ])
     : [[], [{ teams:0,players:0,captains:0,next_matches:0 }]];
@@ -97,7 +99,7 @@ export default async function TeamsPage({
       </section>
 
       {params.error && <div className="form-error">Die Mannschaft konnte nicht verarbeitet werden.</div>}
-      {params.deleted && <div className="form-success">Unbenutzte Mannschaft wurde endgültig gelöscht.</div>}
+      {params.deleted && <div className="form-success">Mannschaft wurde in den Papierkorb verschoben.</div>}
 
       <section className="stat-grid">
         <article className="stat-card"><span>Mannschaften</span><strong>{Number(c.teams ?? 0)}</strong><small>aktiv</small></article>
