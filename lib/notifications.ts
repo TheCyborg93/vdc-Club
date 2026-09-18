@@ -155,7 +155,8 @@ export async function getNotifications(
         CASE WHEN contract_end<CURRENT_DATE THEN 'critical' ELSE 'warning' END AS severity,
         contract_end::timestamp AS sort_at
       FROM sponsors
-      WHERE status='active'
+      WHERE deleted_at IS NULL
+        AND status='active'
         AND contract_end IS NOT NULL
         AND contract_end<=CURRENT_DATE+interval '60 days'
     `);
