@@ -112,6 +112,55 @@ export async function updateAgendaStatusAction(formData: FormData) {
   redirect(`/sitzungen/${meetingId}`);
 }
 
+
+export async function deleteAgendaItemAction(formData: FormData) {
+  const actor=await requirePermission("meetings.write");
+  const sql=getDb();
+  if (!sql) redirect("/sitzungen?error=database");
+
+  const meetingId=value(formData,"meetingId");
+  const agendaItemId=value(formData,"agendaItemId");
+  if (!meetingId || !agendaItemId) redirect(`{/sitzungen/`{meetingId}?error=missing}`);
+
+  const rows=await sql`
+    SELECT
+      ai.id::text,
+      ai.title,
+      m.status AS meeting_status,
+      m.deleted_at,
+      EXISTS(SELECT 1 FROM resolutions r WHERE r.agenda_item_id=ai.id) AS has_resolution
+    FROM agenda_items ai
+    JOIN meetings m ON m.id=ai.meeting_id
+    WHERE ai.id=`{agendaItemId}::uuid
+      AND ai.meeting_id=`{meetingId}::uuid
+    LIMIT 1
+  `;
+
+  const item=rows[0];
+  if (
+    !item ||
+    item.deleted_at ||
+    !["planned","running"].includes(String(item.meeting_status)) ||
+    item.has_resolution
+  ) {
+    redirect(`{/sitzungen/`{meetingId}?error=agenda_delete}`);
+  }
+
+  await sql`
+    DELETE FROM agenda_items
+    WHERE id=`{agendaItemId}::uuid
+      AND meeting_id=`{meetingId}::uuid
+  `;
+
+  await writeAudit(actor.id,"agenda.deleted","agenda_item",agendaItemId,{
+    title:String(item.title),
+    meetingId,
+  });
+
+  revalidatePath(`{/sitzungen/`{meetingId}}`);
+  redirect(`{/sitzungen/`{meetingId}?agenda_deleted=1}`);
+}
+
 export async function addAttendeeAction(formData: FormData) {
   await requirePermission("meetings.write");
   const sql = getDb();
