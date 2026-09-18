@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ReactNode, useMemo, useState } from "react";
+import { ReactNode, useEffect, useMemo, useState } from "react";
 import { logoutAction } from "@/app/auth/actions";
 import { groups, navigation } from "@/lib/navigation";
 import { hasPermission } from "@/lib/access";
+import { NavIcon } from "@/components/nav-icon";
 
 type ShellUser = {
   displayName: string;
@@ -35,6 +36,24 @@ const roleLabels: Record<string, string> = {
   tournament_director: "Turnierleitung",
 };
 
+function SearchIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <circle cx="11" cy="11" r="6.5" />
+      <path d="m16 16 4.5 4.5" />
+    </svg>
+  );
+}
+
+function BellIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M6.5 16.5h11l-1.2-2V10a4.3 4.3 0 0 0-8.6 0v4.5l-1.2 2Z" />
+      <path d="M10 19h4" />
+    </svg>
+  );
+}
+
 export function AppShell({
   children,
   user,
@@ -46,8 +65,17 @@ export function AppShell({
 }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(false);
   const [notificationsOpen,setNotificationsOpen] = useState(false);
   const [quickOpen,setQuickOpen] = useState(false);
+
+  useEffect(()=>{
+    setCollapsed(window.localStorage.getItem("vdc-sidebar-collapsed")==="1");
+  },[]);
+
+  useEffect(()=>{
+    window.localStorage.setItem("vdc-sidebar-collapsed",collapsed ? "1" : "0");
+  },[collapsed]);
 
   const initials = useMemo(() => {
     return user.displayName
@@ -67,37 +95,64 @@ export function AppShell({
     : roleLabels[user.roles[0] ?? ""] ?? "Vereinszugang";
 
   const quickActions = [
-    hasPermission(user.roles,"members.write") ? { href:"/mitglieder", label:"Mitglied" } : null,
-    hasPermission(user.roles,"tasks.write") ? { href:"/aufgaben", label:"Aufgabe" } : null,
-    hasPermission(user.roles,"meetings.write") ? { href:"/sitzungen", label:"Sitzung" } : null,
-    hasPermission(user.roles,"documents.write") ? { href:"/dokumente", label:"Dokument" } : null,
-    hasPermission(user.roles,"calendar.write") ? { href:"/kalender", label:"Termin" } : null,
-  ].filter((item): item is { href:string; label:string } => Boolean(item));
+    hasPermission(user.roles,"tasks.write")
+      ? { href:"/aufgaben", label:"Aufgabe", icon:"AU" }
+      : null,
+    hasPermission(user.roles,"calendar.write")
+      ? { href:"/kalender", label:"Termin", icon:"KA" }
+      : null,
+    hasPermission(user.roles,"meetings.write")
+      ? { href:"/sitzungen", label:"Sitzung", icon:"SI" }
+      : null,
+    hasPermission(user.roles,"resolutions.write")
+      ? { href:"/beschluesse", label:"Beschluss", icon:"BE" }
+      : null,
+    hasPermission(user.roles,"documents.write")
+      ? { href:"/dokumente", label:"Dokument", icon:"DO" }
+      : null,
+    hasPermission(user.roles,"training.write")
+      ? { href:"/training", label:"Training", icon:"TR" }
+      : null,
+    hasPermission(user.roles,"members.write")
+      ? { href:"/mitglieder", label:"Mitglied", icon:"MI" }
+      : null,
+  ].filter((item): item is { href:string; label:string; icon:string } => Boolean(item));
 
   const currentItem = [...visibleNavigation]
     .sort((a, b) => b.href.length - a.href.length)
     .find((item) => item.href === "/" ? pathname === "/" : pathname.startsWith(item.href));
 
+  const currentGroup=currentItem?.group ?? "Dashboard";
+
+  function toggleNavigation() {
+    if (window.matchMedia("(max-width: 920px)").matches) {
+      setOpen((value)=>!value);
+    } else {
+      setCollapsed((value)=>!value);
+    }
+    setNotificationsOpen(false);
+    setQuickOpen(false);
+  }
+
   return (
-    <div className="app-shell">
+    <div className={`app-shell ${collapsed ? "sidebar-collapsed" : ""}`}>
       <aside className={`sidebar ${open ? "is-open" : ""}`}>
-        <div className="brand">
-          <div className="brand-mark" aria-hidden="true">
-            <span>VDC</span>
-            <i />
+        <Link href="/" className="brand" onClick={()=>setOpen(false)} aria-label="VDC Dashboard">
+          <div className="brand-logo">
+            <img src="/vdc-logo.png" alt="" />
           </div>
           <div className="brand-copy">
-            <strong>Vestischer Dart Club</strong>
-            <span>e.V. · Club Office</span>
+            <strong>VDC</strong>
+            <span>Vestischer Dart Club e.V.</span>
           </div>
-        </div>
+        </Link>
 
         <div className="sidebar-identity">
           <span>Vereinszentrale</span>
           <strong>Saison 2026/27</strong>
         </div>
 
-        <nav className="nav">
+        <nav className="nav" aria-label="Hauptnavigation">
           {groups.map((group) => {
             const items = visibleNavigation.filter((item) => item.group === group);
             if (!items.length) return null;
@@ -120,8 +175,9 @@ export function AppShell({
                       href={item.href}
                       className={`nav-item ${active ? "active" : ""}`}
                       onClick={() => setOpen(false)}
+                      title={collapsed ? item.label : undefined}
                     >
-                      <span className="nav-icon">{item.short}</span>
+                      <span className="nav-icon"><NavIcon href={item.href} /></span>
                       <span className="nav-label">{item.label}</span>
                       <span className="nav-chevron">›</span>
                     </Link>
@@ -142,10 +198,11 @@ export function AppShell({
           </div>
 
           <form action={logoutAction}>
-            <button type="submit" className="logout-button">Abmelden</button>
+            <button type="submit" className="logout-button" title="Abmelden">
+              <span className="logout-symbol">↪</span>
+              <span className="logout-label">Abmelden</span>
+            </button>
           </form>
-
-          <div className="club-signature">VDC · MARL · 2026/27</div>
         </div>
       </aside>
 
@@ -154,8 +211,8 @@ export function AppShell({
           <div className="topbar-left">
             <button
               className="menu-button"
-              onClick={() => setOpen((value) => !value)}
-              aria-label="Navigation öffnen"
+              onClick={toggleNavigation}
+              aria-label={collapsed ? "Navigation ausklappen" : "Navigation einklappen"}
             >
               <span />
               <span />
@@ -163,41 +220,21 @@ export function AppShell({
             </button>
 
             <div className="topbar-title">
-              <span className="eyebrow">VDC // CLUB OFFICE</span>
-              <strong>{currentItem?.label ?? "Vereinszentrale"}</strong>
+              <span>{currentGroup}</span>
+              <strong>{currentItem?.label ?? "Dashboard"}</strong>
             </div>
           </div>
 
           <div className="topbar-actions">
             <form action="/suche" method="get" className="topbar-search">
-              <input name="q" placeholder="Suchen …" aria-label="Globale Suche" />
-              <button type="submit" aria-label="Suchen">⌕</button>
+              <SearchIcon />
+              <input
+                name="q"
+                placeholder="Mitglieder, Termine, Dokumente suchen …"
+                aria-label="Globale Suche"
+              />
+              <button type="submit" aria-label="Suchen">Suchen</button>
             </form>
-
-            {quickActions.length > 0 && (
-              <div className="topbar-popover-wrap">
-                <button
-                  type="button"
-                  className="quick-action-button"
-                  onClick={() => {
-                    setQuickOpen((value)=>!value);
-                    setNotificationsOpen(false);
-                  }}
-                >
-                  + Neu
-                </button>
-                {quickOpen && (
-                  <div className="topbar-popover quick-actions-popover">
-                    <span className="popover-eyebrow">Schnell anlegen</span>
-                    {quickActions.map((item)=>(
-                      <Link key={item.label} href={item.href} onClick={()=>setQuickOpen(false)}>
-                        <strong>{item.label}</strong><span>›</span>
-                      </Link>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
 
             <div className="topbar-popover-wrap">
               <button
@@ -209,14 +246,19 @@ export function AppShell({
                 }}
                 aria-label="Hinweise"
               >
-                <span>!</span>
-                {notifications.unread > 0 && <b>{notifications.unread > 99 ? "99+" : notifications.unread}</b>}
+                <BellIcon />
+                {notifications.unread > 0 && (
+                  <b>{notifications.unread > 99 ? "99+" : notifications.unread}</b>
+                )}
               </button>
 
               {notificationsOpen && (
                 <div className="topbar-popover notification-popover">
                   <div className="notification-popover-head">
-                    <div><span className="popover-eyebrow">Persönlich</span><strong>Hinweise</strong></div>
+                    <div>
+                      <span className="popover-eyebrow">Persönlich</span>
+                      <strong>Hinweise</strong>
+                    </div>
                     <b>{notifications.unread}</b>
                   </div>
 
@@ -239,23 +281,48 @@ export function AppShell({
                     ))}
                   </div>
 
-                  <Link href="/hinweise" className="notification-popover-all" onClick={()=>setNotificationsOpen(false)}>
+                  <Link
+                    href="/hinweise"
+                    className="notification-popover-all"
+                    onClick={()=>setNotificationsOpen(false)}
+                  >
                     Alle Hinweise anzeigen
                   </Link>
                 </div>
               )}
             </div>
 
-            {user.roles.includes("admin") && (
-              <Link href="/admin" className="admin-topbar-link">ADMIN</Link>
-            )}
-            <div className="topbar-user">
-              <div className="avatar avatar-small">{initials}</div>
-              <div>
-                <strong>{user.displayName}</strong>
-                <span>{primaryRole}</span>
+            {quickActions.length > 0 && (
+              <div className="topbar-popover-wrap">
+                <button
+                  type="button"
+                  className="quick-action-button"
+                  onClick={() => {
+                    setQuickOpen((value)=>!value);
+                    setNotificationsOpen(false);
+                  }}
+                >
+                  <span>＋</span> Neu
+                </button>
+                {quickOpen && (
+                  <div className="topbar-popover quick-actions-popover">
+                    <span className="popover-eyebrow">Schnell anlegen</span>
+                    <div className="quick-action-grid">
+                      {quickActions.map((item)=>(
+                        <Link
+                          key={item.label}
+                          href={item.href}
+                          onClick={()=>setQuickOpen(false)}
+                        >
+                          <span>{item.icon}</span>
+                          <strong>{item.label}</strong>
+                        </Link>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
-            </div>
+            )}
           </div>
         </header>
 
