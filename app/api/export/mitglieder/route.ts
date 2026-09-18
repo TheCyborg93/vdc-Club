@@ -19,7 +19,7 @@ export async function GET() {
         FILTER (WHERE t.id IS NOT NULL),'') AS teams
     FROM members m
     LEFT JOIN team_members tm ON tm.member_id=m.id AND tm.is_active=true
-    LEFT JOIN teams t ON t.id=tm.team_id
+    LEFT JOIN teams t ON t.id=tm.team_id AND t.deleted_at IS NULL
     GROUP BY m.id
     ORDER BY m.last_name,m.first_name
   `;
