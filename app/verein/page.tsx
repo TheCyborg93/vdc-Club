@@ -27,8 +27,8 @@ export default async function ClubProfilePage({
 
   const [profileRows, summaryRows, recentChanges] = sql
     ? await Promise.all([
-        sql\`SELECT * FROM club_profile WHERE id=1 LIMIT 1\`,
-        sql\`
+        sql`SELECT * FROM club_profile WHERE id=1 LIMIT 1`,
+        sql`
           SELECT
             count(*) FILTER (WHERE status='active')::int AS active,
             count(*) FILTER (WHERE status='passive')::int AS passive,
@@ -45,8 +45,8 @@ export default async function ClubProfilePage({
                 AND leave_date < (date_trunc('year',CURRENT_DATE) + interval '1 year')::date
             )::int AS left_year
           FROM members
-        \`,
-        sql\`
+        `,
+        sql`
           SELECT
             h.id::text,
             h.old_status,
@@ -59,7 +59,7 @@ export default async function ClubProfilePage({
           JOIN members m ON m.id=h.member_id
           ORDER BY h.created_at DESC
           LIMIT 8
-        \`,
+        `,
       ])
     : [[], [{ active:0, passive:0, inactive:0, notices:0, joined_year:0, left_year:0 }], []];
 
