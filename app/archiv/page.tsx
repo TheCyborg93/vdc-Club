@@ -121,17 +121,19 @@ export default async function ArchivePage({
                       : <a href={String(doc.storage_ref)} target="_blank" rel="noreferrer" className="mini-button">Öffnen</a>
                 )}
                 {canWriteDocuments && (
-                  <form action={restoreDocumentAction}>
-                    <input type="hidden" name="id" value={String(doc.id)} />
-                    <button className="mini-button">Wiederherstellen</button>
-                  </form>
-                  <form action={moveToTrashAction}>
-                    <input type="hidden" name="type" value="document" />
-                    <input type="hidden" name="id" value={String(doc.id)} />
-                    <ConfirmSubmitButton message={"Archiviertes Dokument „"+String(doc.title)+"“ in den Papierkorb verschieben?"}>
-                      Löschen
-                    </ConfirmSubmitButton>
-                  </form>
+                  <>
+                    <form action={restoreDocumentAction}>
+                      <input type="hidden" name="id" value={String(doc.id)} />
+                      <button className="mini-button">Wiederherstellen</button>
+                    </form>
+                    <form action={moveToTrashAction}>
+                      <input type="hidden" name="type" value="document" />
+                      <input type="hidden" name="id" value={String(doc.id)} />
+                      <ConfirmSubmitButton message={"Archiviertes Dokument „"+String(doc.title)+"“ in den Papierkorb verschieben?"}>
+                        Löschen
+                      </ConfirmSubmitButton>
+                    </form>
+                  </>
                 )}
               </div>
             </div>
