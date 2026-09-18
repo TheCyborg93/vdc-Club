@@ -84,7 +84,8 @@ export default async function TrainingReportPage({
         sql`
           SELECT DISTINCT EXTRACT(YEAR FROM scheduled_at AT TIME ZONE 'Europe/Berlin')::int AS year
           FROM training_sessions
-          WHERE attendance_recorded_at IS NOT NULL
+          WHERE deleted_at IS NULL
+            AND attendance_recorded_at IS NOT NULL
           UNION SELECT ${nowYear}::int
           ORDER BY year DESC
         `,
@@ -96,7 +97,8 @@ export default async function TrainingReportPage({
               count(a.member_id) FILTER (WHERE a.attendance='present')::int AS present_count
             FROM training_sessions s
             LEFT JOIN training_attendance a ON a.session_id=s.id
-            WHERE s.attendance_recorded_at IS NOT NULL
+            WHERE s.deleted_at IS NULL
+              AND s.attendance_recorded_at IS NOT NULL
               AND s.status='completed'
               AND (s.scheduled_at AT TIME ZONE 'Europe/Berlin')::date
                   BETWEEN ${rangeStart}::date AND ${rangeEnd}::date
@@ -118,6 +120,7 @@ export default async function TrainingReportPage({
               FROM training_attendance a2
               JOIN training_sessions s2 ON s2.id=a2.session_id
               WHERE a2.attendance='present'
+                AND s2.deleted_at IS NULL
                 AND s2.attendance_recorded_at IS NOT NULL
                 AND s2.status='completed'
                 AND (s2.scheduled_at AT TIME ZONE 'Europe/Berlin')::date
@@ -129,7 +132,8 @@ export default async function TrainingReportPage({
           WITH recorded AS (
             SELECT id,scheduled_at
             FROM training_sessions
-            WHERE attendance_recorded_at IS NOT NULL
+            WHERE deleted_at IS NULL
+              AND attendance_recorded_at IS NOT NULL
               AND status='completed'
               AND (scheduled_at AT TIME ZONE 'Europe/Berlin')::date
                   BETWEEN ${rangeStart}::date AND ${rangeEnd}::date
@@ -199,7 +203,8 @@ export default async function TrainingReportPage({
             ) AS avg_present
           FROM training_sessions s
           LEFT JOIN training_attendance a ON a.session_id=s.id
-          WHERE s.attendance_recorded_at IS NOT NULL
+          WHERE s.deleted_at IS NULL
+            AND s.attendance_recorded_at IS NOT NULL
             AND s.status='completed'
             AND (s.scheduled_at AT TIME ZONE 'Europe/Berlin')::date
                 BETWEEN ${rangeStart}::date AND ${rangeEnd}::date
@@ -271,6 +276,7 @@ export default async function TrainingReportPage({
           LEFT JOIN training_attendance a ON a.member_id=m.id
           LEFT JOIN training_sessions s
             ON s.id=a.session_id
+           AND s.deleted_at IS NULL
            AND s.attendance_recorded_at IS NOT NULL
            AND s.status='completed'
            AND (s.scheduled_at AT TIME ZONE 'Europe/Berlin')::date
