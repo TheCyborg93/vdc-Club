@@ -4,10 +4,12 @@ import { getDb } from "@/lib/db";
 import { hasPermission, requirePermission } from "@/lib/permissions";
 import {
   addTeamMemberAction,
+  deleteUnusedTeamAction,
   removeTeamMemberAction,
   setTeamCaptainAction,
   updateTeamAction,
 } from "@/app/mannschaften/actions";
+import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 
 export const dynamic = "force-dynamic";
 
@@ -84,6 +86,7 @@ export default async function TeamDetailPage({
       SELECT id::text,title,starts_at,event_type,description
       FROM club_events
       WHERE team_id = ${id}::uuid
+        AND deleted_at IS NULL
         AND starts_at >= now() - interval '1 day'
       ORDER BY starts_at
       LIMIT 8
@@ -108,7 +111,13 @@ export default async function TeamDetailPage({
         </div>
       </section>
 
-      {query.error && <div className="form-error">Die Änderung konnte nicht gespeichert werden.</div>}
+      {query.error && (
+        <div className="form-error">
+          {query.error==="team_delete"
+            ? "Diese Mannschaft enthält bereits Kader-/Termin-/Importhistorie und kann nicht endgültig gelöscht werden. Nutze stattdessen den Status „Archiviert“."
+            : "Die Änderung konnte nicht gespeichert werden."}
+        </div>
+      )}
       {(query.saved || query.member || query.captain || query.removed || query.created) && <div className="form-success">Mannschaft wurde aktualisiert.</div>}
 
       <section className="meeting-summary-grid">
@@ -204,6 +213,18 @@ export default async function TeamDetailPage({
               </label>
               {canWrite && <button className="primary-button">Änderungen speichern</button>}
             </form>
+
+            {isAdmin && roster.length===0 && !team.external_source && !team.external_id && (
+              <form action={deleteUnusedTeamAction} className="destructive-inline-form">
+                <input type="hidden" name="id" value={id} />
+                <ConfirmSubmitButton
+                  message={"Mannschaft „"+String(team.name)+"“ endgültig löschen? Das ist nur möglich, wenn keinerlei Kader-, Termin- oder Importhistorie existiert."}
+                  requireText="LÖSCHEN"
+                >
+                  Mannschaft endgültig löschen
+                </ConfirmSubmitButton>
+              </form>
+            )}
           </article>
 
           {canWrite && availableMembers.length > 0 && (
