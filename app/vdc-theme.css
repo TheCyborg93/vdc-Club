@@ -3137,3 +3137,75 @@ body{
     width:70px;
   }
 }
+
+
+/* ---- Private document uploads ---------------------------- */
+.document-upload-box{
+  display:grid;
+  gap:7px;
+  padding:11px;
+  border:1px dashed rgba(196,51,30,.24);
+  border-radius:10px;
+  background:
+    linear-gradient(135deg,rgba(196,51,30,.055),transparent 55%),
+    #17171a;
+}
+.document-upload-box label{
+  display:grid;
+  gap:5px;
+  color:#aaa5a1;
+  font-size:8px;
+  font-weight:850;
+}
+.document-upload-box input[type="file"]{
+  width:100%;
+  padding:8px;
+  border:1px solid rgba(255,255,255,.09);
+  border-radius:8px;
+  background:#121215;
+  color:#c8c3bd;
+  font-size:8px;
+}
+.document-upload-box input[type="file"]::file-selector-button{
+  margin-right:9px;
+  padding:6px 8px;
+  border:1px solid rgba(196,51,30,.2);
+  border-radius:7px;
+  background:rgba(196,51,30,.08);
+  color:#dd715d;
+  font-size:8px;
+  font-weight:850;
+}
+.document-upload-box>small{
+  color:#777378;
+  font-size:7px;
+  line-height:1.45;
+}
+.document-source-divider{
+  position:relative;
+  display:grid;
+  place-items:center;
+  height:18px;
+}
+.document-source-divider:before{
+  content:"";
+  position:absolute;
+  inset:50% 0 auto;
+  height:1px;
+  background:rgba(255,255,255,.07);
+}
+.document-source-divider span{
+  position:relative;
+  z-index:1;
+  padding:0 8px;
+  background:#1b1b1f;
+  color:#5f5c61;
+  font-size:7px;
+  font-weight:900;
+  letter-spacing:.12em;
+}
+.document-file-chip{
+  border:1px solid rgba(106,212,255,.12);
+  background:rgba(106,212,255,.055)!important;
+  color:#96c9d8!important;
+}
