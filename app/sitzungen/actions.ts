@@ -403,10 +403,10 @@ export async function updateMeetingStatusAction(formData: FormData) {
         'Protokoll',
         'internal',
         '/sitzungen/' || m.id::text || '/protokoll',
-        'active',
+        'review',
         (m.starts_at AT TIME ZONE 'Europe/Berlin')::date,
         m.id,
-        'Automatisch beim Beenden der Sitzung registriert.'
+        'Automatisch beim Beenden der Sitzung registriert · Freigabe noch erforderlich.'
       FROM meetings m
       WHERE m.id=${meetingId}::uuid
         AND m.deleted_at IS NULL
