@@ -301,6 +301,7 @@ export async function getDashboardData(
               JOIN training_sessions s ON s.id=a.session_id
               WHERE a.member_id=${options.memberId || null}::uuid
                 AND a.attendance='present'
+                AND s.deleted_at IS NULL
                 AND s.attendance_recorded_at IS NOT NULL
                 AND s.status='completed'
                 AND EXTRACT(YEAR FROM s.scheduled_at AT TIME ZONE 'Europe/Berlin')
