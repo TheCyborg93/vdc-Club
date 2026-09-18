@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getDb } from "@/lib/db";
 import { hasPermission, requirePermission } from "@/lib/permissions";
 import {
+import { teamStatusLabel } from "@/lib/ui-labels";
   addTeamMemberAction,
   removeTeamMemberAction,
   setTeamCaptainAction,
@@ -108,7 +109,7 @@ export default async function TeamDetailPage({
         </div>
         <div className="meeting-hero-side">
           {isAdmin && team.external_source === "vdc_tc" && <span className="sync-chip">VDC‑TC verbunden</span>}
-          <b className={`status-badge status-${team.status}`}>{String(team.status)}</b>
+          <b className={`status-badge status-${team.status}`}>{teamStatusLabel(team.status)}</b>
         </div>
       </section>
 
