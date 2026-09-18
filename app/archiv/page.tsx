@@ -63,7 +63,8 @@ export default async function ArchivePage({
         canSponsors ? sql`
           SELECT id::text,name,status,contract_end
           FROM sponsors
-          WHERE status IN ('expired','inactive')
+          WHERE deleted_at IS NULL
+            AND status IN ('expired','inactive')
           ORDER BY contract_end DESC NULLS LAST,name
           LIMIT 80
         ` : Promise.resolve([]),
