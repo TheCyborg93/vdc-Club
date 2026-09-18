@@ -4,8 +4,10 @@ import { hasPermission, requirePermission } from "@/lib/permissions";
 import { PrintReportButton } from "@/components/print-report-button";
 import {
   activateTrainingSeasonAction,
+  deleteTrainingSeasonAction,
   saveTrainingSeasonAction,
 } from "@/app/training/auswertung/actions";
+import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 
 export const dynamic = "force-dynamic";
 
@@ -40,6 +42,7 @@ export default async function TrainingReportPage({
     season?: string;
     saved?: string;
     active?: string;
+    deleted?: string;
     error?: string;
   }>;
 }) {
@@ -307,6 +310,7 @@ export default async function TrainingReportPage({
   const errorLabels: Record<string,string> = {
     database:"Datenbank ist nicht verfügbar.",
     season:"Saison konnte nicht gespeichert werden. Bitte Zeitraum prüfen.",
+    season_delete:"Diese Saison kann nicht gelöscht werden. Aktive oder von einer Mannschaft verwendete Saisons bleiben erhalten.",
   };
 
   return (
@@ -360,6 +364,7 @@ export default async function TrainingReportPage({
       {params.error && <div className="form-error">{errorLabels[params.error] ?? "Aktion fehlgeschlagen."}</div>}
       {params.saved && <div className="form-success">Saison wurde gespeichert.</div>}
       {params.active && <div className="form-success">Aktive Trainingssaison wurde geändert.</div>}
+      {params.deleted && <div className="form-success">Unbenutzte Trainingssaison wurde gelöscht.</div>}
 
       <section className="training-report-meta">
         <div><span>Auswertung</span><strong>{reportLabel}</strong></div>
@@ -548,6 +553,24 @@ export default async function TrainingReportPage({
                   <form action={activateTrainingSeasonAction} key={String(season.id)}>
                     <input type="hidden" name="id" value={String(season.id)} />
                     <button className="mini-button">{String(season.label)} aktivieren</button>
+                  </form>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {seasons.some((season)=>!season.is_active) && (
+            <div className="training-season-activate-list">
+              <span className="eyebrow">Unbenutzte Saison entfernen</span>
+              <div>
+                {seasons.filter((season)=>!season.is_active).map((season)=>(
+                  <form action={deleteTrainingSeasonAction} key={"delete-"+String(season.id)}>
+                    <input type="hidden" name="id" value={String(season.id)} />
+                    <ConfirmSubmitButton
+                      message={"Trainingssaison „"+String(season.label)+"“ löschen? Saisons, die von einer Mannschaft verwendet werden, sind geschützt."}
+                    >
+                      {String(season.label)} löschen
+                    </ConfirmSubmitButton>
                   </form>
                 ))}
               </div>
