@@ -71,8 +71,29 @@ export async function generateMembershipFeesAction(formData: FormData) {
   if (!sql) redirect("/finanzen?error=database");
 
   const year = Number(value(formData, "year"));
-  const amount = Number(value(formData, "amount").replace(",", "."));
-  const dueDate = value(formData, "dueDate");
+  const enteredAmount = value(formData, "amount");
+  const enteredDueDate = value(formData, "dueDate");
+
+  const profileRows = await sql`
+    SELECT default_annual_fee,fee_due_month,fee_due_day
+    FROM club_profile
+    WHERE id=1
+    LIMIT 1
+  `;
+  const profile = profileRows[0] ?? {};
+
+  const amount = enteredAmount
+    ? Number(enteredAmount.replace(",", "."))
+    : Number(profile.default_annual_fee ?? NaN);
+
+  let dueDate = enteredDueDate;
+  if (!dueDate && profile.fee_due_month && profile.fee_due_day && Number.isInteger(year)) {
+    const month = Number(profile.fee_due_month);
+    const requestedDay = Number(profile.fee_due_day);
+    const maxDay = new Date(year, month, 0).getDate();
+    const day = Math.min(requestedDay, maxDay);
+    dueDate = `${year}-${String(month).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
+  }
 
   if (!Number.isInteger(year) || !Number.isFinite(amount) || amount < 0) {
     redirect("/finanzen?error=invalid");
@@ -87,6 +108,8 @@ export async function generateMembershipFeesAction(formData: FormData) {
   `;
 
   revalidatePath("/finanzen");
+  revalidatePath("/mitglieder");
+  revalidatePath("/");
   redirect("/finanzen?fees=1");
 }
 
