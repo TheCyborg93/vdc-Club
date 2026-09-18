@@ -101,7 +101,9 @@ export default async function ArchivePage({
           ) : documents.map((doc)=>(
             <div className="archive-row" key={String(doc.id)}>
               <div>
-                <strong>{String(doc.title)}</strong>
+                <Link href={"/dokumente/"+String(doc.id)} className="document-title-link">
+                  <strong>{String(doc.title)}</strong>
+                </Link>
                 <span>{String(doc.category)} · {doc.document_date ? formatDate(doc.document_date) : "ohne Dokumentdatum"}</span>
                 <small>
                   Archiviert {formatDate(doc.archived_at)}
@@ -109,6 +111,7 @@ export default async function ArchivePage({
                 </small>
               </div>
               <div className="archive-row-actions">
+                <Link href={"/dokumente/"+String(doc.id)} className="mini-button">Details</Link>
                 {doc.storage_ref && (
                   doc.storage_type==="upload"
                     ? (
