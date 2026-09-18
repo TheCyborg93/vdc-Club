@@ -97,7 +97,7 @@ export async function getDashboardData(
       businessAlerts,
     ] = await Promise.all([
       sql`SELECT count(*)::int AS count FROM members WHERE status = 'active'`,
-      sql`SELECT count(*)::int AS count FROM teams WHERE status = 'active'`,
+      sql`SELECT count(*)::int AS count FROM teams WHERE status = 'active' AND deleted_at IS NULL`,
       sql`SELECT count(*)::int AS count FROM tasks WHERE deleted_at IS NULL AND status IN ('open','in_progress','blocked')`,
       sql`SELECT count(*)::int AS count FROM club_events WHERE deleted_at IS NULL AND starts_at >= now() AND starts_at < now() + interval '14 days'`,
       sql`
@@ -136,7 +136,7 @@ export async function getDashboardData(
           e.source,
           t.short_name AS team
         FROM club_events e
-        LEFT JOIN teams t ON t.id=e.team_id
+        LEFT JOIN teams t ON t.id=e.team_id AND t.deleted_at IS NULL
         WHERE e.deleted_at IS NULL
           AND e.starts_at >= now()
         ORDER BY e.starts_at ASC
@@ -210,7 +210,8 @@ export async function getDashboardData(
             CASE WHEN s.contract_end < CURRENT_DATE THEN 'critical' ELSE 'warning' END,
             s.contract_end::timestamp
           FROM sponsors s
-          WHERE s.status='active'
+          WHERE s.deleted_at IS NULL
+            AND s.status='active'
             AND s.contract_end IS NOT NULL
             AND s.contract_end <= CURRENT_DATE + interval '60 days'
 
