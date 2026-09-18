@@ -287,11 +287,14 @@ export default async function TrainingPage({
           <h1>Training</h1>
           <p>Dienstag und Freitag · Beginn 19:00 Uhr · Ende offen. Anwesenheit wird händisch mit einem Klick pro Mitglied erfasst.</p>
         </div>
-        {canWrite && (
-          <form action={refreshTrainingScheduleAction}>
-            <button className="ghost-button">Terminplan aktualisieren</button>
-          </form>
-        )}
+        <div className="training-heading-actions">
+          <Link href="/training/auswertung" className="ghost-button">Auswertung</Link>
+          {canWrite && (
+            <form action={refreshTrainingScheduleAction}>
+              <button className="ghost-button">Terminplan aktualisieren</button>
+            </form>
+          )}
+        </div>
       </section>
 
       {params.error && <div className="form-error">{errorLabels[params.error] ?? "Die Trainingsaktion konnte nicht ausgeführt werden."}</div>}
