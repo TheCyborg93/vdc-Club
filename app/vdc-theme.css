@@ -1616,3 +1616,259 @@ body{
   .audit-row{grid-template-columns:8px minmax(0,1fr)}
   .audit-row time{grid-column:2}
 }
+
+
+/* ---- Training -------------------------------------------- */
+.training-heading{
+  display:flex;
+  justify-content:space-between;
+  gap:16px;
+  align-items:flex-start;
+}
+
+.training-rule-chip{
+  padding:6px 9px;
+  border:1px solid rgba(196,51,30,.22);
+  border-radius:999px;
+  background:rgba(196,51,30,.07);
+  color:#e57a65;
+  font-size:8px;
+  font-weight:950;
+  letter-spacing:.08em;
+}
+
+.training-upcoming-list,
+.training-history-list,
+.training-activity-list,
+.training-attendance-list{display:grid}
+
+.training-upcoming-row{
+  display:grid;
+  grid-template-columns:58px minmax(0,1fr) auto;
+  gap:12px;
+  align-items:center;
+  padding:11px 0;
+  border-top:1px solid rgba(255,255,255,.07);
+}
+
+.training-upcoming-row:first-child,
+.training-history-row:first-child,
+.training-activity-row:first-child,
+.training-attendance-row:first-child{border-top:0}
+
+.training-date-badge{
+  display:grid;
+  place-items:center;
+  min-height:48px;
+  padding:7px;
+  border:1px solid rgba(255,255,255,.09);
+  border-radius:9px;
+  background:#18181c;
+  text-align:center;
+}
+
+.training-date-badge strong{
+  color:#e16a55;
+  font-size:8px;
+  letter-spacing:.08em;
+}
+
+.training-date-badge span{
+  margin-top:3px;
+  color:#d7d2cb;
+  font-size:10px;
+  font-weight:850;
+}
+
+.training-upcoming-row>div:nth-child(2) strong,
+.training-upcoming-row>div:nth-child(2) span{
+  display:block;
+}
+
+.training-upcoming-row>div:nth-child(2) strong{font-size:11px}
+.training-upcoming-row>div:nth-child(2) span{margin-top:3px;color:#777378;font-size:9px}
+.training-upcoming-row>b{font-size:8px;color:#807b7f}
+
+.training-cancelled .training-date-badge{
+  border-color:rgba(228,121,114,.18);
+  background:rgba(228,121,114,.05);
+}
+
+.training-cancelled>div:nth-child(2) strong,
+.training-cancelled>b{color:#e38a82}
+
+.training-history-row{
+  display:flex;
+  justify-content:space-between;
+  gap:14px;
+  align-items:flex-start;
+  padding:11px 0;
+  border-top:1px solid rgba(255,255,255,.07);
+}
+
+.training-history-row strong,
+.training-history-row span,
+.training-history-row small{display:block}
+
+.training-history-row strong{font-size:10px}
+.training-history-row span{margin-top:3px;color:#aaa5a1;font-size:9px}
+.training-history-row small{
+  max-width:520px;
+  margin-top:5px;
+  color:#6f6b6f;
+  font-size:8px;
+  line-height:1.45;
+}
+
+.training-history-row>b{
+  padding:4px 7px;
+  border-radius:999px;
+  background:#242428;
+  color:#8f8a8e;
+  font-size:8px;
+}
+
+.training-activity-note{
+  margin:-3px 0 10px!important;
+  font-size:9px!important;
+}
+
+.training-activity-row{
+  display:grid;
+  grid-template-columns:28px 38px minmax(0,1fr) minmax(130px,220px);
+  gap:10px;
+  align-items:center;
+  padding:10px 0;
+  border-top:1px solid rgba(255,255,255,.07);
+}
+
+.training-rank{
+  display:grid;
+  place-items:center;
+  width:25px;
+  height:25px;
+  border-radius:50%;
+  background:#232327;
+  color:#777378;
+  font-size:8px;
+  font-weight:900;
+}
+
+.training-member strong,
+.training-member span{display:block}
+
+.training-member strong{font-size:10px}
+.training-member span{margin-top:3px;color:#777378;font-size:8px}
+
+.training-rate{
+  display:grid;
+  grid-template-columns:40px minmax(70px,1fr);
+  gap:8px;
+  align-items:center;
+}
+
+.training-rate strong{
+  color:#e27661;
+  font-size:11px;
+  text-align:right;
+}
+
+.training-rate>div{
+  height:6px;
+  overflow:hidden;
+  border-radius:99px;
+  background:#29292d;
+}
+
+.training-rate i{
+  display:block;
+  height:100%;
+  border-radius:inherit;
+  background:linear-gradient(90deg,#a82718,#df4930);
+}
+
+.training-attendance-row{
+  display:grid;
+  grid-template-columns:38px minmax(0,1fr) 160px;
+  gap:10px;
+  align-items:center;
+  padding:10px 0;
+  border-top:1px solid rgba(255,255,255,.07);
+}
+
+.training-attendance-row>div:nth-child(2) strong,
+.training-attendance-row>div:nth-child(2) span{display:block}
+
+.training-attendance-row>div:nth-child(2) strong{font-size:10px}
+.training-attendance-row>div:nth-child(2) span{margin-top:3px;color:#777378;font-size:8px}
+
+.training-attendance-row select{
+  width:100%;
+  padding:8px 9px;
+  border:1px solid rgba(255,255,255,.11);
+  border-radius:8px;
+  background:#141417;
+  color:#f1efeb;
+  font-size:9px;
+}
+
+.training-save-bar{
+  display:flex;
+  justify-content:space-between;
+  gap:14px;
+  align-items:center;
+  margin-top:14px;
+  padding-top:13px;
+  border-top:1px solid rgba(255,255,255,.08);
+}
+
+.training-save-bar p{
+  margin:0!important;
+  max-width:620px;
+  color:#777378!important;
+  font-size:8px!important;
+}
+
+.training-info-box{
+  margin-bottom:12px;
+  padding:10px 12px;
+  border:1px solid rgba(228,191,112,.14);
+  border-radius:9px;
+  background:rgba(228,191,112,.05);
+  color:#caae6e;
+  font-size:9px;
+}
+
+.training-session-meta{
+  display:grid;
+  gap:7px;
+  margin-bottom:13px;
+}
+
+.training-session-meta>div{
+  padding:9px;
+  border:1px solid rgba(255,255,255,.07);
+  border-radius:8px;
+  background:#18181c;
+}
+
+.training-session-meta span,
+.training-session-meta strong{display:block}
+
+.training-session-meta span{font-size:8px;color:#777378}
+.training-session-meta strong{margin-top:3px;font-size:10px}
+
+.training-status-planned{background:rgba(228,191,112,.09);color:#e4c271}
+.training-status-completed{background:rgba(143,198,162,.09);color:#acd3b8}
+.training-status-cancelled{background:rgba(228,121,114,.09);color:#e99b95}
+
+@media(max-width:760px){
+  .training-heading{display:grid}
+  .training-upcoming-row{grid-template-columns:54px minmax(0,1fr)}
+  .training-upcoming-row>b{grid-column:2}
+  .training-activity-row{grid-template-columns:26px 36px minmax(0,1fr)}
+  .training-rate{grid-column:3;grid-template-columns:38px 1fr}
+  .training-attendance-row{grid-template-columns:36px minmax(0,1fr)}
+  .training-attendance-row select{grid-column:2}
+  .training-save-bar{display:grid}
+}
