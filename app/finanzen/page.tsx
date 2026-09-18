@@ -38,7 +38,7 @@ export default async function FinancePage({
   const params = await searchParams;
   const canWrite = hasPermission(actor.roles, "finance.write");
 
-  const [summaryRows, entries, budgets, fees, members] = sql
+  const [summaryRows, entries, budgets, fees, members, profileRows] = sql
     ? await Promise.all([
         sql`
           SELECT
@@ -92,12 +92,23 @@ export default async function FinancePage({
           WHERE status = 'active'
           ORDER BY last_name, first_name
         `,
+        sql`
+          SELECT default_annual_fee,fee_due_month,fee_due_day
+          FROM club_profile
+          WHERE id=1
+          LIMIT 1
+        `,
       ])
-    : [[{ budget: 0, income: 0, expense: 0, open_fees: 0 }], [], [], [], []];
+    : [[{ budget: 0, income: 0, expense: 0, open_fees: 0 }], [], [], [], [], []];
 
   const s = summaryRows[0] ?? {};
+  const profile = profileRows[0] ?? {};
   const balance = Number(s.income ?? 0) - Number(s.expense ?? 0);
   const budgetRemaining = Number(s.budget ?? 0) - Number(s.expense ?? 0);
+  const currentYear = new Date().getFullYear();
+  const defaultDueDate = profile.fee_due_month && profile.fee_due_day
+    ? `${currentYear}-${String(profile.fee_due_month).padStart(2,"0")}-${String(profile.fee_due_day).padStart(2,"0")}`
+    : "";
 
   return (
     <div className="page-stack">
@@ -236,11 +247,11 @@ export default async function FinancePage({
             <div className="panel-head"><div><span className="eyebrow">Beiträge</span><h2>Jahresbeiträge erzeugen</h2></div></div>
             <form action={generateMembershipFeesAction} className="form-stack">
               <div className="form-grid">
-                <label>Jahr<input name="year" type="number" defaultValue={new Date().getFullYear()} required /></label>
-                <label>Beitrag pro Mitglied<input name="amount" inputMode="decimal" required /></label>
+                <label>Jahr<input name="year" type="number" defaultValue={currentYear} required /></label>
+                <label>Beitrag pro Mitglied<input name="amount" inputMode="decimal" defaultValue={profile.default_annual_fee ?? ""} placeholder="aus Vereinsprofil" /></label>
               </div>
-              <label>Fällig am<input name="dueDate" type="date" /></label>
-              <p className="form-hint">Es werden nur aktive Mitglieder ergänzt, für die in diesem Jahr noch kein Beitrag existiert.</p>
+              <label>Fällig am<input name="dueDate" type="date" defaultValue={defaultDueDate} /></label>
+              <p className="form-hint">Standardbetrag und Fälligkeit kommen aus dem Vereinsprofil. Es werden nur aktive Mitglieder ergänzt, für die in diesem Jahr noch kein Beitrag existiert.</p>
               <button className="primary-button">Beiträge erzeugen</button>
             </form>
           </article>
