@@ -7,6 +7,7 @@ const errors: Record<string, string> = {
   database: "Die Datenbankverbindung fehlt.",
   missing: "Vor- und Nachname sind erforderlich.",
   duplicate: "Mitgliedsnummer oder andere eindeutige Daten sind bereits vergeben.",
+  member_delete: "Dieses Mitglied besitzt bereits Vereinshistorie und kann nicht endgültig gelöscht werden.",
 };
 
 const statusLabels: Record<string,string> = {
@@ -27,7 +28,7 @@ export const dynamic = "force-dynamic";
 export default async function MembersPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; created?: string }>;
+  searchParams: Promise<{ error?: string; created?: string; deleted?: string }>;
 }) {
   const user = await requirePermission("members.read");
   const sql = getDb();
@@ -90,6 +91,7 @@ export default async function MembersPage({
 
       {params.error && <div className="form-error">{errors[params.error] ?? "Die Aktion konnte nicht ausgeführt werden."}</div>}
       {params.created && <div className="form-success">Mitglied wurde angelegt.</div>}
+      {params.deleted && <div className="form-success">Unbenutztes Mitglied wurde endgültig gelöscht.</div>}
 
       <section className="stat-grid">
         <article className="stat-card"><span>Aktive Mitglieder</span><strong>{Number(count.active ?? 0)}</strong><small>aktueller Bestand</small></article>
