@@ -258,7 +258,7 @@ export async function POST(request: Request) {
         const eligibleMembers=await sql`
           SELECT id::text
           FROM members
-          WHERE status='active'
+          WHERE status IN ('active','passive')
             AND (join_date IS NULL OR join_date <= (${day.startsAt}::timestamptz AT TIME ZONE 'Europe/Berlin')::date)
             AND (leave_date IS NULL OR leave_date >= (${day.startsAt}::timestamptz AT TIME ZONE 'Europe/Berlin')::date)
         `;
