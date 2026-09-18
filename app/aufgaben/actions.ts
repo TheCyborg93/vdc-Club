@@ -63,6 +63,7 @@ export async function updateTaskStatusAction(formData: FormData) {
     SELECT id::text,title,status,source_type,source_id::text
     FROM tasks
     WHERE id=${id}::uuid
+      AND deleted_at IS NULL
     LIMIT 1
   `;
 
@@ -72,6 +73,7 @@ export async function updateTaskStatusAction(formData: FormData) {
       status=${status},
       completed_at=CASE WHEN ${status}='done' THEN COALESCE(completed_at,now()) ELSE NULL END
     WHERE id=${id}::uuid
+      AND deleted_at IS NULL
   `;
 
   const task=before[0];
