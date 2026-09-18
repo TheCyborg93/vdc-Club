@@ -27,6 +27,7 @@ export default async function TeamsPage({
   const sql = getDb();
   const params = await searchParams;
   const canWrite = hasPermission(actor.roles, "teams.write");
+  const isAdmin = actor.roles.includes("admin");
 
   const [teams, counts] = sql
     ? await Promise.all([
@@ -89,7 +90,7 @@ export default async function TeamsPage({
         <div>
           <span className="eyebrow">Verein</span>
           <h1>Mannschaften</h1>
-          <p>Kader, Captains, Liga, Saison und kommende Spieltage mit angebundenen Daten aus VDC‑TC.</p>
+          <p>Kader, Captains, Liga, Saison und kommende Spieltage zentral verwalten.</p>
         </div>
       </section>
 
@@ -117,7 +118,7 @@ export default async function TeamsPage({
                 </div>
                 <div className="team-source-stack">
                   <b className={`status-badge status-${team.status}`}>{String(team.status)}</b>
-                  {team.external_source === "vdc_tc" && <span className="sync-chip">TC verbunden</span>}
+                  {isAdmin && team.external_source === "vdc_tc" && <span className="sync-chip">TC verbunden</span>}
                 </div>
               </div>
 
