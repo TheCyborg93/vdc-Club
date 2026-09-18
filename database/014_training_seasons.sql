@@ -16,6 +16,10 @@ CREATE TABLE IF NOT EXISTS training_seasons (
 CREATE INDEX IF NOT EXISTS idx_training_seasons_active
   ON training_seasons(is_active,starts_on DESC);
 
+CREATE UNIQUE INDEX IF NOT EXISTS idx_training_seasons_single_active
+  ON training_seasons ((1))
+  WHERE is_active=true;
+
 DROP TRIGGER IF EXISTS trg_training_seasons_updated_at ON training_seasons;
 CREATE TRIGGER trg_training_seasons_updated_at
   BEFORE UPDATE ON training_seasons
