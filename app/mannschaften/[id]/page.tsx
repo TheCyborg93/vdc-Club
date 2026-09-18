@@ -40,6 +40,7 @@ export default async function TeamDetailPage({
   const { id } = await params;
   const query = await searchParams;
   const canWrite = hasPermission(actor.roles, "teams.write");
+  const isAdmin = actor.roles.includes("admin");
 
   const [teamRows, roster, availableMembers, events] = await Promise.all([
     sql`
@@ -102,7 +103,7 @@ export default async function TeamDetailPage({
           <p>{team.league ? String(team.league) : "Noch keiner Liga zugeordnet"}</p>
         </div>
         <div className="meeting-hero-side">
-          {team.external_source === "vdc_tc" && <span className="sync-chip">VDC‑TC verbunden</span>}
+          {isAdmin && team.external_source === "vdc_tc" && <span className="sync-chip">VDC‑TC verbunden</span>}
           <b className={`status-badge status-${team.status}`}>{String(team.status)}</b>
         </div>
       </section>
@@ -114,7 +115,9 @@ export default async function TeamDetailPage({
         <article><span>Kader</span><strong>{roster.length}</strong><small>aktive Spieler</small></article>
         <article><span>Captains</span><strong>{roster.filter((r) => r.is_captain).length}</strong><small>markiert</small></article>
         <article><span>Termine</span><strong>{events.length}</strong><small>kommende Spiele</small></article>
-        <article><span>Quelle</span><strong>{team.external_source === "vdc_tc" ? "TC" : "Club"}</strong><small>{team.external_id ? "synchronisiert" : "lokal"}</small></article>
+        {isAdmin
+          ? <article><span>Quelle</span><strong>{team.external_source === "vdc_tc" ? "TC" : "Club"}</strong><small>{team.external_id ? "synchronisiert" : "lokal"}</small></article>
+          : <article><span>Saison</span><strong>{team.season ? String(team.season) : "–"}</strong><small>aktueller Spielbetrieb</small></article>}
       </section>
 
       <section className="team-detail-grid">
