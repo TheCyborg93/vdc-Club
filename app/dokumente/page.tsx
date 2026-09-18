@@ -6,6 +6,8 @@ import {
   createDocumentAction,
   updateDocumentStatusAction,
 } from "@/app/dokumente/actions";
+import { moveToTrashAction } from "@/app/admin/papierkorb/actions";
+import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 
 export const dynamic = "force-dynamic";
 
@@ -50,6 +52,7 @@ export default async function DocumentsPage({
     created?:string;
     archived?:string;
     uploaded?:string;
+    deleted?:string;
     q?:string;
     category?:string;
     status?:string;
@@ -82,6 +85,7 @@ export default async function DocumentsPage({
           LEFT JOIN finance_entries f ON f.id=d.finance_entry_id
           LEFT JOIN sponsors s ON s.id=d.sponsor_id
           WHERE d.status<>'archived'
+            AND d.deleted_at IS NULL
             AND (${q}='' OR d.title ILIKE '%' || ${q} || '%' OR COALESCE(d.notes,'') ILIKE '%' || ${q} || '%')
             AND (${category}='' OR d.category=${category})
             AND (${status}='' OR d.status=${status})
@@ -107,13 +111,14 @@ export default async function DocumentsPage({
             )::int AS review,
             count(*) FILTER (WHERE status='archived')::int AS archived
           FROM documents
+          WHERE deleted_at IS NULL
         `,
         sql`SELECT id::text,first_name,last_name FROM members WHERE status='active' ORDER BY last_name,first_name`,
-        sql`SELECT id::text,title,starts_at FROM meetings ORDER BY starts_at DESC LIMIT 40`,
+        sql`SELECT id::text,title,starts_at FROM meetings WHERE deleted_at IS NULL ORDER BY starts_at DESC LIMIT 40`,
         sql`SELECT id::text,resolution_number,title FROM resolutions ORDER BY decided_at DESC LIMIT 60`,
         sql`SELECT id::text,booked_on,description FROM finance_entries WHERE status='booked' ORDER BY booked_on DESC LIMIT 60`,
         sql`SELECT id::text,name FROM sponsors ORDER BY name`,
-        sql`SELECT DISTINCT category FROM documents ORDER BY category`,
+        sql`SELECT DISTINCT category FROM documents WHERE deleted_at IS NULL ORDER BY category`,
       ])
     : [[],[{total:0,minutes:0,contracts:0,review:0,archived:0}],[],[],[],[],[],[]];
 
@@ -133,6 +138,7 @@ export default async function DocumentsPage({
       {params.error && <div className="form-error">{errorLabels[params.error] ?? "Das Dokument konnte nicht gespeichert werden."}</div>}
       {(params.created || params.archived) && <div className="form-success">Dokumentenregister wurde aktualisiert.</div>}
       {params.uploaded && <div className="form-success">Datei wurde sicher hochgeladen und im Dokumentenregister gespeichert.</div>}
+      {params.deleted && <div className="form-success">Dokument wurde in den Papierkorb verschoben.</div>}
 
       <section className="stat-grid">
         <article className="stat-card"><span>Dokumente</span><strong>{Number(c.total ?? 0)}</strong><small>aktive Ablage</small></article>
@@ -234,6 +240,13 @@ export default async function DocumentsPage({
                       <form action={archiveDocumentAction}>
                         <input type="hidden" name="id" value={String(doc.id)} />
                         <button className="mini-button">Archivieren</button>
+                      </form>
+                      <form action={moveToTrashAction}>
+                        <input type="hidden" name="type" value="document" />
+                        <input type="hidden" name="id" value={String(doc.id)} />
+                        <ConfirmSubmitButton message={"Dokument „"+String(doc.title)+"“ in den Papierkorb verschieben?"}>
+                          Löschen
+                        </ConfirmSubmitButton>
                       </form>
                     </>
                   )}
