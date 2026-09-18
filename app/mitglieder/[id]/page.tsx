@@ -80,7 +80,7 @@ export default async function MemberDetailPage({
   const { id } = await params;
   const query = await searchParams;
 
-  const [memberRows, roleRows, userRows, feeRows, historyRows] = await Promise.all([
+  const [memberRows, roleRows, userRows, feeRows, historyRows, trainingSummaryRows, trainingHistoryRows] = await Promise.all([
     sql`
       SELECT
         m.id::text,
@@ -134,6 +134,38 @@ export default async function MemberDetailPage({
       ORDER BY created_at DESC
       LIMIT 12
     `,
+    sql`
+      SELECT
+        count(s.id)::int AS recorded,
+        count(s.id) FILTER (WHERE a.attendance='present')::int AS attended,
+        count(s.id) FILTER (WHERE a.attendance='excused')::int AS excused,
+        max(s.scheduled_at) FILTER (WHERE a.attendance='present') AS last_present,
+        CASE
+          WHEN count(s.id)=0 THEN 0
+          ELSE round(
+            (count(s.id) FILTER (WHERE a.attendance='present')::numeric / count(s.id)::numeric) * 100
+          )::int
+        END AS activity_rate
+      FROM training_attendance a
+      JOIN training_sessions s ON s.id=a.session_id
+      WHERE a.member_id=${id}::uuid
+        AND s.attendance_recorded_at IS NOT NULL
+        AND s.status='completed'
+        AND EXTRACT(YEAR FROM s.scheduled_at AT TIME ZONE 'Europe/Berlin')
+            = EXTRACT(YEAR FROM CURRENT_DATE)
+    `,
+    sql`
+      SELECT
+        s.id::text,
+        s.scheduled_at,
+        a.attendance
+      FROM training_attendance a
+      JOIN training_sessions s ON s.id=a.session_id
+      WHERE a.member_id=${id}::uuid
+        AND s.attendance_recorded_at IS NOT NULL
+      ORDER BY s.scheduled_at DESC
+      LIMIT 8
+    `,
   ]);
 
   const member = memberRows[0];
@@ -147,6 +179,8 @@ export default async function MemberDetailPage({
   const currentFee = feeRows.find((fee) => Number(fee.fiscal_year) === new Date().getFullYear()) ?? null;
   const canWrite = hasPermission(actor.roles, "members.write");
   const canManageAccounts = hasPermission(actor.roles, "settings.manage");
+  const canTraining = hasPermission(actor.roles, "training.read");
+  const trainingSummary = trainingSummaryRows[0] ?? { recorded:0,attended:0,excused:0,activity_rate:0,last_present:null };
 
   return (
     <div className="page-stack">
@@ -174,6 +208,13 @@ export default async function MemberDetailPage({
           <span>Beitrag {new Date().getFullYear()}</span>
           <strong>{currentFee ? feeLabels[String(currentFee.status)] ?? String(currentFee.status) : "Nicht erzeugt"}</strong>
         </article>
+        {canTraining && (
+          <article>
+            <span>Training {new Date().getFullYear()}</span>
+            <strong>{Number(trainingSummary.activity_rate ?? 0)}%</strong>
+            <small>{Number(trainingSummary.attended ?? 0)} von {Number(trainingSummary.recorded ?? 0)} besucht</small>
+          </article>
+        )}
       </section>
 
       <section className="panel-grid">
@@ -228,8 +269,9 @@ export default async function MemberDetailPage({
           </form>
         </article>
 
+        {canManageAccounts && (
         <article className="panel">
-          <div className="panel-head"><div><span className="eyebrow">Zugang</span><h2>Benutzer & Rollen</h2></div></div>
+          <div className="panel-head"><div><span className="eyebrow">Administration</span><h2>Benutzer & Rollen</h2></div></div>
           {appUser ? (
             <>
               <div className="account-summary">
@@ -289,9 +331,40 @@ export default async function MemberDetailPage({
             </>
           )}
         </article>
+        )}
       </section>
 
       <section className="panel-grid">
+        {canTraining && (
+          <article className="panel">
+            <div className="panel-head">
+              <div><span className="eyebrow">Training</span><h2>Trainingsaktivität</h2></div>
+              <Link href="/training" className="text-link">Training</Link>
+            </div>
+            <div className="member-training-summary">
+              <div><span>Aktivität</span><strong>{Number(trainingSummary.activity_rate ?? 0)}%</strong></div>
+              <div><span>Besucht</span><strong>{Number(trainingSummary.attended ?? 0)}/{Number(trainingSummary.recorded ?? 0)}</strong></div>
+              <div><span>Zuletzt da</span><strong>{formatDate(trainingSummary.last_present)}</strong></div>
+            </div>
+            <div className="member-training-history">
+              {trainingHistoryRows.length===0 ? (
+                <div className="empty-state">Noch keine erfassten Trainingstage für dieses Mitglied.</div>
+              ) : trainingHistoryRows.map((training)=>(
+                <Link href={`/training/${training.id}`} key={String(training.id)}>
+                  <span>{formatDate(training.scheduled_at)}</span>
+                  <strong>
+                    {training.attendance==="present"
+                      ? "Anwesend"
+                      : training.attendance==="excused"
+                        ? "Entschuldigt"
+                        : "Nicht anwesend"}
+                  </strong>
+                </Link>
+              ))}
+            </div>
+          </article>
+        )}
+
         <article className="panel">
           <div className="panel-head"><div><span className="eyebrow">Beiträge</span><h2>Beitragsverlauf</h2></div></div>
           <div className="member-fee-list">
