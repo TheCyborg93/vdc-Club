@@ -13,6 +13,7 @@ import {
 } from "@/lib/document-storage";
 
 const MAX_FILE_SIZE=4*1024*1024;
+
 const allowedUploads:Record<string,string[]>={
   pdf:["application/pdf"],
   doc:["application/msword","application/octet-stream"],
@@ -78,21 +79,30 @@ export async function updateDocumentMetadataAction(formData:FormData) {
   const reviewOn=value(formData,"reviewOn");
   const validUntil=value(formData,"validUntil");
   const notes=value(formData,"notes");
+  const status=value(formData,"status");
   const memberId=value(formData,"memberId");
   const meetingId=value(formData,"meetingId");
   const resolutionId=value(formData,"resolutionId");
   const financeEntryId=value(formData,"financeEntryId");
   const sponsorId=value(formData,"sponsorId");
 
-  if (!id || !title || !category) redirect(`/dokumente/${id}?error=missing`);
+  if (
+    !id ||
+    !title ||
+    !category ||
+    !["active","review","expired","archived"].includes(status)
+  ) {
+    redirect(`/dokumente/${id}?error=missing`);
+  }
 
   const before=await sql`
-    SELECT title,category
+    SELECT title,category,status
     FROM documents
     WHERE id=${id}::uuid
       AND deleted_at IS NULL
     LIMIT 1
   `;
+
   if (!before.length) redirect("/dokumente?error=missing");
 
   await sql`
@@ -104,6 +114,15 @@ export async function updateDocumentMetadataAction(formData:FormData) {
       review_on=${reviewOn || null}::date,
       valid_until=${validUntil || null}::date,
       notes=${notes || null},
+      status=${status},
+      archived_at=CASE
+        WHEN ${status}='archived' THEN COALESCE(archived_at,now())
+        ELSE NULL
+      END,
+      archived_by=CASE
+        WHEN ${status}='archived' THEN ${actor.id}::uuid
+        ELSE NULL
+      END,
       member_id=${memberId || null}::uuid,
       meeting_id=${meetingId || null}::uuid,
       resolution_id=${resolutionId || null}::uuid,
@@ -119,6 +138,8 @@ export async function updateDocumentMetadataAction(formData:FormData) {
     titleAfter:title,
     categoryBefore:String(before[0].category),
     categoryAfter:category,
+    statusBefore:String(before[0].status),
+    statusAfter:status,
   });
 
   refresh(id);
@@ -161,13 +182,14 @@ export async function replaceDocumentVersionAction(formData:FormData) {
       AND deleted_at IS NULL
     LIMIT 1
   `;
+
   const current=currentRows[0];
   if (!current) redirect("/dokumente?error=missing");
   if (current.storage_type==="internal") {
     redirect(`/dokumente/${id}?error=protected_source`);
   }
 
-  let nextStorageType=storageRef ? "link" : "upload";
+  const nextStorageType=file ? "upload" : "link";
   let nextStorageRef:string | null=storageRef || null;
   let mimeType:string | null=null;
   let originalFilename:string | null=null;
