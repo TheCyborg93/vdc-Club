@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { getCurrentUser } from "@/lib/auth";
+import { getNotifications } from "@/lib/notifications";
 import "./globals.css";
 import "./vdc-theme.css";
 
@@ -22,6 +23,9 @@ export default async function RootLayout({
   const user = await getCurrentUser();
 
   if (!isPublic && !user) redirect("/login");
+  const notifications = !isPublic && user
+    ? await getNotifications(user,{limit:6})
+    : { items:[],unread:0 };
 
   return (
     <html lang="de">
@@ -34,7 +38,9 @@ export default async function RootLayout({
               displayName: user!.displayName,
               email: user!.email,
               roles: user!.roles,
+              memberId: user!.memberId,
             }}
+            notifications={notifications}
           >
             {children}
           </AppShell>
