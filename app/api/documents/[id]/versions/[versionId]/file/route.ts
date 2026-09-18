@@ -1,0 +1,87 @@
+import { getCurrentUser } from "@/lib/auth";
+import { getDb } from "@/lib/db";
+import { hasPermission } from "@/lib/access";
+import {
+  getDocumentObject,
+  isDocumentStorageConfigured,
+} from "@/lib/document-storage";
+
+export const runtime="nodejs";
+export const dynamic="force-dynamic";
+
+function safeDispositionFilename(value:string) {
+  return value.replace(/[\r\n"]/g,"_");
+}
+
+export async function GET(
+  request:Request,
+  { params }:{ params:Promise<{ id:string; versionId:string }> },
+) {
+  const user=await getCurrentUser();
+  if (!user) return new Response("Unauthorized",{status:401});
+  if (!hasPermission(user.roles,"documents.read")) {
+    return new Response("Forbidden",{status:403});
+  }
+
+  const sql=getDb();
+  if (!sql) return new Response("Database unavailable",{status:503});
+  if (!isDocumentStorageConfigured()) {
+    return new Response("Document storage unavailable",{status:503});
+  }
+
+  const { id,versionId }=await params;
+  const rows=await sql`
+    SELECT
+      v.id::text,
+      v.storage_type,
+      v.storage_ref,
+      v.mime_type,
+      v.original_filename,
+      d.title
+    FROM document_versions v
+    JOIN documents d ON d.id=v.document_id
+    WHERE v.id=${versionId}::uuid
+      AND v.document_id=${id}::uuid
+      AND d.deleted_at IS NULL
+    LIMIT 1
+  `;
+
+  const version=rows[0];
+  if (!version || version.storage_type!=="upload" || !version.storage_ref) {
+    return new Response("Not found",{status:404});
+  }
+
+  try {
+    const object=await getDocumentObject(String(version.storage_ref));
+    if (!object.Body) return new Response("Not found",{status:404});
+
+    const bytes=await object.Body.transformToByteArray();
+    const mime=String(version.mime_type || object.ContentType || "application/octet-stream");
+    const filename=safeDispositionFilename(
+      String(version.original_filename || version.title || "dokument"),
+    );
+
+    const forceDownload=new URL(request.url).searchParams.get("download")==="1";
+    const inlineSafe=[
+      "application/pdf","text/plain","image/jpeg","image/png","image/webp",
+    ].includes(mime);
+    const disposition=forceDownload || !inlineSafe ? "attachment" : "inline";
+    const body=bytes.buffer.slice(
+      bytes.byteOffset,
+      bytes.byteOffset+bytes.byteLength,
+    ) as ArrayBuffer;
+
+    return new Response(body,{
+      headers:{
+        "Content-Type":mime,
+        "Content-Length":String(bytes.byteLength),
+        "Content-Disposition":
+          disposition+'; filename="'+filename+'"; filename*=UTF-8\'\''+encodeURIComponent(filename),
+        "Cache-Control":"private, no-store, max-age=0",
+        "X-Content-Type-Options":"nosniff",
+      },
+    });
+  } catch {
+    return new Response("File unavailable",{status:502});
+  }
+}
