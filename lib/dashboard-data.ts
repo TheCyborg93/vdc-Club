@@ -77,11 +77,11 @@ export async function getDashboardData(): Promise<DashboardData> {
       integrations,
       alerts,
     ] = await Promise.all([
-      sql\`SELECT count(*)::int AS count FROM members WHERE status = 'active'\`,
-      sql\`SELECT count(*)::int AS count FROM teams WHERE status = 'active'\`,
-      sql\`SELECT count(*)::int AS count FROM tasks WHERE status IN ('open','in_progress','blocked')\`,
-      sql\`SELECT count(*)::int AS count FROM club_events WHERE starts_at >= now() AND starts_at < now() + interval '14 days'\`,
-      sql\`
+      sql`SELECT count(*)::int AS count FROM members WHERE status = 'active'`,
+      sql`SELECT count(*)::int AS count FROM teams WHERE status = 'active'`,
+      sql`SELECT count(*)::int AS count FROM tasks WHERE status IN ('open','in_progress','blocked')`,
+      sql`SELECT count(*)::int AS count FROM club_events WHERE starts_at >= now() AND starts_at < now() + interval '14 days'`,
+      sql`
         SELECT
           count(*) FILTER (
             WHERE source='vdc_turnier'
@@ -93,8 +93,8 @@ export async function getDashboardData(): Promise<DashboardData> {
           )::int AS training_days_year,
           count(*) FILTER (WHERE source='vdc_tc' AND event_type='league')::int AS league_events
         FROM club_events
-      \`,
-      sql\`
+      `,
+      sql`
         SELECT title, COALESCE(category, 'Allgemein') AS category, due_date, priority
         FROM tasks
         WHERE status IN ('open','in_progress','blocked')
@@ -102,8 +102,8 @@ export async function getDashboardData(): Promise<DashboardData> {
           CASE priority WHEN 'urgent' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 ELSE 4 END,
           due_date NULLS LAST
         LIMIT 4
-      \`,
-      sql\`
+      `,
+      sql`
         SELECT
           e.title,
           e.starts_at,
@@ -116,8 +116,8 @@ export async function getDashboardData(): Promise<DashboardData> {
         WHERE e.starts_at >= now()
         ORDER BY e.starts_at ASC
         LIMIT 5
-      \`,
-      sql\`
+      `,
+      sql`
         SELECT integration_key,display_name,status,last_sync_at
         FROM integration_connections
         ORDER BY
@@ -126,8 +126,8 @@ export async function getDashboardData(): Promise<DashboardData> {
             WHEN 'vdc_turnier' THEN 1
             ELSE 2
           END
-      \`,
-      sql\`
+      `,
+      sql`
         SELECT kind,title,detail,href,severity
         FROM (
           SELECT
@@ -228,7 +228,7 @@ export async function getDashboardData(): Promise<DashboardData> {
           CASE severity WHEN 'critical' THEN 0 WHEN 'warning' THEN 1 ELSE 2 END,
           sort_date NULLS LAST
         LIMIT 8
-      \`,
+      `,
     ]);
 
     const activityRow = activity[0] ?? {};
