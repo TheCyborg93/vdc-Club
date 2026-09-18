@@ -83,6 +83,7 @@ export default async function SearchPage({
         SELECT id::text,title,category,status,due_date
         FROM tasks
         WHERE status<>'cancelled'
+          AND deleted_at IS NULL
           AND (title ILIKE '%' || ${q} || '%' OR COALESCE(description,'') ILIKE '%' || ${q} || '%')
         ORDER BY updated_at DESC
         LIMIT 12
@@ -99,8 +100,9 @@ export default async function SearchPage({
       const rows=await sql`
         SELECT id::text,title,starts_at,status
         FROM meetings
-        WHERE title ILIKE '%' || ${q} || '%'
-          OR COALESCE(notes,'') ILIKE '%' || ${q} || '%'
+        WHERE deleted_at IS NULL
+          AND (title ILIKE '%' || ${q} || '%'
+          OR COALESCE(notes,'') ILIKE '%' || ${q} || '%')
         ORDER BY starts_at DESC
         LIMIT 10
       `;
@@ -136,6 +138,7 @@ export default async function SearchPage({
         SELECT id::text,title,category,status,document_date
         FROM documents
         WHERE status<>'archived'
+          AND deleted_at IS NULL
           AND (
             title ILIKE '%' || ${q} || '%'
             OR category ILIKE '%' || ${q} || '%'
@@ -174,10 +177,11 @@ export default async function SearchPage({
       const rows=await sql`
         SELECT id::text,title,event_type,starts_at,location
         FROM club_events
-        WHERE
+        WHERE deleted_at IS NULL
+          AND (
           title ILIKE '%' || ${q} || '%'
           OR COALESCE(description,'') ILIKE '%' || ${q} || '%'
-          OR COALESCE(location,'') ILIKE '%' || ${q} || '%'
+          OR COALESCE(location,'') ILIKE '%' || ${q} || '%')
         ORDER BY starts_at DESC
         LIMIT 10
       `;
