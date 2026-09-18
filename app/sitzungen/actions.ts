@@ -579,10 +579,27 @@ export async function createResolutionFromAgendaAction(formData: FormData) {
     taskCreated:createTask,
   });
 
+  const nextAgenda=await sql`
+    SELECT next_item.id::text
+    FROM agenda_items current_item
+    LEFT JOIN LATERAL (
+      SELECT ai.id
+      FROM agenda_items ai
+      WHERE ai.meeting_id=current_item.meeting_id
+        AND ai.position>current_item.position
+        AND ai.status IN ('open','active')
+      ORDER BY ai.position
+      LIMIT 1
+    ) next_item ON true
+    WHERE current_item.id=${agendaItemId}::uuid
+    LIMIT 1
+  `;
+  const nextTop=nextAgenda[0]?.id ? String(nextAgenda[0].id) : agendaItemId;
+
   revalidatePath(`/sitzungen/${meetingId}`);
   revalidatePath(`/sitzungen/${meetingId}/protokoll`);
   revalidatePath("/beschluesse");
   revalidatePath("/aufgaben");
   revalidatePath("/");
-  redirect(`/sitzungen/${meetingId}?resolution=1`);
+  redirect(`/sitzungen/${meetingId}?top=${nextTop}&resolution=1`);
 }
