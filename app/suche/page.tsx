@@ -102,8 +102,20 @@ export default async function SearchPage({
         SELECT id::text,title,starts_at,status
         FROM meetings
         WHERE deleted_at IS NULL
-          AND (title ILIKE '%' || ${q} || '%'
-          OR COALESCE(notes,'') ILIKE '%' || ${q} || '%')
+          AND (
+            title ILIKE '%' || ${q} || '%'
+            OR COALESCE(notes,'') ILIKE '%' || ${q} || '%'
+            OR EXISTS (
+              SELECT 1
+              FROM agenda_items ai
+              WHERE ai.meeting_id=meetings.id
+                AND (
+                  ai.title ILIKE '%' || ${q} || '%'
+                  OR COALESCE(ai.description,'') ILIKE '%' || ${q} || '%'
+                  OR COALESCE(ai.notes,'') ILIKE '%' || ${q} || '%'
+                )
+            )
+          )
         ORDER BY starts_at DESC
         LIMIT 10
       `;
@@ -123,12 +135,15 @@ export default async function SearchPage({
           title ILIKE '%' || ${q} || '%'
           OR decision_text ILIKE '%' || ${q} || '%'
           OR COALESCE(resolution_number,'') ILIKE '%' || ${q} || '%'
+          OR COALESCE(implementation_notes,'') ILIKE '%' || ${q} || '%'
         ORDER BY decided_at DESC
         LIMIT 12
       `;
       addRows(
         results,rows,"Beschluss",
-        ()=>"/beschluesse",
+        (row)=>row.resolution_number
+          ? "/beschluesse?q="+encodeURIComponent(String(row.resolution_number))
+          : "/beschluesse?q="+encodeURIComponent(String(row.title)),
         (row)=>(row.resolution_number ? String(row.resolution_number)+" · " : "")+String(row.title),
         (row)=>String(row.status),
       );
@@ -138,8 +153,7 @@ export default async function SearchPage({
       const rows=await sql`
         SELECT id::text,title,category,status,document_date
         FROM documents
-        WHERE status<>'archived'
-          AND deleted_at IS NULL
+        WHERE deleted_at IS NULL
           AND (
             title ILIKE '%' || ${q} || '%'
             OR category ILIKE '%' || ${q} || '%'
