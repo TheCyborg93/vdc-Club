@@ -45,6 +45,7 @@ export const navigation: NavItem[] = [
   { href: "/admin/status", label: "Systemstatus", short: "SY", group: "Administration", permission: "settings.manage" },
   { href: "/admin/audit", label: "Audit-Log", short: "AL", group: "Administration", permission: "settings.manage" },
   { href: "/admin/daten", label: "Daten & Qualität", short: "DQ", group: "Administration", permission: "settings.manage" },
+  { href: "/admin/papierkorb", label: "Papierkorb", short: "PK", group: "Administration", permission: "settings.manage" },
 ];
 
 export const groups: NavGroup[] = [
