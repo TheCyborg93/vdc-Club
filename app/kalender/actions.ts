@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getDb } from "@/lib/db";
 import { requirePermission } from "@/lib/permissions";
+import { writeAudit } from "@/lib/audit";
 
 function value(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
@@ -78,23 +79,43 @@ export async function createEventAction(formData: FormData) {
 }
 
 export async function deleteEventAction(formData: FormData) {
-  await requirePermission("calendar.write");
-  const sql = getDb();
+  const actor=await requirePermission("calendar.write");
+  const sql=getDb();
   if (!sql) redirect("/kalender?error=database");
 
-  const id = value(formData, "id");
+  const id=value(formData,"id");
   if (!id) redirect("/kalender?error=missing");
 
-  await sql`
-    DELETE FROM club_events
-    WHERE id = ${id}::uuid
-      AND source = 'club'
+  const rows=await sql`
+    SELECT id::text,title,source
+    FROM club_events
+    WHERE id=${id}::uuid
+      AND deleted_at IS NULL
+      AND source='club'
       AND NOT EXISTS (
-        SELECT 1 FROM meetings WHERE meetings.event_id = club_events.id
+        SELECT 1 FROM meetings
+        WHERE meetings.event_id=club_events.id
+          AND meetings.deleted_at IS NULL
       )
+      AND NOT EXISTS (
+        SELECT 1 FROM training_sessions
+        WHERE training_sessions.event_id=club_events.id
+          AND training_sessions.deleted_at IS NULL
+      )
+    LIMIT 1
   `;
 
+  if (!rows.length) redirect("/kalender?error=protected_delete");
+
+  await sql`
+    UPDATE club_events
+    SET deleted_at=now(),deleted_by=${actor.id}::uuid,delete_reason='Über Kalender gelöscht.'
+    WHERE id=${id}::uuid
+  `;
+
+  await writeAudit(actor.id,"trash.moved","club_event",id,{title:String(rows[0].title)});
   revalidatePath("/kalender");
+  revalidatePath("/admin/papierkorb");
   revalidatePath("/");
   redirect("/kalender?deleted=1");
 }
