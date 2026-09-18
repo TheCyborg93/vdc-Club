@@ -71,10 +71,23 @@ export default async function DashboardPage() {
   const isAdmin = user.roles.includes("admin");
   const canTraining = hasPermission(user.roles,"training.read");
   const canTrainingWrite = hasPermission(user.roles,"training.write");
+
+  const primaryRole =
+    user.roles.includes("admin") ? "admin" :
+    user.roles.includes("chair") ? "chair" :
+    user.roles.includes("vice_chair") ? "vice_chair" :
+    user.roles.includes("treasurer") ? "treasurer" :
+    user.roles.includes("secretary") ? "secretary" :
+    user.roles.includes("sport_director") ? "sport_director" :
+    user.roles.includes("team_captain") ? "team_captain" :
+    user.roles.includes("tournament_director") ? "tournament_director" :
+    user.roles.includes("board") ? "board" : "member";
+
   const data = await getDashboardData({
     includeSystem: isAdmin,
     includeTraining: canTraining,
     memberId: user.memberId,
+    primaryRole,
   });
   const canTasks = hasPermission(user.roles,"tasks.read");
   const canTeams = hasPermission(user.roles,"teams.read");
@@ -104,17 +117,6 @@ export default async function DashboardPage() {
     year: "numeric",
     timeZone: "Europe/Berlin",
   }).format(now);
-
-  const primaryRole =
-    user.roles.includes("admin") ? "admin" :
-    user.roles.includes("chair") ? "chair" :
-    user.roles.includes("vice_chair") ? "vice_chair" :
-    user.roles.includes("treasurer") ? "treasurer" :
-    user.roles.includes("secretary") ? "secretary" :
-    user.roles.includes("sport_director") ? "sport_director" :
-    user.roles.includes("team_captain") ? "team_captain" :
-    user.roles.includes("tournament_director") ? "tournament_director" :
-    user.roles.includes("board") ? "board" : "member";
 
   const roleFocus: Record<string,{ label:string; text:string; links:{ href:string; label:string }[] }> = {
     admin:{
@@ -245,6 +247,23 @@ export default async function DashboardPage() {
             ))}
         </nav>
       </section>
+
+      {data.roleMetrics.length>0 && (
+        <section className="role-metric-grid">
+          {data.roleMetrics.map((metric)=>(
+            <Link
+              href={metric.href}
+              className={"role-metric-card role-metric-"+metric.tone}
+              key={metric.label}
+            >
+              <span>{metric.label}</span>
+              <strong>{metric.value}</strong>
+              <small>{metric.note}</small>
+              <b>Öffnen ›</b>
+            </Link>
+          ))}
+        </section>
+      )}
 
       <section className="stat-grid">
         {stats.map((item) => (
