@@ -197,7 +197,6 @@ export async function getNotifications(
         SELECT notification_key,read_at,dismissed_at
         FROM user_notification_state
         WHERE user_id=${user.id}::uuid
-          AND notification_key=ANY(${[...unique.keys()]}::text[])
       `
     : [];
 
