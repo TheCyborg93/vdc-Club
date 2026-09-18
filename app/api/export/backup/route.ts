@@ -13,7 +13,7 @@ export async function GET() {
 
   const [
     profile,members,teams,teamMembers,tasks,meetings,attendees,agenda,resolutions,
-    events,finance,budgets,fees,documents,sponsors,trainingSessions,trainingAttendance,
+    events,finance,budgets,fees,documents,documentVersions,sponsors,trainingSessions,trainingAttendance,
     trainingRules,trainingPauses,trainingSeasons
   ]=await Promise.all([
     sql`SELECT * FROM club_profile ORDER BY id`,
@@ -30,6 +30,7 @@ export async function GET() {
     sql`SELECT * FROM finance_budgets ORDER BY fiscal_year,category`,
     sql`SELECT * FROM membership_fees ORDER BY fiscal_year,member_id`,
     sql`SELECT * FROM documents ORDER BY created_at`,
+    sql`SELECT * FROM document_versions ORDER BY document_id,version_number`,
     sql`SELECT * FROM sponsors ORDER BY name`,
     sql`SELECT * FROM training_sessions ORDER BY scheduled_at`,
     sql`SELECT * FROM training_attendance ORDER BY session_id,member_id`,
@@ -45,7 +46,7 @@ export async function GET() {
     data:{
       clubProfile:profile,members,teams,teamMembers,tasks,meetings,meetingAttendees:attendees,
       agendaItems:agenda,resolutions,clubEvents:events,financeEntries:finance,financeBudgets:budgets,
-      membershipFees:fees,documents,sponsors,trainingSessions,trainingAttendance,
+      membershipFees:fees,documents,documentVersions,sponsors,trainingSessions,trainingAttendance,
       trainingScheduleRules:trainingRules,trainingBlackouts:trainingPauses,trainingSeasons
     }
   };
