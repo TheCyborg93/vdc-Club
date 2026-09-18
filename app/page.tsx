@@ -38,6 +38,26 @@ function formatSync(value: string | null) {
   }).format(date);
 }
 
+function visibleNavigationAccess(href: string, roles: string[]) {
+  const requirements: Record<string, Parameters<typeof hasPermission>[1]> = {
+    "/admin/daten":"settings.manage",
+    "/admin/integrationen":"settings.manage",
+    "/admin/benutzer":"settings.manage",
+    "/finanzen":"finance.read",
+    "/mitglieder":"members.read",
+    "/dokumente":"documents.read",
+    "/sitzungen":"meetings.read",
+    "/beschluesse":"resolutions.read",
+    "/aufgaben":"tasks.read",
+    "/mannschaften":"teams.read",
+    "/training":"training.read",
+    "/statistik":"statistics.read",
+    "/kalender":"calendar.read",
+  };
+  const permission=requirements[href];
+  return permission ? hasPermission(roles,permission) : true;
+}
+
 const eventTypeLabels: Record<string,string> = {
   league: "Ligaspiel",
   training: "Training",
@@ -85,6 +105,110 @@ export default async function DashboardPage() {
     timeZone: "Europe/Berlin",
   }).format(now);
 
+  const primaryRole =
+    user.roles.includes("admin") ? "admin" :
+    user.roles.includes("chair") ? "chair" :
+    user.roles.includes("vice_chair") ? "vice_chair" :
+    user.roles.includes("treasurer") ? "treasurer" :
+    user.roles.includes("secretary") ? "secretary" :
+    user.roles.includes("sport_director") ? "sport_director" :
+    user.roles.includes("team_captain") ? "team_captain" :
+    user.roles.includes("tournament_director") ? "tournament_director" :
+    user.roles.includes("board") ? "board" : "member";
+
+  const roleFocus: Record<string,{ label:string; text:string; links:{ href:string; label:string }[] }> = {
+    admin:{
+      label:"Administration",
+      text:"System, Datenqualität und Benutzerverwaltung im Blick behalten.",
+      links:[
+        {href:"/admin/daten",label:"Daten & Qualität"},
+        {href:"/admin/integrationen",label:"Integrationen"},
+        {href:"/admin/benutzer",label:"Benutzer & Rollen"},
+      ],
+    },
+    chair:{
+      label:"Vorsitz",
+      text:"Vorstandsarbeit, Beschlüsse und offene Aufgaben steuern.",
+      links:[
+        {href:"/sitzungen",label:"Sitzungen"},
+        {href:"/beschluesse",label:"Beschlüsse"},
+        {href:"/aufgaben",label:"Aufgaben"},
+      ],
+    },
+    vice_chair:{
+      label:"Stellv. Vorsitz",
+      text:"Organisation, Sitzungen und Vereinsaufgaben koordinieren.",
+      links:[
+        {href:"/sitzungen",label:"Sitzungen"},
+        {href:"/aufgaben",label:"Aufgaben"},
+        {href:"/mitglieder",label:"Mitglieder"},
+      ],
+    },
+    treasurer:{
+      label:"Kasse",
+      text:"Beiträge, Buchungen und finanzielle Fristen stehen im Mittelpunkt.",
+      links:[
+        {href:"/finanzen",label:"Finanzen & Beiträge"},
+        {href:"/mitglieder",label:"Mitglieder"},
+        {href:"/dokumente",label:"Belege & Dokumente"},
+      ],
+    },
+    secretary:{
+      label:"Schriftführung",
+      text:"Sitzungen, Protokolle, Beschlüsse und Dokumente zentral bearbeiten.",
+      links:[
+        {href:"/sitzungen",label:"Sitzungen"},
+        {href:"/beschluesse",label:"Beschlüsse"},
+        {href:"/dokumente",label:"Dokumente"},
+      ],
+    },
+    sport_director:{
+      label:"Sportwart",
+      text:"Mannschaften, Training und sportliche Entwicklung im Überblick.",
+      links:[
+        {href:"/mannschaften",label:"Mannschaften"},
+        {href:"/training",label:"Training"},
+        {href:"/statistik",label:"Statistik"},
+      ],
+    },
+    team_captain:{
+      label:"Team Captain",
+      text:"Mannschaft, kommende Termine und Trainingsaktivität schnell erreichen.",
+      links:[
+        {href:"/mannschaften",label:"Mannschaft"},
+        {href:"/kalender",label:"Kalender"},
+        {href:"/training",label:"Training"},
+      ],
+    },
+    tournament_director:{
+      label:"Turnierleitung",
+      text:"Turniertermine, Aufgaben und notwendige Vereinsunterlagen im Zugriff.",
+      links:[
+        {href:"/kalender",label:"Kalender"},
+        {href:"/aufgaben",label:"Aufgaben"},
+        {href:"/dokumente",label:"Dokumente"},
+      ],
+    },
+    board:{
+      label:"Vorstand",
+      text:"Aufgaben, Sitzungen und Vereinsunterlagen für die Vorstandsarbeit.",
+      links:[
+        {href:"/aufgaben",label:"Aufgaben"},
+        {href:"/sitzungen",label:"Sitzungen"},
+        {href:"/dokumente",label:"Dokumente"},
+      ],
+    },
+    member:{
+      label:"Vereinszugang",
+      text:"Deine freigegebenen Vereinsbereiche auf einen Blick.",
+      links:[
+        {href:"/kalender",label:"Kalender"},
+      ],
+    },
+  };
+
+  const focus=roleFocus[primaryRole];
+
   const stats = [
     canMembers ? { label: "Mitglieder", value: String(data.members), note: "aktive Mitglieder" } : null,
     canTeams ? { label: "Mannschaften", value: String(data.teams), note: "aktive Teams" } : null,
@@ -105,6 +229,21 @@ export default async function DashboardPage() {
           <strong>Club Control</strong>
           <small>{isAdmin ? `${data.connectedIntegrations}/3 Fachsysteme verbunden` : "Saison 2026/27"}</small>
         </div>
+      </section>
+
+      <section className="role-focus-strip">
+        <div>
+          <span className="eyebrow">Dein Bereich</span>
+          <strong>{focus.label}</strong>
+          <p>{focus.text}</p>
+        </div>
+        <nav>
+          {focus.links
+            .filter((item)=>visibleNavigationAccess(item.href,user.roles))
+            .map((item)=>(
+              <Link key={item.href} href={item.href}>{item.label}<span>›</span></Link>
+            ))}
+        </nav>
       </section>
 
       <section className="stat-grid">
