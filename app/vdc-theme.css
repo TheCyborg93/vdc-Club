@@ -1973,3 +1973,243 @@ body{
 }
 .training-dashboard-alert span{font-size:8px;color:#a58d58}
 .training-dashboard-alert strong{font-size:8px;color:#dfbd70}
+
+
+/* ---- Training fast entry & analytics --------------------- */
+.training-fast-form{display:grid;gap:14px}
+.training-fast-toolbar{
+  display:grid;
+  grid-template-columns:90px 90px 90px minmax(0,1fr);
+  gap:8px;
+  align-items:center;
+  padding:10px;
+  border:1px solid rgba(255,255,255,.075);
+  border-radius:10px;
+  background:#18181c;
+}
+.training-fast-toolbar>div:not(.training-bulk-actions){
+  padding:8px;
+  border-radius:8px;
+  background:#222226;
+  text-align:center;
+}
+.training-fast-toolbar span,
+.training-fast-toolbar strong{display:block}
+.training-fast-toolbar span{font-size:7px;color:#777378;text-transform:uppercase;letter-spacing:.07em}
+.training-fast-toolbar strong{margin-top:3px;font-size:14px;color:#f0ece7}
+
+.training-bulk-actions{
+  display:flex;
+  gap:6px;
+  justify-content:flex-end;
+  flex-wrap:wrap;
+}
+.training-bulk-actions button{
+  padding:7px 9px;
+  border:1px solid rgba(255,255,255,.09);
+  border-radius:8px;
+  background:#242428;
+  color:#b6b1ad;
+  font-size:8px;
+  font-weight:800;
+}
+.training-bulk-actions button:hover{
+  border-color:rgba(196,51,30,.24);
+  color:#fff;
+}
+
+.training-fast-list{display:grid}
+.training-fast-row{
+  display:grid;
+  grid-template-columns:38px minmax(150px,1fr) minmax(300px,420px);
+  gap:10px;
+  align-items:center;
+  padding:10px 0;
+  border-top:1px solid rgba(255,255,255,.07);
+}
+.training-fast-row:first-child{border-top:0}
+
+.training-fast-member strong,
+.training-fast-member span{display:block}
+.training-fast-member strong{font-size:10px}
+.training-fast-member span{margin-top:3px;color:#777378;font-size:8px}
+
+.training-state-buttons{
+  display:grid;
+  grid-template-columns:repeat(3,1fr);
+  gap:5px;
+}
+.training-state-buttons button{
+  padding:8px 7px;
+  border:1px solid rgba(255,255,255,.09);
+  border-radius:8px;
+  background:#1a1a1e;
+  color:#898589;
+  font-size:8px;
+  font-weight:850;
+  transition:.12s ease;
+}
+.training-state-buttons button:not(:disabled):hover{
+  border-color:rgba(255,255,255,.17);
+  color:#ddd8d2;
+}
+.training-state-buttons button.is-active{
+  color:#fff;
+  font-weight:950;
+}
+.training-state-buttons .state-present{
+  border-color:rgba(143,198,162,.28);
+  background:rgba(143,198,162,.12);
+  color:#b9dcc3;
+}
+.training-state-buttons .state-excused{
+  border-color:rgba(228,191,112,.28);
+  background:rgba(228,191,112,.10);
+  color:#e7cb8d;
+}
+.training-state-buttons .state-absent{
+  border-color:rgba(196,51,30,.25);
+  background:rgba(196,51,30,.09);
+  color:#e98370;
+}
+.training-state-buttons button:disabled{opacity:.72;cursor:default}
+
+.training-note-field{
+  display:grid;
+  gap:6px;
+  color:#b7b2ae;
+  font-size:9px;
+  font-weight:800;
+}
+.training-note-field textarea{
+  width:100%;
+  resize:vertical;
+  padding:10px;
+  border:1px solid rgba(255,255,255,.10);
+  border-radius:9px;
+  background:#141417;
+  color:#f1efeb;
+  font:inherit;
+  font-size:10px;
+}
+
+.training-weekday-grid{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:10px;
+}
+.training-weekday-card{padding:14px}
+.training-weekday-card strong,
+.training-weekday-card small{display:block}
+.training-weekday-card strong{margin-top:6px;font-size:17px;color:#f0ece7}
+.training-weekday-card small{margin-top:4px;font-size:8px;color:#777378}
+
+.training-month-grid{
+  display:grid;
+  grid-template-columns:repeat(6,minmax(0,1fr));
+  gap:8px;
+}
+.training-month-card{
+  padding:10px;
+  border:1px solid rgba(255,255,255,.075);
+  border-radius:9px;
+  background:#18181c;
+}
+.training-month-card span,
+.training-month-card strong,
+.training-month-card small{display:block}
+.training-month-card span{font-size:8px;color:#777378}
+.training-month-card strong{margin-top:4px;font-size:12px;color:#f0ece7}
+.training-month-card small{margin-top:5px;font-size:7px;color:#666267}
+.training-month-card>div{
+  height:5px;
+  margin-top:7px;
+  overflow:hidden;
+  border-radius:99px;
+  background:#29292d;
+}
+.training-month-card i{
+  display:block;
+  height:100%;
+  border-radius:inherit;
+  background:linear-gradient(90deg,#a82718,#df4930);
+}
+
+.training-activity-head{align-items:center}
+.training-filter-bar{
+  display:flex;
+  gap:6px;
+  flex-wrap:wrap;
+  margin-bottom:11px;
+}
+.training-filter-bar a{
+  padding:6px 9px;
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:999px;
+  background:#202024;
+  color:#8c888c;
+  font-size:8px;
+  font-weight:800;
+}
+.training-filter-bar a.active{
+  border-color:rgba(196,51,30,.25);
+  background:rgba(196,51,30,.09);
+  color:#e77b67;
+}
+.training-activity-row-rich .training-member small{
+  display:block;
+  margin-top:4px;
+  color:#8b8589;
+  font-size:7px;
+}
+
+.training-management-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:12px;
+  align-items:start;
+}
+.training-pause-list{
+  display:grid;
+  margin-top:13px;
+  padding-top:10px;
+  border-top:1px solid rgba(255,255,255,.07);
+}
+.training-pause-list>div{
+  display:flex;
+  justify-content:space-between;
+  gap:12px;
+  align-items:center;
+  padding:9px 0;
+  border-top:1px solid rgba(255,255,255,.06);
+}
+.training-pause-list>div:first-child{border-top:0}
+.training-pause-list strong,
+.training-pause-list span{display:block}
+.training-pause-list strong{font-size:9px}
+.training-pause-list span{margin-top:3px;color:#777378;font-size:8px}
+
+.training-upcoming-row small{
+  display:block;
+  margin-top:4px;
+  color:#777378;
+  font-size:8px;
+}
+
+@media(max-width:1100px){
+  .training-month-grid{grid-template-columns:repeat(4,1fr)}
+}
+@media(max-width:820px){
+  .training-fast-toolbar{grid-template-columns:repeat(3,1fr)}
+  .training-bulk-actions{grid-column:1 / -1;justify-content:flex-start}
+  .training-fast-row{grid-template-columns:36px minmax(0,1fr)}
+  .training-state-buttons{grid-column:2}
+  .training-weekday-grid{grid-template-columns:1fr}
+  .training-management-grid{grid-template-columns:1fr}
+  .training-month-grid{grid-template-columns:repeat(3,1fr)}
+}
+@media(max-width:520px){
+  .training-fast-toolbar{grid-template-columns:1fr 1fr 1fr}
+  .training-state-buttons{grid-template-columns:1fr}
+  .training-month-grid{grid-template-columns:repeat(2,1fr)}
+}
