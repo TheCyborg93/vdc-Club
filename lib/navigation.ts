@@ -33,6 +33,7 @@ export const navigation: NavItem[] = [
   { href: "/sitzungen", label: "Sitzungen", short: "SI", group: "Vorstandsarbeit", permission: "meetings.read" },
   { href: "/beschluesse", label: "Beschlüsse", short: "BE", group: "Vorstandsarbeit", permission: "resolutions.read" },
   { href: "/dokumente", label: "Dokumente", short: "DO", group: "Vorstandsarbeit", permission: "documents.read" },
+  { href: "/archiv", label: "Archiv", short: "AR", group: "Vorstandsarbeit", permission: "documents.read" },
 
   { href: "/finanzen", label: "Finanzen & Beiträge", short: "FI", group: "Finanzen", permission: "finance.read" },
 
@@ -43,6 +44,7 @@ export const navigation: NavItem[] = [
   { href: "/admin/integrationen", label: "Integrationen", short: "IN", group: "Administration", permission: "settings.manage" },
   { href: "/admin/status", label: "Systemstatus", short: "SY", group: "Administration", permission: "settings.manage" },
   { href: "/admin/audit", label: "Audit-Log", short: "AL", group: "Administration", permission: "settings.manage" },
+  { href: "/admin/daten", label: "Daten & Qualität", short: "DQ", group: "Administration", permission: "settings.manage" },
 ];
 
 export const groups: NavGroup[] = [
