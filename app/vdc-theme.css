@@ -3291,3 +3291,27 @@ body{
     justify-content:flex-start;
   }
 }
+
+
+/* ---- Protected destructive zones ------------------------- */
+.destructive-inline-form{
+  margin-top:8px;
+}
+.destructive-zone{
+  border-color:rgba(214,72,54,.18)!important;
+  background:
+    linear-gradient(135deg,rgba(214,72,54,.055),transparent 60%),
+    #18181c!important;
+}
+.destructive-zone h2{
+  margin:5px 0 0;
+  color:#eee7e2;
+  font-size:13px;
+}
+.destructive-zone p{
+  max-width:760px;
+  margin:7px 0 12px!important;
+  color:#817b7e!important;
+  font-size:8px!important;
+  line-height:1.55;
+}
