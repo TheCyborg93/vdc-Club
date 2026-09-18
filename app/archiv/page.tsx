@@ -29,7 +29,7 @@ export default async function ArchivePage({
   const [documents,members,meetings,resolutions,sponsors]=sql
     ? await Promise.all([
         sql`
-          SELECT id::text,title,category,document_date,archived_at,storage_type,storage_ref
+          SELECT id::text,title,category,document_date,archived_at,storage_type,storage_ref,original_filename,file_size_bytes
           FROM documents
           WHERE status='archived'
           ORDER BY archived_at DESC NULLS LAST,created_at DESC
@@ -98,13 +98,23 @@ export default async function ArchivePage({
               <div>
                 <strong>{String(doc.title)}</strong>
                 <span>{String(doc.category)} · {doc.document_date ? formatDate(doc.document_date) : "ohne Dokumentdatum"}</span>
-                <small>Archiviert {formatDate(doc.archived_at)}</small>
+                <small>
+                  Archiviert {formatDate(doc.archived_at)}
+                  {doc.storage_type==="upload" && doc.original_filename ? " · Datei: "+String(doc.original_filename) : ""}
+                </small>
               </div>
               <div className="archive-row-actions">
                 {doc.storage_ref && (
-                  doc.storage_type==="internal"
-                    ? <Link href={String(doc.storage_ref)} className="mini-button">Öffnen</Link>
-                    : <a href={String(doc.storage_ref)} target="_blank" rel="noreferrer" className="mini-button">Öffnen</a>
+                  doc.storage_type==="upload"
+                    ? (
+                      <>
+                        <Link href={"/api/documents/"+String(doc.id)+"/file"} target="_blank" className="mini-button">Datei öffnen</Link>
+                        <Link href={"/api/documents/"+String(doc.id)+"/file?download=1"} className="mini-button">Download</Link>
+                      </>
+                    )
+                    : doc.storage_type==="internal"
+                      ? <Link href={String(doc.storage_ref)} className="mini-button">Öffnen</Link>
+                      : <a href={String(doc.storage_ref)} target="_blank" rel="noreferrer" className="mini-button">Öffnen</a>
                 )}
                 {canWriteDocuments && (
                   <form action={restoreDocumentAction}>
