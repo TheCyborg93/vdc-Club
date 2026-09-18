@@ -3753,3 +3753,72 @@ body{
     justify-content:flex-start;
   }
 }
+
+
+/* ---- Role-specific dashboard metrics --------------------- */
+.role-metric-grid{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:9px;
+}
+.role-metric-card{
+  position:relative;
+  display:grid;
+  gap:4px;
+  min-height:112px;
+  padding:14px 15px;
+  overflow:hidden;
+  border:1px solid rgba(255,255,255,.085);
+  border-radius:12px;
+  background:
+    linear-gradient(145deg,rgba(255,255,255,.018),transparent 60%),
+    #19191d;
+}
+.role-metric-card:before{
+  content:"";
+  position:absolute;
+  inset:0 auto 0 0;
+  width:3px;
+  background:#666269;
+}
+.role-metric-card>span{
+  color:#888488;
+  font-size:8px;
+  font-weight:850;
+}
+.role-metric-card>strong{
+  color:#f1ede7;
+  font-size:22px;
+  font-weight:950;
+  letter-spacing:-.035em;
+}
+.role-metric-card>small{
+  color:#706c71;
+  font-size:8px;
+}
+.role-metric-card>b{
+  align-self:end;
+  margin-top:5px;
+  color:#8a8588;
+  font-size:7px;
+}
+.role-metric-card:hover{
+  border-color:rgba(196,51,30,.24);
+}
+.role-metric-warning:before{background:#deb96d}
+.role-metric-critical:before{background:#df6559}
+.role-metric-success:before{background:#8fc6a2}
+.role-metric-warning>strong{color:#e6c984}
+.role-metric-critical>strong{color:#e99b95}
+.role-metric-success>strong{color:#acd3b8}
+
+@media(max-width:840px){
+  .role-metric-grid{
+    grid-template-columns:1fr 1fr;
+  }
+}
+@media(max-width:540px){
+  .role-metric-grid{
+    grid-template-columns:1fr;
+  }
+}
