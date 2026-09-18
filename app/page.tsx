@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getDashboardData } from "@/lib/dashboard-data";
 import { requireUser } from "@/lib/auth";
+import { hasPermission } from "@/lib/access";
 
 export const dynamic = "force-dynamic";
 
@@ -49,6 +50,25 @@ export default async function DashboardPage() {
   const user = await requireUser();
   const isAdmin = user.roles.includes("admin");
   const data = await getDashboardData({ includeSystem: isAdmin });
+  const canTasks = hasPermission(user.roles,"tasks.read");
+  const canCalendar = hasPermission(user.roles,"calendar.read");
+  const canStatistics = hasPermission(user.roles,"statistics.read");
+  const canMeetings = hasPermission(user.roles,"meetings.read");
+  const canFinance = hasPermission(user.roles,"finance.read");
+  const canSponsors = hasPermission(user.roles,"sponsors.read");
+  const canDocuments = hasPermission(user.roles,"documents.read");
+  const canMembers = hasPermission(user.roles,"members.read");
+
+  const alerts = data.alerts.filter((alert) => {
+    if (alert.kind === "fee") return canFinance;
+    if (alert.kind === "task") return canTasks;
+    if (alert.kind === "sponsor") return canSponsors;
+    if (alert.kind === "document") return canDocuments;
+    if (alert.kind === "member_leave" || alert.kind === "member_notice") return canMembers;
+    if (alert.kind === "integration") return isAdmin;
+    return false;
+  });
+
   const now = new Date();
   const today = new Intl.DateTimeFormat("de-DE", {
     weekday: "long",
@@ -111,17 +131,17 @@ export default async function DashboardPage() {
             <span className="eyebrow">Fristen & Hinweise</span>
             <h2>Achtung erforderlich</h2>
           </div>
-          <span className={`attention-count ${data.alerts.length ? "has-alerts" : ""}`}>{data.alerts.length}</span>
+          <span className={`attention-count ${alerts.length ? "has-alerts" : ""}`}>{alerts.length}</span>
         </div>
 
-        {data.alerts.length === 0 ? (
+        {alerts.length === 0 ? (
           <div className="attention-clear">
             <i />
             <div><strong>Keine dringenden Hinweise</strong><span>Beiträge, Fristen, Verträge und Aufgaben sind aktuell unauffällig.</span></div>
           </div>
         ) : (
           <div className="attention-list">
-            {data.alerts.map((alert,index) => (
+            {alerts.map((alert,index) => (
               <Link
                 href={alert.href}
                 className={`attention-row attention-${alert.severity}`}
@@ -140,24 +160,27 @@ export default async function DashboardPage() {
       </section>
 
       <section className="dashboard-grid">
-        <article className="panel panel-wide">
-          <div className="panel-head">
-            <div><span className="eyebrow">Organisation</span><h2>Offene Aufgaben</h2></div>
-            <Link className="ghost-button" href="/aufgaben">Alle anzeigen</Link>
-          </div>
-          <div className="table-list">
-            {data.tasks.length === 0 ? (
-              <div className="empty-state">Noch keine offenen Aufgaben vorhanden.</div>
-            ) : data.tasks.map((task) => (
-              <div className="table-row" key={task.title}>
-                <div><strong>{task.title}</strong><span>{task.category}</span></div>
-                <span>{formatDate(task.dueDate)}</span>
-                <span className={`priority priority-${task.priority.toLowerCase()}`}>{task.priority}</span>
-              </div>
-            ))}
-          </div>
-        </article>
+        {canTasks && (
+          <article className="panel panel-wide">
+            <div className="panel-head">
+              <div><span className="eyebrow">Organisation</span><h2>Offene Aufgaben</h2></div>
+              <Link className="ghost-button" href="/aufgaben">Alle anzeigen</Link>
+            </div>
+            <div className="table-list">
+              {data.tasks.length === 0 ? (
+                <div className="empty-state">Noch keine offenen Aufgaben vorhanden.</div>
+              ) : data.tasks.map((task) => (
+                <div className="table-row" key={task.title}>
+                  <div><strong>{task.title}</strong><span>{task.category}</span></div>
+                  <span>{formatDate(task.dueDate)}</span>
+                  <span className={`priority priority-${task.priority.toLowerCase()}`}>{task.priority}</span>
+                </div>
+              ))}
+            </div>
+          </article>
+        )}
 
+        {canCalendar && (
         <article className="panel">
           <div className="panel-head">
             <div><span className="eyebrow">Kalender</span><h2>Nächste Termine</h2></div>
@@ -183,7 +206,9 @@ export default async function DashboardPage() {
             })}
           </div>
         </article>
+        )}
 
+        {canStatistics && (
         <article className="panel">
           <div className="panel-head">
             <div><span className="eyebrow">Sport & Verein</span><h2>Aktivität 2026</h2></div>
@@ -195,6 +220,7 @@ export default async function DashboardPage() {
             <div><span>Trainingstage</span><strong>{data.trainingDaysYear}</strong></div>
           </div>
         </article>
+        )}
 
         <article className="panel">
           <div className="panel-head"><div><span className="eyebrow">Verein</span><h2>Auf einen Blick</h2></div></div>
@@ -203,12 +229,14 @@ export default async function DashboardPage() {
           <div className="team-card"><div><strong>{data.upcomingEvents} Termine</strong><span>in den nächsten 14 Tagen</span></div><b>PLAN</b></div>
         </article>
 
-        <article className="panel panel-accent">
-          <span className="eyebrow">Sitzungsmodus</span>
-          <h2>Vorstandssitzung vorbereiten</h2>
-          <p>Tagesordnung, Beschlüsse und Aufgaben werden direkt miteinander verknüpft.</p>
-          <Link className="light-button" href="/sitzungen">Sitzungen öffnen</Link>
-        </article>
+        {canMeetings && (
+          <article className="panel panel-accent">
+            <span className="eyebrow">Sitzungsmodus</span>
+            <h2>Vorstandssitzung vorbereiten</h2>
+            <p>Tagesordnung, Beschlüsse und Aufgaben werden direkt miteinander verknüpft.</p>
+            <Link className="light-button" href="/sitzungen">Sitzungen öffnen</Link>
+          </article>
+        )}
       </section>
     </div>
   );
