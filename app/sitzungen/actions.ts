@@ -54,6 +54,60 @@ export async function createMeetingAction(formData: FormData) {
   redirect(id ? `/sitzungen/${id}?created=1` : "/sitzungen");
 }
 
+export async function updateMeetingDetailsAction(formData: FormData) {
+  const actor=await requirePermission("meetings.write");
+  const sql=getDb();
+  if (!sql) redirect("/sitzungen?error=database");
+
+  const meetingId=value(formData,"meetingId");
+  const title=value(formData,"title");
+  const startsAt=value(formData,"startsAt");
+  const location=value(formData,"location");
+  const notes=value(formData,"notes");
+
+  if (!meetingId || !title || !startsAt) {
+    redirect(`/sitzungen/${meetingId}?error=missing`);
+  }
+
+  const rows=await sql`
+    UPDATE meetings
+    SET
+      title=${title},
+      starts_at=(${startsAt}::timestamp AT TIME ZONE 'Europe/Berlin'),
+      location=${location || null},
+      notes=${notes || null},
+      updated_at=now()
+    WHERE id=${meetingId}::uuid
+      AND deleted_at IS NULL
+      AND status IN ('planned','cancelled')
+    RETURNING event_id::text
+  `;
+
+  if (!rows.length) redirect(`/sitzungen/${meetingId}?error=meeting_locked`);
+
+  if (rows[0].event_id) {
+    await sql`
+      UPDATE club_events
+      SET
+        title=${title},
+        starts_at=(${startsAt}::timestamp AT TIME ZONE 'Europe/Berlin'),
+        location=${location || null},
+        description=${notes || null},
+        updated_at=now()
+      WHERE id=${String(rows[0].event_id)}::uuid
+        AND deleted_at IS NULL
+    `;
+  }
+
+  await writeAudit(actor.id,"meeting.updated","meeting",meetingId,{title,startsAt,location});
+
+  revalidatePath(`/sitzungen/${meetingId}`);
+  revalidatePath("/sitzungen");
+  revalidatePath("/kalender");
+  revalidatePath("/");
+  redirect(`/sitzungen/${meetingId}?saved=1`);
+}
+
 export async function addAgendaItemAction(formData: FormData) {
   await requirePermission("meetings.write");
   const sql = getDb();
@@ -79,6 +133,7 @@ export async function addAgendaItemAction(formData: FormData) {
         SELECT 1 FROM meetings m
         WHERE m.id=${meetingId}::uuid
           AND m.deleted_at IS NULL
+          AND m.status IN ('planned','running')
       )
   `;
 
@@ -87,31 +142,76 @@ export async function addAgendaItemAction(formData: FormData) {
 }
 
 export async function updateAgendaStatusAction(formData: FormData) {
-  await requirePermission("meetings.write");
-  const sql = getDb();
+  const actor=await requirePermission("meetings.write");
+  const sql=getDb();
   if (!sql) redirect("/sitzungen?error=database");
 
-  const meetingId = value(formData, "meetingId");
-  const agendaItemId = value(formData, "agendaItemId");
-  const statusRaw = value(formData, "status");
-  const status = ["open", "active", "done", "deferred"].includes(statusRaw) ? statusRaw : "open";
+  const meetingId=value(formData,"meetingId");
+  const agendaItemId=value(formData,"agendaItemId");
+  const statusRaw=value(formData,"status");
+  const status=["open","active","done","deferred"].includes(statusRaw) ? statusRaw : "open";
 
-  await sql`
+  const rows=await sql`
     UPDATE agenda_items
-    SET status = ${status}
-    WHERE id = ${agendaItemId}::uuid
-      AND meeting_id = ${meetingId}::uuid
+    SET status=${status}
+    WHERE id=${agendaItemId}::uuid
+      AND meeting_id=${meetingId}::uuid
       AND EXISTS (
-        SELECT 1 FROM meetings m
+        SELECT 1
+        FROM meetings m
         WHERE m.id=${meetingId}::uuid
           AND m.deleted_at IS NULL
+          AND m.status='running'
       )
+    RETURNING id::text
   `;
+
+  if (!rows.length) redirect(`/sitzungen/${meetingId}?error=meeting_locked`);
+
+  await writeAudit(actor.id,"agenda.status_changed","agenda_item",agendaItemId,{
+    meetingId,
+    status,
+  });
 
   revalidatePath(`/sitzungen/${meetingId}`);
   redirect(`/sitzungen/${meetingId}`);
 }
 
+export async function updateAgendaNotesAction(formData: FormData) {
+  const actor=await requirePermission("meetings.write");
+  const sql=getDb();
+  if (!sql) redirect("/sitzungen?error=database");
+
+  const meetingId=value(formData,"meetingId");
+  const agendaItemId=value(formData,"agendaItemId");
+  const notes=value(formData,"notes");
+
+  const rows=await sql`
+    UPDATE agenda_items
+    SET notes=${notes || null}
+    WHERE id=${agendaItemId}::uuid
+      AND meeting_id=${meetingId}::uuid
+      AND EXISTS (
+        SELECT 1
+        FROM meetings m
+        WHERE m.id=${meetingId}::uuid
+          AND m.deleted_at IS NULL
+          AND m.status='running'
+      )
+    RETURNING id::text,title
+  `;
+
+  if (!rows.length) redirect(`/sitzungen/${meetingId}?error=meeting_locked`);
+
+  await writeAudit(actor.id,"agenda.notes_updated","agenda_item",agendaItemId,{
+    meetingId,
+    title:String(rows[0].title),
+  });
+
+  revalidatePath(`/sitzungen/${meetingId}`);
+  revalidatePath(`/sitzungen/${meetingId}/protokoll`);
+  redirect(`/sitzungen/${meetingId}?notes=1`);
+}
 
 export async function deleteAgendaItemAction(formData: FormData) {
   const actor=await requirePermission("meetings.write");
@@ -185,30 +285,41 @@ export async function addAttendeeAction(formData: FormData) {
 }
 
 export async function updateAttendanceAction(formData: FormData) {
-  await requirePermission("meetings.write");
-  const sql = getDb();
+  const actor=await requirePermission("meetings.write");
+  const sql=getDb();
   if (!sql) redirect("/sitzungen?error=database");
 
-  const meetingId = value(formData, "meetingId");
-  const memberId = value(formData, "memberId");
-  const attendanceRaw = value(formData, "attendance");
-  const attendance = ["invited", "present", "absent", "excused"].includes(attendanceRaw)
+  const meetingId=value(formData,"meetingId");
+  const memberId=value(formData,"memberId");
+  const attendanceRaw=value(formData,"attendance");
+  const attendance=["invited","present","absent","excused"].includes(attendanceRaw)
     ? attendanceRaw
     : "invited";
 
-  await sql`
+  const rows=await sql`
     UPDATE meeting_attendees
-    SET attendance = ${attendance}
-    WHERE meeting_id = ${meetingId}::uuid
-      AND member_id = ${memberId}::uuid
+    SET attendance=${attendance}
+    WHERE meeting_id=${meetingId}::uuid
+      AND member_id=${memberId}::uuid
       AND EXISTS (
-        SELECT 1 FROM meetings m
+        SELECT 1
+        FROM meetings m
         WHERE m.id=${meetingId}::uuid
           AND m.deleted_at IS NULL
+          AND m.status IN ('planned','running')
       )
+    RETURNING member_id::text
   `;
 
+  if (!rows.length) redirect(`/sitzungen/${meetingId}?error=meeting_locked`);
+
+  await writeAudit(actor.id,"meeting.attendance_changed","meeting",meetingId,{
+    memberId,
+    attendance,
+  });
+
   revalidatePath(`/sitzungen/${meetingId}`);
+  revalidatePath(`/sitzungen/${meetingId}/protokoll`);
   redirect(`/sitzungen/${meetingId}`);
 }
 
@@ -223,13 +334,49 @@ export async function updateMeetingStatusAction(formData: FormData) {
     ? statusRaw
     : "planned";
 
-  const before=await sql`
-    SELECT id::text,title,status,starts_at
+  const beforeRows=await sql`
+    SELECT id::text,title,status,starts_at,event_id::text
     FROM meetings
     WHERE id=${meetingId}::uuid
       AND deleted_at IS NULL
     LIMIT 1
   `;
+  const before=beforeRows[0];
+  if (!before) redirect("/sitzungen?error=missing");
+
+  const current=String(before.status);
+  const transitions:Record<string,string[]>={
+    planned:["running","cancelled"],
+    cancelled:["planned"],
+    running:["completed"],
+    completed:["running"],
+  };
+
+  if (status!==current && !(transitions[current] ?? []).includes(status)) {
+    redirect(`/sitzungen/${meetingId}?error=invalid_transition`);
+  }
+
+  if (status==="completed") {
+    const checks=await sql`
+      SELECT
+        count(*) FILTER (WHERE ai.status IN ('open','active'))::int AS open_agenda,
+        (
+          SELECT count(*)::int
+          FROM meeting_attendees ma
+          WHERE ma.meeting_id=${meetingId}::uuid
+            AND ma.attendance='invited'
+        ) AS unresolved_attendance
+      FROM agenda_items ai
+      WHERE ai.meeting_id=${meetingId}::uuid
+    `;
+    const check=checks[0] ?? {};
+    if (Number(check.open_agenda ?? 0)>0) {
+      redirect(`/sitzungen/${meetingId}?error=open_agenda`);
+    }
+    if (Number(check.unresolved_attendance ?? 0)>0) {
+      redirect(`/sitzungen/${meetingId}?error=attendance_open`);
+    }
+  }
 
   await sql`
     UPDATE meetings
@@ -237,14 +384,15 @@ export async function updateMeetingStatusAction(formData: FormData) {
       status=${status},
       ended_at=CASE
         WHEN ${status}='completed' THEN COALESCE(ended_at,now())
-        WHEN ${status}<>'completed' THEN NULL
+        WHEN ${status}='running' THEN NULL
         ELSE ended_at
-      END
+      END,
+      updated_at=now()
     WHERE id=${meetingId}::uuid
       AND deleted_at IS NULL
   `;
 
-  if (status==="completed" && before[0]) {
+  if (status==="completed") {
     await sql`
       INSERT INTO documents (
         title,category,storage_type,storage_ref,status,
@@ -273,18 +421,19 @@ export async function updateMeetingStatusAction(formData: FormData) {
   }
 
   await writeAudit(actor.id,"meeting.status_changed","meeting",meetingId,{
-    title:String(before[0]?.title ?? ""),
-    before:String(before[0]?.status ?? ""),
+    title:String(before.title ?? ""),
+    before:current,
     after:status,
     protocolRegistered:status==="completed",
   });
 
   revalidatePath(`/sitzungen/${meetingId}`);
+  revalidatePath(`/sitzungen/${meetingId}/protokoll`);
   revalidatePath("/sitzungen");
   revalidatePath("/dokumente");
   revalidatePath("/archiv");
   revalidatePath("/");
-  redirect(`/sitzungen/${meetingId}`);
+  redirect(`/sitzungen/${meetingId}?status=${status}`);
 }
 
 export async function createResolutionFromAgendaAction(formData: FormData) {
@@ -345,6 +494,7 @@ export async function createResolutionFromAgendaAction(formData: FormData) {
         SELECT 1 FROM meetings m
         WHERE m.id=${meetingId}::uuid
           AND m.deleted_at IS NULL
+          AND m.status='running'
       )
       RETURNING id, title
     ),
@@ -378,7 +528,27 @@ export async function createResolutionFromAgendaAction(formData: FormData) {
       )
   `;
 
+  const created=await sql`
+    SELECT id::text
+    FROM resolutions
+    WHERE meeting_id=${meetingId}::uuid
+      AND agenda_item_id=${agendaItemId}::uuid
+    LIMIT 1
+  `;
+  if (!created.length) redirect(`/sitzungen/${meetingId}?error=meeting_locked`);
+
+  await writeAudit(actor.id,"resolution.created","resolution",String(created[0].id),{
+    meetingId,
+    agendaItemId,
+    title,
+    votesYes:Number.isFinite(yes) ? yes : 0,
+    votesNo:Number.isFinite(no) ? no : 0,
+    votesAbstain:Number.isFinite(abstain) ? abstain : 0,
+    taskCreated:createTask,
+  });
+
   revalidatePath(`/sitzungen/${meetingId}`);
+  revalidatePath(`/sitzungen/${meetingId}/protokoll`);
   revalidatePath("/beschluesse");
   revalidatePath("/aufgaben");
   revalidatePath("/");
