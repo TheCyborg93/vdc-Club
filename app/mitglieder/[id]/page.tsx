@@ -20,8 +20,28 @@ const roleLabels: Record<string, string> = {
   tournament_director: "Turnierleitung",
 };
 
+const statusLabels: Record<string,string> = {
+  active:"Aktiv",
+  passive:"Passiv",
+  inactive:"Inaktiv",
+};
+
+const membershipTypeLabels: Record<string,string> = {
+  regular:"Regulär",
+  youth:"Jugend",
+  honorary:"Ehrenmitglied",
+  other:"Sonstige",
+};
+
+const feeLabels: Record<string,string> = {
+  open:"Offen",
+  paid:"Bezahlt",
+  exempt:"Befreit",
+  cancelled:"Storniert",
+};
+
 const errors: Record<string, string> = {
-  missing: "Vor- und Nachname sind erforderlich.",
+  missing: "Bitte die Pflichtfelder korrekt ausfüllen.",
   account: "Für den Zugang werden E-Mail und ein Passwort mit mindestens 12 Zeichen benötigt.",
   account_exists: "Für dieses Mitglied oder diese E-Mail existiert bereits ein Benutzerzugang.",
 };
@@ -32,6 +52,17 @@ function dateValue(value: unknown) {
   if (!value) return "";
   const date = new Date(String(value));
   return Number.isNaN(date.getTime()) ? "" : date.toISOString().slice(0, 10);
+}
+
+function formatDate(value: unknown) {
+  if (!value) return "–";
+  const date = new Date(String(value));
+  return Number.isNaN(date.getTime()) ? "–" : new Intl.DateTimeFormat("de-DE").format(date);
+}
+
+function money(value: unknown) {
+  if (value === null || value === undefined) return "–";
+  return new Intl.NumberFormat("de-DE",{style:"currency",currency:"EUR"}).format(Number(value));
 }
 
 export default async function MemberDetailPage({
@@ -48,8 +79,8 @@ export default async function MemberDetailPage({
   const { id } = await params;
   const query = await searchParams;
 
-  const [memberRows, roleRows, userRows] = await Promise.all([
-    sql`
+  const [memberRows, roleRows, userRows, feeRows, historyRows] = await Promise.all([
+    sql\`
       SELECT
         m.id::text,
         m.member_number,
@@ -59,18 +90,23 @@ export default async function MemberDetailPage({
         m.phone,
         m.birth_date,
         m.join_date,
+        m.notice_date,
+        m.leave_date,
         m.status,
+        m.membership_type,
+        m.status_reason,
+        m.status_changed_at,
         m.notes,
-        COALESCE(string_agg(DISTINCT t.name, ', ') FILTER (WHERE t.id IS NOT NULL), '') AS teams
+        COALESCE(string_agg(DISTINCT t.short_name, ', ') FILTER (WHERE t.id IS NOT NULL), '') AS teams
       FROM members m
       LEFT JOIN team_members tm ON tm.member_id = m.id AND tm.is_active = true
       LEFT JOIN teams t ON t.id = tm.team_id AND t.status = 'active'
-      WHERE m.id = ${id}::uuid
+      WHERE m.id = \${id}::uuid
       GROUP BY m.id
       LIMIT 1
-    `,
-    sql`SELECT key, name FROM roles ORDER BY name`,
-    sql`
+    \`,
+    sql\`SELECT key, name FROM roles ORDER BY name\`,
+    sql\`
       SELECT
         u.id::text,
         u.email,
@@ -79,10 +115,24 @@ export default async function MemberDetailPage({
         COALESCE(array_agg(ur.role_key) FILTER (WHERE ur.role_key IS NOT NULL), ARRAY[]::text[]) AS roles
       FROM app_users u
       LEFT JOIN user_roles ur ON ur.user_id = u.id
-      WHERE u.member_id = ${id}::uuid
+      WHERE u.member_id = \${id}::uuid
       GROUP BY u.id
       LIMIT 1
-    `,
+    \`,
+    sql\`
+      SELECT id::text,fiscal_year,amount,due_date,status,paid_on,notes
+      FROM membership_fees
+      WHERE member_id=\${id}::uuid
+      ORDER BY fiscal_year DESC
+      LIMIT 4
+    \`,
+    sql\`
+      SELECT id::text,old_status,new_status,reason,effective_date,created_at
+      FROM member_status_history
+      WHERE member_id=\${id}::uuid
+      ORDER BY created_at DESC
+      LIMIT 12
+    \`,
   ]);
 
   const member = memberRows[0];
@@ -93,6 +143,7 @@ export default async function MemberDetailPage({
     appUser && Array.isArray(appUser.roles) ? appUser.roles.map(String) : []
   );
 
+  const currentFee = feeRows.find((fee) => Number(fee.fiscal_year) === new Date().getFullYear()) ?? null;
   const canWrite = hasPermission(actor.roles, "members.write");
   const canManageAccounts = hasPermission(actor.roles, "settings.manage");
 
@@ -103,13 +154,26 @@ export default async function MemberDetailPage({
           <Link href="/mitglieder" className="back-link">← Mitglieder</Link>
           <span className="eyebrow">Mitgliedsprofil</span>
           <h1>{String(member.first_name)} {String(member.last_name)}</h1>
-          <p>{member.teams ? String(member.teams) : "Noch keiner Mannschaft zugeordnet."}</p>
+          <p>
+            {membershipTypeLabels[String(member.membership_type ?? "regular")] ?? "Mitglied"}
+            {member.teams ? \` · \${member.teams}\` : " · keine Mannschaft"}
+          </p>
         </div>
-        <b className={`status-badge status-${member.status}`}>{String(member.status)}</b>
+        <b className={\`status-badge status-\${member.status}\`}>{statusLabels[String(member.status)] ?? String(member.status)}</b>
       </section>
 
       {query.error && <div className="form-error">{errors[query.error] ?? "Die Aktion konnte nicht ausgeführt werden."}</div>}
       {(query.saved || query.account || query.roles) && <div className="form-success">Änderungen wurden gespeichert.</div>}
+
+      <section className="member-lifecycle-summary">
+        <article><span>Eintritt</span><strong>{formatDate(member.join_date)}</strong></article>
+        <article><span>Kündigung</span><strong>{formatDate(member.notice_date)}</strong></article>
+        <article><span>Austritt</span><strong>{formatDate(member.leave_date)}</strong></article>
+        <article>
+          <span>Beitrag {new Date().getFullYear()}</span>
+          <strong>{currentFee ? feeLabels[String(currentFee.status)] ?? String(currentFee.status) : "Nicht erzeugt"}</strong>
+        </article>
+      </section>
 
       <section className="panel-grid">
         <article className="panel">
@@ -126,11 +190,12 @@ export default async function MemberDetailPage({
             </div>
             <div className="form-grid">
               <label>Mitgliedsnummer<input name="memberNumber" defaultValue={member.member_number ? String(member.member_number) : ""} disabled={!canWrite} /></label>
-              <label>Status
-                <select name="status" defaultValue={String(member.status)} disabled={!canWrite}>
-                  <option value="active">Aktiv</option>
-                  <option value="passive">Passiv</option>
-                  <option value="inactive">Inaktiv</option>
+              <label>Mitgliedsart
+                <select name="membershipType" defaultValue={String(member.membership_type ?? "regular")} disabled={!canWrite}>
+                  <option value="regular">Regulär</option>
+                  <option value="youth">Jugend</option>
+                  <option value="honorary">Ehrenmitglied</option>
+                  <option value="other">Sonstige</option>
                 </select>
               </label>
             </div>
@@ -138,6 +203,25 @@ export default async function MemberDetailPage({
               <label>Geburtsdatum<input name="birthDate" type="date" defaultValue={dateValue(member.birth_date)} disabled={!canWrite} /></label>
               <label>Eintritt<input name="joinDate" type="date" defaultValue={dateValue(member.join_date)} disabled={!canWrite} /></label>
             </div>
+
+            <div className="membership-status-box">
+              <div className="panel-head"><div><span className="eyebrow">Mitgliedschaft</span><h2>Status & Austritt</h2></div></div>
+              <div className="form-grid">
+                <label>Status
+                  <select name="status" defaultValue={String(member.status)} disabled={!canWrite}>
+                    <option value="active">Aktiv</option>
+                    <option value="passive">Passiv</option>
+                    <option value="inactive">Inaktiv</option>
+                  </select>
+                </label>
+                <label>Statusgrund<input name="statusReason" defaultValue={member.status_reason ? String(member.status_reason) : ""} disabled={!canWrite} placeholder="z. B. Wechsel auf passiv" /></label>
+              </div>
+              <div className="form-grid">
+                <label>Kündigung eingegangen<input name="noticeDate" type="date" defaultValue={dateValue(member.notice_date)} disabled={!canWrite} /></label>
+                <label>Austritt zum<input name="leaveDate" type="date" defaultValue={dateValue(member.leave_date)} disabled={!canWrite} /></label>
+              </div>
+            </div>
+
             <label>Notizen<textarea name="notes" rows={4} defaultValue={member.notes ? String(member.notes) : ""} disabled={!canWrite} /></label>
             {canWrite && <button className="primary-button" type="submit">Änderungen speichern</button>}
           </form>
@@ -203,6 +287,40 @@ export default async function MemberDetailPage({
               )}
             </>
           )}
+        </article>
+      </section>
+
+      <section className="panel-grid">
+        <article className="panel">
+          <div className="panel-head"><div><span className="eyebrow">Beiträge</span><h2>Beitragsverlauf</h2></div></div>
+          <div className="member-fee-list">
+            {feeRows.length === 0 ? (
+              <div className="empty-state">Noch keine Beiträge für dieses Mitglied erzeugt.</div>
+            ) : feeRows.map((fee) => (
+              <div className="member-fee-row" key={String(fee.id)}>
+                <div><strong>{String(fee.fiscal_year)}</strong><span>Fällig {formatDate(fee.due_date)}</span></div>
+                <b>{money(fee.amount)}</b>
+                <span className={\`fee-status fee-\${fee.status}\`}>{feeLabels[String(fee.status)] ?? String(fee.status)}</span>
+              </div>
+            ))}
+          </div>
+        </article>
+
+        <article className="panel">
+          <div className="panel-head"><div><span className="eyebrow">Historie</span><h2>Statusänderungen</h2></div></div>
+          <div className="member-history-list">
+            {historyRows.length === 0 ? (
+              <div className="empty-state">Noch keine Statusänderungen protokolliert.</div>
+            ) : historyRows.map((history) => (
+              <div className="member-history-row" key={String(history.id)}>
+                <div>
+                  <strong>{statusLabels[String(history.old_status)] ?? String(history.old_status ?? "Neu")} → {statusLabels[String(history.new_status)] ?? String(history.new_status)}</strong>
+                  <span>{formatDate(history.effective_date)}</span>
+                </div>
+                <div>{history.reason && <small>{String(history.reason)}</small>}</div>
+              </div>
+            ))}
+          </div>
         </article>
       </section>
     </div>
