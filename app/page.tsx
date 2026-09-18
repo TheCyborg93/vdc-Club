@@ -51,6 +51,7 @@ export default async function DashboardPage() {
   const isAdmin = user.roles.includes("admin");
   const data = await getDashboardData({ includeSystem: isAdmin });
   const canTasks = hasPermission(user.roles,"tasks.read");
+  const canTeams = hasPermission(user.roles,"teams.read");
   const canCalendar = hasPermission(user.roles,"calendar.read");
   const canStatistics = hasPermission(user.roles,"statistics.read");
   const canMeetings = hasPermission(user.roles,"meetings.read");
@@ -79,11 +80,11 @@ export default async function DashboardPage() {
   }).format(now);
 
   const stats = [
-    { label: "Mitglieder", value: String(data.members), note: "aktive Mitglieder" },
-    { label: "Mannschaften", value: String(data.teams), note: "aktive Teams" },
-    { label: "Offene Aufgaben", value: String(data.openTasks), note: "noch zu erledigen" },
-    { label: "Nächste Termine", value: String(data.upcomingEvents), note: "in den nächsten 14 Tagen" },
-  ];
+    canMembers ? { label: "Mitglieder", value: String(data.members), note: "aktive Mitglieder" } : null,
+    canTeams ? { label: "Mannschaften", value: String(data.teams), note: "aktive Teams" } : null,
+    canTasks ? { label: "Offene Aufgaben", value: String(data.openTasks), note: "noch zu erledigen" } : null,
+    canCalendar ? { label: "Nächste Termine", value: String(data.upcomingEvents), note: "in den nächsten 14 Tagen" } : null,
+  ].filter((item): item is { label:string; value:string; note:string } => Boolean(item));
 
   return (
     <div className="page-stack">
@@ -137,7 +138,7 @@ export default async function DashboardPage() {
         {alerts.length === 0 ? (
           <div className="attention-clear">
             <i />
-            <div><strong>Keine dringenden Hinweise</strong><span>Beiträge, Fristen, Verträge und Aufgaben sind aktuell unauffällig.</span></div>
+            <div><strong>Keine dringenden Hinweise</strong><span>Für deine Rolle liegen aktuell keine offenen Warnungen oder Fristen vor.</span></div>
           </div>
         ) : (
           <div className="attention-list">
@@ -222,12 +223,14 @@ export default async function DashboardPage() {
         </article>
         )}
 
-        <article className="panel">
-          <div className="panel-head"><div><span className="eyebrow">Verein</span><h2>Auf einen Blick</h2></div></div>
-          <div className="team-card"><div><strong>{data.members} Mitglieder</strong><span>aktiver Vereinsbestand</span></div><b>VDC</b></div>
-          <div className="team-card"><div><strong>{data.teams} Mannschaften</strong><span>im aktuellen Spielbetrieb</span></div><b>SPORT</b></div>
-          <div className="team-card"><div><strong>{data.upcomingEvents} Termine</strong><span>in den nächsten 14 Tagen</span></div><b>PLAN</b></div>
-        </article>
+        {(canMembers || canTeams || canCalendar) && (
+          <article className="panel">
+            <div className="panel-head"><div><span className="eyebrow">Verein</span><h2>Auf einen Blick</h2></div></div>
+            {canMembers && <div className="team-card"><div><strong>{data.members} Mitglieder</strong><span>aktiver Vereinsbestand</span></div><b>VDC</b></div>}
+            {canTeams && <div className="team-card"><div><strong>{data.teams} Mannschaften</strong><span>im aktuellen Spielbetrieb</span></div><b>SPORT</b></div>}
+            {canCalendar && <div className="team-card"><div><strong>{data.upcomingEvents} Termine</strong><span>in den nächsten 14 Tagen</span></div><b>PLAN</b></div>}
+          </article>
+        )}
 
         {canMeetings && (
           <article className="panel panel-accent">
