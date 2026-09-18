@@ -6,6 +6,7 @@ import {
   addAgendaItemAction,
   addAttendeeAction,
   createResolutionFromAgendaAction,
+  deleteAgendaItemAction,
   updateAgendaStatusAction,
   updateAttendanceAction,
   updateMeetingStatusAction,
@@ -32,6 +33,7 @@ const errors: Record<string, string> = {
   attendee: "Teilnehmer konnte nicht hinzugefügt werden.",
   resolution: "Für einen Beschluss werden Titel und Beschlusstext benötigt.",
   protected_delete: "Diese Sitzung kann nicht gelöscht werden, weil sie bereits abgeschlossen ist oder Beschlüsse/Dokumente enthält.",
+  agenda_delete: "Dieser TOP kann nicht gelöscht werden, weil bereits ein Beschluss dazu existiert oder die Sitzung abgeschlossen ist.",
 };
 
 export const dynamic = "force-dynamic";
@@ -56,7 +58,7 @@ export default async function MeetingDetailPage({
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string; agenda?: string; resolution?: string; created?: string }>;
+  searchParams: Promise<{ error?: string; agenda?: string; resolution?: string; created?: string; agenda_deleted?: string }>;
 }) {
   const actor = await requirePermission("meetings.read");
   const sql = getDb();
@@ -184,6 +186,7 @@ export default async function MeetingDetailPage({
 
       {query.error && <div className="form-error">{errors[query.error] ?? "Die Aktion konnte nicht ausgeführt werden."}</div>}
       {(query.agenda || query.resolution || query.created) && <div className="form-success">Sitzung wurde aktualisiert.</div>}
+      {query.agenda_deleted && <div className="form-success">TOP wurde gelöscht.</div>}
 
       <section className="meeting-summary-grid">
         <article><span>TOPs</span><strong>{agenda.length}</strong><small>{openAgendaCount} offen</small></article>
@@ -254,6 +257,15 @@ export default async function MeetingDetailPage({
                                 <input type="hidden" name="agendaItemId" value={String(item.id)} />
                                 <input type="hidden" name="status" value="done" />
                                 <button className="mini-button">Ohne Beschluss erledigen</button>
+                              </form>
+                            )}
+                            {["planned","running"].includes(String(meeting.status)) && (
+                              <form action={deleteAgendaItemAction}>
+                                <input type="hidden" name="meetingId" value={id} />
+                                <input type="hidden" name="agendaItemId" value={String(item.id)} />
+                                <ConfirmSubmitButton message={"TOP „"+String(item.title)+"“ wirklich löschen?"}>
+                                  TOP löschen
+                                </ConfirmSubmitButton>
                               </form>
                             )}
                           </div>
