@@ -183,3 +183,13 @@ button,a{font:inherit}button{cursor:pointer}a{color:inherit;text-decoration:none
 
 @media(max-width:1100px){.finance-admin-grid{grid-template-columns:1fr 1fr}.finance-admin-grid>.panel:last-child{grid-column:1 / -1}.fee-row{grid-template-columns:minmax(0,1fr) 90px 90px}.fee-row form{grid-column:1 / -1}.document-row{grid-template-columns:40px minmax(0,1fr)}.document-actions{grid-column:2;justify-content:flex-start}}
 @media(max-width:720px){.finance-summary-strip{grid-template-columns:1fr}.finance-admin-grid{grid-template-columns:1fr}.finance-admin-grid>.panel:last-child{grid-column:auto}.fee-row{grid-template-columns:1fr auto}.fee-row>span{grid-column:1}.fee-row form{grid-column:1 / -1}.finance-row{grid-template-columns:32px minmax(0,1fr)}.finance-row>b{grid-column:2}.document-row{grid-template-columns:36px minmax(0,1fr)}}
+
+
+/* Sponsors */
+.sponsor-list{display:grid;gap:10px}.sponsor-card{padding:15px;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.015)}
+.sponsor-card-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start}.sponsor-card-head strong,.sponsor-card-head div span{display:block}.sponsor-card-head div span{font-size:10px;color:var(--muted);margin-top:3px}
+.sponsor-status{padding:5px 8px;border-radius:99px;font-size:9px;font-weight:800}.sponsor-active{background:rgba(68,224,176,.10);color:var(--accent)}.sponsor-lead{background:rgba(106,212,255,.10);color:#8ee1ff}.sponsor-expired{background:rgba(255,202,104,.10);color:#ffd98a}.sponsor-inactive{background:rgba(143,165,161,.10);color:#b7c8c4}
+.sponsor-meta{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.sponsor-meta span{font-size:9px;padding:4px 7px;border-radius:99px;background:rgba(255,255,255,.04);color:var(--muted)}
+.sponsor-benefits{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}.sponsor-benefits>div{padding:10px;border:1px solid var(--line);border-radius:10px;background:rgba(255,255,255,.012)}.sponsor-benefits span{font-size:9px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted)}.sponsor-benefits p{font-size:11px;margin:5px 0 0!important}
+.sponsor-status-form{display:flex;gap:6px;margin-top:12px;padding-top:10px;border-top:1px solid var(--line)}.sponsor-status-form select{border:1px solid var(--line);background:#0b1514;color:var(--text);border-radius:9px;padding:7px 8px;font-size:10px}
+@media(max-width:720px){.sponsor-benefits{grid-template-columns:1fr}.sponsor-card-head{display:grid}.sponsor-status-form{flex-wrap:wrap}}
