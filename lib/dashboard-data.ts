@@ -40,6 +40,14 @@ export type DashboardTraining = {
   personalRate: number;
 };
 
+export type DashboardRoleMetric = {
+  label: string;
+  value: string;
+  note: string;
+  href: string;
+  tone: "neutral" | "warning" | "critical" | "success";
+};
+
 export type DashboardData = {
   members: number;
   teams: number;
@@ -54,6 +62,7 @@ export type DashboardData = {
   integrations: DashboardIntegration[];
   alerts: DashboardAlert[];
   training: DashboardTraining | null;
+  roleMetrics: DashboardRoleMetric[];
 };
 
 const emptyData: DashboardData = {
@@ -70,6 +79,7 @@ const emptyData: DashboardData = {
   integrations: [],
   alerts: [],
   training: null,
+  roleMetrics: [],
 };
 
 function severityRank(value: string) {
@@ -79,7 +89,12 @@ function severityRank(value: string) {
 }
 
 export async function getDashboardData(
-  options: { includeSystem?: boolean; includeTraining?: boolean; memberId?: string | null } = {},
+  options: {
+    includeSystem?: boolean;
+    includeTraining?: boolean;
+    memberId?: string | null;
+    primaryRole?: string;
+  } = {},
 ): Promise<DashboardData> {
   const sql = getDb();
   if (!sql) return emptyData;
@@ -310,6 +325,259 @@ export async function getDashboardData(
         `
       : [];
 
+    let roleMetricRows: Array<Record<string,unknown>>=[];
+
+    if (options.primaryRole==="admin") {
+      roleMetricRows=await sql`
+        SELECT 'Datenqualität' AS label,
+          (
+            (SELECT count(*) FROM members
+              WHERE status='active'
+                AND (email IS NULL OR trim(email)='' OR member_number IS NULL OR trim(member_number)='' OR join_date IS NULL))
+            +
+            (SELECT count(*) FROM teams t
+              WHERE t.status='active' AND t.deleted_at IS NULL
+                AND NOT EXISTS (
+                  SELECT 1 FROM team_members tm
+                  WHERE tm.team_id=t.id AND tm.is_active=true AND tm.is_captain=true
+                ))
+            +
+            (SELECT count(*) FROM integration_connections WHERE status='error')
+          )::text AS value,
+          'Auffälligkeiten prüfen' AS note,
+          '/admin/daten' AS href,
+          CASE WHEN (
+            (SELECT count(*) FROM integration_connections WHERE status='error')
+          )>0 THEN 'critical' ELSE 'warning' END AS tone
+        UNION ALL
+        SELECT 'Integrationen',
+          count(*) FILTER (WHERE status='error')::text,
+          'mit Fehlerstatus',
+          '/admin/integrationen',
+          CASE WHEN count(*) FILTER (WHERE status='error')>0 THEN 'critical' ELSE 'success' END
+        FROM integration_connections
+        UNION ALL
+        SELECT 'Benutzer',
+          count(*) FILTER (WHERE status='active')::text,
+          'aktive Zugänge',
+          '/admin/benutzer',
+          'neutral'
+        FROM app_users
+      `;
+    } else if (["chair","vice_chair","board"].includes(options.primaryRole ?? "")) {
+      roleMetricRows=await sql`
+        SELECT 'Offene Beschlüsse' AS label,
+          count(*) FILTER (WHERE status IN ('open','in_progress'))::text AS value,
+          'noch nicht abgeschlossen' AS note,
+          '/beschluesse' AS href,
+          CASE WHEN count(*) FILTER (WHERE status='open')>0 THEN 'warning' ELSE 'neutral' END AS tone
+        FROM resolutions
+        UNION ALL
+        SELECT 'Überfällige Aufgaben',
+          count(*)::text,
+          'Frist überschritten',
+          '/aufgaben',
+          CASE WHEN count(*)>0 THEN 'critical' ELSE 'success' END
+        FROM tasks
+        WHERE deleted_at IS NULL
+          AND status IN ('open','in_progress','blocked')
+          AND due_date<CURRENT_DATE
+        UNION ALL
+        SELECT 'Nächste Sitzung',
+          COALESCE(to_char(min(starts_at) AT TIME ZONE 'Europe/Berlin','DD.MM.'),'–'),
+          'geplanter Vorstandstermin',
+          '/sitzungen',
+          'neutral'
+        FROM meetings
+        WHERE deleted_at IS NULL
+          AND status='planned'
+          AND starts_at>=now()
+      `;
+    } else if (options.primaryRole==="secretary") {
+      roleMetricRows=await sql`
+        SELECT 'Nächste Sitzung' AS label,
+          COALESCE(to_char(min(starts_at) AT TIME ZONE 'Europe/Berlin','DD.MM.'),'–') AS value,
+          'Vorbereitung & Protokoll' AS note,
+          '/sitzungen' AS href,
+          'neutral' AS tone
+        FROM meetings
+        WHERE deleted_at IS NULL
+          AND status='planned'
+          AND starts_at>=now()
+        UNION ALL
+        SELECT 'Dokumentprüfung',
+          count(*)::text,
+          'innerhalb 30 Tagen',
+          '/dokumente',
+          CASE WHEN count(*)>0 THEN 'warning' ELSE 'success' END
+        FROM documents
+        WHERE deleted_at IS NULL
+          AND status IN ('active','review')
+          AND (
+            (review_on IS NOT NULL AND review_on<=CURRENT_DATE+interval '30 days')
+            OR (valid_until IS NOT NULL AND valid_until<=CURRENT_DATE+interval '30 days')
+          )
+        UNION ALL
+        SELECT 'Offene Beschlüsse',
+          count(*)::text,
+          'Beschlussbuch pflegen',
+          '/beschluesse',
+          CASE WHEN count(*)>0 THEN 'warning' ELSE 'success' END
+        FROM resolutions
+        WHERE status IN ('open','in_progress')
+      `;
+    } else if (options.primaryRole==="treasurer") {
+      roleMetricRows=await sql`
+        SELECT 'Offene Beiträge' AS label,
+          COALESCE(to_char(sum(amount) FILTER (WHERE status='open'),'FM999999990D00'),'0,00') || ' €' AS value,
+          count(*) FILTER (WHERE status='open')::text || ' Forderungen' AS note,
+          '/finanzen' AS href,
+          CASE WHEN count(*) FILTER (WHERE status='open')>0 THEN 'warning' ELSE 'success' END AS tone
+        FROM membership_fees
+        WHERE fiscal_year=EXTRACT(YEAR FROM CURRENT_DATE)::int
+        UNION ALL
+        SELECT 'Überfällig',
+          count(*)::text,
+          'Beiträge nach Fälligkeit',
+          '/finanzen',
+          CASE WHEN count(*)>0 THEN 'critical' ELSE 'success' END
+        FROM membership_fees
+        WHERE status='open'
+          AND due_date IS NOT NULL
+          AND due_date<CURRENT_DATE
+        UNION ALL
+        SELECT 'Jahressaldo',
+          COALESCE(
+            to_char(
+              sum(CASE WHEN entry_type='income' THEN amount ELSE -amount END)
+                FILTER (WHERE status='booked'),
+              'FM999999990D00'
+            ),
+            '0,00'
+          ) || ' €',
+          'gebuchte Einnahmen/Ausgaben',
+          '/finanzen',
+          'neutral'
+        FROM finance_entries
+        WHERE EXTRACT(YEAR FROM booked_on)=EXTRACT(YEAR FROM CURRENT_DATE)
+      `;
+    } else if (options.primaryRole==="sport_director") {
+      roleMetricRows=await sql`
+        SELECT 'Mannschaften' AS label,
+          count(*)::text AS value,
+          'aktive Teams' AS note,
+          '/mannschaften' AS href,
+          'neutral' AS tone
+        FROM teams
+        WHERE status='active' AND deleted_at IS NULL
+        UNION ALL
+        SELECT 'Ligatermine',
+          count(*)::text,
+          'nächste 30 Tage',
+          '/kalender',
+          'neutral'
+        FROM club_events
+        WHERE deleted_at IS NULL
+          AND event_type='league'
+          AND starts_at BETWEEN now() AND now()+interval '30 days'
+        UNION ALL
+        SELECT 'Training offen',
+          count(*)::text,
+          'Anwesenheiten nachtragen',
+          '/training',
+          CASE WHEN count(*)>0 THEN 'warning' ELSE 'success' END
+        FROM training_sessions
+        WHERE deleted_at IS NULL
+          AND scheduled_at<now()
+          AND status<>'cancelled'
+          AND attendance_recorded_at IS NULL
+      `;
+    } else if (options.primaryRole==="team_captain") {
+      roleMetricRows=await sql`
+        WITH own_teams AS (
+          SELECT DISTINCT t.id
+          FROM teams t
+          JOIN team_members tm ON tm.team_id=t.id
+          WHERE t.deleted_at IS NULL
+            AND t.status='active'
+            AND tm.member_id=${options.memberId || null}::uuid
+            AND tm.is_active=true
+            AND tm.is_captain=true
+        )
+        SELECT 'Deine Teams' AS label,
+          count(*)::text AS value,
+          'als Captain' AS note,
+          '/mannschaften' AS href,
+          'neutral' AS tone
+        FROM own_teams
+        UNION ALL
+        SELECT 'Kader',
+          count(DISTINCT tm.member_id)::text,
+          'aktive Spieler in deinen Teams',
+          '/mannschaften',
+          'neutral'
+        FROM team_members tm
+        JOIN own_teams ot ON ot.id=tm.team_id
+        WHERE tm.is_active=true
+        UNION ALL
+        SELECT 'Teamtermine',
+          count(*)::text,
+          'nächste 30 Tage',
+          '/kalender',
+          'neutral'
+        FROM club_events e
+        JOIN own_teams ot ON ot.id=e.team_id
+        WHERE e.deleted_at IS NULL
+          AND e.starts_at BETWEEN now() AND now()+interval '30 days'
+      `;
+    } else if (options.primaryRole==="tournament_director") {
+      roleMetricRows=await sql`
+        SELECT 'Turniere' AS label,
+          count(*)::text AS value,
+          'nächste 30 Tage' AS note,
+          '/kalender' AS href,
+          'neutral' AS tone
+        FROM club_events
+        WHERE deleted_at IS NULL
+          AND event_type='tournament'
+          AND starts_at BETWEEN now() AND now()+interval '30 days'
+        UNION ALL
+        SELECT 'Turnieraufgaben',
+          count(*)::text,
+          'offen oder in Arbeit',
+          '/aufgaben',
+          CASE WHEN count(*)>0 THEN 'warning' ELSE 'success' END
+        FROM tasks
+        WHERE deleted_at IS NULL
+          AND status IN ('open','in_progress','blocked')
+          AND (
+            COALESCE(category,'') ILIKE '%turnier%'
+            OR title ILIKE '%turnier%'
+          )
+        UNION ALL
+        SELECT 'Dieses Jahr',
+          count(*)::text,
+          'interne Turniere',
+          '/statistik',
+          'neutral'
+        FROM club_events
+        WHERE deleted_at IS NULL
+          AND event_type='tournament'
+          AND EXTRACT(YEAR FROM starts_at AT TIME ZONE 'Europe/Berlin')=EXTRACT(YEAR FROM CURRENT_DATE)
+      `;
+    } else {
+      roleMetricRows=await sql`
+        SELECT 'Termine' AS label,
+          count(*)::text AS value,
+          'nächste 14 Tage' AS note,
+          '/kalender' AS href,
+          'neutral' AS tone
+        FROM club_events
+        WHERE deleted_at IS NULL
+          AND starts_at BETWEEN now() AND now()+interval '14 days'
+      `;
+    }
+
     const mergedAlerts = [...businessAlerts, ...systemAlerts]
       .sort((a, b) => {
         const severityDiff = severityRank(String(a.severity)) - severityRank(String(b.severity));
@@ -370,6 +638,15 @@ export async function getDashboardData(
           ? Math.round((personalAttended / personalRecorded) * 100)
           : 0,
       } : null,
+      roleMetrics: roleMetricRows.map((row)=>({
+        label:String(row.label),
+        value:String(row.value ?? "–"),
+        note:String(row.note ?? ""),
+        href:String(row.href ?? "/"),
+        tone:["warning","critical","success"].includes(String(row.tone))
+          ? String(row.tone) as DashboardRoleMetric["tone"]
+          : "neutral",
+      })),
     };
   } catch {
     return emptyData;
