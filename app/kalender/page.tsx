@@ -73,6 +73,12 @@ export default async function CalendarPage({
             count(*) FILTER (
               WHERE starts_at >= date_trunc('week', now())
                 AND starts_at < date_trunc('week', now()) + interval '7 days'
+                AND NOT EXISTS (
+                  SELECT 1
+                  FROM training_sessions ts
+                  WHERE ts.event_id=club_events.id
+                    AND ts.status='cancelled'
+                )
             )::int AS week,
             count(*) FILTER (WHERE event_type = 'league' AND starts_at >= now())::int AS league,
             count(*) FILTER (
