@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getDb } from "@/lib/db";
 import { hasPermission, requirePermission } from "@/lib/permissions";
 import { createMeetingAction } from "@/app/sitzungen/actions";
+import { meetingStatusLabel } from "@/lib/ui-labels";
 
 const errors: Record<string, string> = {
   database: "Die Datenbankverbindung fehlt.",
@@ -117,7 +118,7 @@ export default async function MeetingsPage({
                   <span>{Number(meeting.resolution_count)} Beschlüsse</span>
                   <span>{Number(meeting.attendee_count)} Personen</span>
                 </div>
-                <b className={`status-badge status-${meeting.status}`}>{String(meeting.status)}</b>
+                <b className={`status-badge status-${meeting.status}`}>{meetingStatusLabel(meeting.status)}</b>
               </Link>
             ))}
           </div>
