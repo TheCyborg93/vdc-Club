@@ -25,6 +25,14 @@ export async function createDocumentAction(formData: FormData) {
   const financeEntryId = value(formData, "financeEntryId");
 
   if (!title || !category) redirect("/dokumente?error=missing");
+  if (storageRef) {
+    try {
+      const url = new URL(storageRef);
+      if (!["http:", "https:"].includes(url.protocol)) redirect("/dokumente?error=invalid");
+    } catch {
+      redirect("/dokumente?error=invalid");
+    }
+  }
 
   await sql`
     INSERT INTO documents (
