@@ -90,7 +90,7 @@ export async function activateTrainingSeasonAction(formData: FormData) {
   const id=value(formData,"id");
   if (!id) redirect("/training/auswertung?error=season");
 
-  await sql`UPDATE training_seasons SET is_active=false WHERE is_active=true`;
+  await sql`UPDATE training_seasons SET is_active=false WHERE is_active=true AND deleted_at IS NULL`;
   const rows=await sql`
     UPDATE training_seasons
     SET is_active=true
