@@ -17,6 +17,9 @@ const actionLabels: Record<string,string> = {
   "training.special_created":"Sondertraining angelegt",
   "training.pause_created":"Trainingspause angelegt",
   "training.pause_deleted":"Trainingspause aufgehoben",
+  "training.season_created":"Trainingssaison angelegt",
+  "training.season_updated":"Trainingssaison geändert",
+  "training.season_activated":"Trainingssaison aktiviert",
 };
 
 function formatDateTime(value: unknown) {
