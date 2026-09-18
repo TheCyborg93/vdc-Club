@@ -1,12 +1,37 @@
 "use server";
 
+import { createHash, randomUUID } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getDb } from "@/lib/db";
 import { requirePermission } from "@/lib/permissions";
 import { writeAudit } from "@/lib/audit";
+import {
+  deleteDocumentObject,
+  isDocumentStorageConfigured,
+  uploadDocumentObject,
+} from "@/lib/document-storage";
 
-function value(formData: FormData, key: string) {
+const MAX_FILE_SIZE=4*1024*1024;
+
+const allowedUploads: Record<string,string[]> = {
+  pdf:["application/pdf"],
+  doc:["application/msword","application/octet-stream"],
+  docx:["application/vnd.openxmlformats-officedocument.wordprocessingml.document","application/zip","application/octet-stream"],
+  xls:["application/vnd.ms-excel","application/octet-stream"],
+  xlsx:["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet","application/zip","application/octet-stream"],
+  ppt:["application/vnd.ms-powerpoint","application/octet-stream"],
+  pptx:["application/vnd.openxmlformats-officedocument.presentationml.presentation","application/zip","application/octet-stream"],
+  odt:["application/vnd.oasis.opendocument.text","application/zip","application/octet-stream"],
+  ods:["application/vnd.oasis.opendocument.spreadsheet","application/zip","application/octet-stream"],
+  txt:["text/plain","application/octet-stream"],
+  jpg:["image/jpeg"],
+  jpeg:["image/jpeg"],
+  png:["image/png"],
+  webp:["image/webp"],
+};
+
+function value(formData: FormData,key:string) {
   return String(formData.get(key) ?? "").trim();
 }
 
@@ -14,6 +39,33 @@ function revalidateDocuments() {
   revalidatePath("/dokumente");
   revalidatePath("/archiv");
   revalidatePath("/");
+}
+
+function extension(name:string) {
+  const pos=name.lastIndexOf(".");
+  return pos>=0 ? name.slice(pos+1).toLowerCase() : "";
+}
+
+function sanitizeFilename(name:string) {
+  const cleaned=name
+    .normalize("NFKD")
+    .replace(/[^\w.\-]+/g,"-")
+    .replace(/-+/g,"-")
+    .replace(/^-|-$/g,"");
+  return cleaned.slice(0,120) || "dokument";
+}
+
+function validateUpload(file:File) {
+  if (file.size<=0) return "empty";
+  if (file.size>MAX_FILE_SIZE) return "size";
+
+  const ext=extension(file.name);
+  const allowed=allowedUploads[ext];
+  if (!allowed) return "type";
+
+  const mime=(file.type || "application/octet-stream").toLowerCase();
+  if (!allowed.includes(mime)) return "type";
+  return null;
 }
 
 export async function createDocumentAction(formData: FormData) {
@@ -34,7 +86,11 @@ export async function createDocumentAction(formData: FormData) {
   const financeEntryId=value(formData,"financeEntryId");
   const sponsorId=value(formData,"sponsorId");
 
+  const rawFile=formData.get("file");
+  const file=rawFile instanceof File && rawFile.size>0 ? rawFile : null;
+
   if (!title || !category) redirect("/dokumente?error=missing");
+  if (file && storageRef) redirect("/dokumente?error=source");
 
   if (storageRef) {
     try {
@@ -47,32 +103,85 @@ export async function createDocumentAction(formData: FormData) {
     }
   }
 
-  const rows=await sql`
-    INSERT INTO documents (
-      title,category,storage_type,storage_ref,status,
-      document_date,valid_until,review_on,notes,
-      meeting_id,resolution_id,member_id,finance_entry_id,sponsor_id
-    )
-    VALUES (
-      ${title},${category},'link',${storageRef || null},'active',
-      ${documentDate || null}::date,${validUntil || null}::date,${reviewOn || null}::date,${notes || null},
-      ${meetingId || null}::uuid,${resolutionId || null}::uuid,${memberId || null}::uuid,
-      ${financeEntryId || null}::uuid,${sponsorId || null}::uuid
-    )
-    RETURNING id::text
-  `;
+  let storageType=storageRef ? "link" : "record";
+  let storedRef:string | null=storageRef || null;
+  let mimeType:string | null=null;
+  let originalFilename:string | null=null;
+  let fileSizeBytes:number | null=null;
+  let checksumSha256:string | null=null;
+  let uploadedObjectKey:string | null=null;
 
-  const id=String(rows[0]?.id ?? "");
-  await writeAudit(actor.id,"document.created","document",id,{
-    title,category,
-    linkedMeeting:Boolean(meetingId),
-    linkedResolution:Boolean(resolutionId),
-    linkedMember:Boolean(memberId),
-    linkedSponsor:Boolean(sponsorId),
-  });
+  if (file) {
+    const uploadError=validateUpload(file);
+    if (uploadError) redirect(`/dokumente?error=${uploadError}`);
+    if (!isDocumentStorageConfigured()) redirect("/dokumente?error=storage");
+
+    const bytes=new Uint8Array(await file.arrayBuffer());
+    const safeName=sanitizeFilename(file.name);
+    const now=new Date();
+    const year=now.getUTCFullYear();
+    const month=String(now.getUTCMonth()+1).padStart(2,"0");
+    uploadedObjectKey=`documents/${year}/${month}/${randomUUID()}-${safeName}`;
+
+    try {
+      await uploadDocumentObject({
+        key:uploadedObjectKey,
+        body:bytes,
+        contentType:file.type || "application/octet-stream",
+      });
+    } catch {
+      redirect("/dokumente?error=upload");
+    }
+
+    storageType="upload";
+    storedRef=uploadedObjectKey;
+    mimeType=file.type || "application/octet-stream";
+    originalFilename=file.name;
+    fileSizeBytes=file.size;
+    checksumSha256=createHash("sha256").update(bytes).digest("hex");
+  }
+
+  try {
+    const rows=await sql`
+      INSERT INTO documents (
+        title,category,storage_type,storage_ref,mime_type,status,
+        document_date,valid_until,review_on,notes,
+        meeting_id,resolution_id,member_id,finance_entry_id,sponsor_id,
+        original_filename,file_size_bytes,uploaded_by,uploaded_at,checksum_sha256
+      )
+      VALUES (
+        ${title},${category},${storageType},${storedRef},${mimeType},'active',
+        ${documentDate || null}::date,${validUntil || null}::date,${reviewOn || null}::date,${notes || null},
+        ${meetingId || null}::uuid,${resolutionId || null}::uuid,${memberId || null}::uuid,
+        ${financeEntryId || null}::uuid,${sponsorId || null}::uuid,
+        ${originalFilename},${fileSizeBytes},${file ? actor.id : null}::uuid,
+        CASE WHEN ${Boolean(file)} THEN now() ELSE NULL END,
+        ${checksumSha256}
+      )
+      RETURNING id::text
+    `;
+
+    const id=String(rows[0]?.id ?? "");
+    await writeAudit(actor.id,"document.created","document",id,{
+      title,
+      category,
+      storageType,
+      originalFilename,
+      fileSizeBytes,
+      linkedMeeting:Boolean(meetingId),
+      linkedResolution:Boolean(resolutionId),
+      linkedMember:Boolean(memberId),
+      linkedSponsor:Boolean(sponsorId),
+    });
+  } catch (error) {
+    if (uploadedObjectKey) {
+      try { await deleteDocumentObject(uploadedObjectKey); } catch {}
+    }
+    throw error;
+  }
 
   revalidateDocuments();
-  redirect("/dokumente?created=1");
+  redirect(file ? "/dokumente?uploaded=1" : "/dokumente?created=1");
 }
 
 export async function updateDocumentStatusAction(formData: FormData) {
