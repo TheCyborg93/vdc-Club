@@ -32,6 +32,7 @@ export async function saveTrainingAttendanceAction(formData: FormData) {
     SELECT id::text,scheduled_at,status,event_id::text
     FROM training_sessions
     WHERE id=${sessionId}::uuid
+      AND deleted_at IS NULL
     LIMIT 1
   `;
   const session=sessionRows[0];
@@ -81,6 +82,7 @@ export async function saveTrainingAttendanceAction(formData: FormData) {
       attendance_recorded_at=now(),
       completed_at=COALESCE(completed_at,now())
     WHERE id=${sessionId}::uuid
+      AND deleted_at IS NULL
   `;
 
   if (session.event_id) {
@@ -277,6 +279,7 @@ export async function createTrainingPauseAction(formData: FormData) {
       attendance_recorded_at=NULL,
       completed_at=NULL
     WHERE source='schedule'
+      AND deleted_at IS NULL
       AND (scheduled_at AT TIME ZONE 'Europe/Berlin')::date
           BETWEEN ${startsOn}::date AND ${endsOn}::date
       AND scheduled_at>=now()
@@ -290,6 +293,7 @@ export async function createTrainingPauseAction(formData: FormData) {
       updated_at=now()
     FROM training_sessions s
     WHERE s.event_id=e.id
+      AND s.deleted_at IS NULL
       AND s.notes LIKE ${"pause:" + pauseId + "|%"}
   `;
 
@@ -322,6 +326,7 @@ export async function deleteTrainingPauseAction(formData: FormData) {
     UPDATE training_sessions
     SET status='planned',notes=NULL
     WHERE source='schedule'
+      AND deleted_at IS NULL
       AND notes LIKE ${"pause:" + pauseId + "|%"}
   `;
 
@@ -333,6 +338,7 @@ export async function deleteTrainingPauseAction(formData: FormData) {
       updated_at=now()
     FROM training_sessions s
     WHERE s.event_id=e.id
+      AND s.deleted_at IS NULL
       AND s.source='schedule'
       AND (s.scheduled_at AT TIME ZONE 'Europe/Berlin')::date
           BETWEEN ${String(pause.starts_on)}::date AND ${String(pause.ends_on)}::date
