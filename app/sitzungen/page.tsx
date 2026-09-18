@@ -6,6 +6,7 @@ import { createMeetingAction } from "@/app/sitzungen/actions";
 const errors: Record<string, string> = {
   database: "Die Datenbankverbindung fehlt.",
   missing: "Titel und Startzeit sind erforderlich.",
+  protected_delete: "Diese Sitzung enthält bereits Beschlüsse oder Dokumente bzw. ist abgeschlossen und kann nicht gelöscht werden.",
 };
 
 export const dynamic = "force-dynamic";
@@ -28,7 +29,7 @@ function formatDateTime(value: unknown) {
 export default async function MeetingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; created?: string }>;
+  searchParams: Promise<{ error?: string; created?: string; deleted?: string }>;
 }) {
   const actor = await requirePermission("meetings.read");
   const sql = getDb();
@@ -50,6 +51,7 @@ export default async function MeetingsPage({
           LEFT JOIN agenda_items ai ON ai.meeting_id = m.id
           LEFT JOIN resolutions r ON r.meeting_id = m.id
           LEFT JOIN meeting_attendees ma ON ma.meeting_id = m.id
+          WHERE m.deleted_at IS NULL
           GROUP BY m.id
           ORDER BY
             CASE WHEN m.status IN ('planned','running') THEN 0 ELSE 1 END,
@@ -59,9 +61,16 @@ export default async function MeetingsPage({
           SELECT
             count(*) FILTER (WHERE status = 'planned' AND starts_at >= now())::int AS planned,
             count(*) FILTER (WHERE EXTRACT(YEAR FROM starts_at) = EXTRACT(YEAR FROM CURRENT_DATE))::int AS year_count,
-            (SELECT count(*)::int FROM agenda_items WHERE status IN ('open','active')) AS open_agenda,
+            (
+              SELECT count(*)::int
+              FROM agenda_items ai
+              JOIN meetings mx ON mx.id=ai.meeting_id
+              WHERE ai.status IN ('open','active')
+                AND mx.deleted_at IS NULL
+            ) AS open_agenda,
             (SELECT count(*)::int FROM resolutions WHERE EXTRACT(YEAR FROM decided_at) = EXTRACT(YEAR FROM CURRENT_DATE)) AS resolutions
           FROM meetings
+          WHERE deleted_at IS NULL
         `,
       ])
     : [[], [{ planned: 0, year_count: 0, open_agenda: 0, resolutions: 0 }]];
@@ -81,6 +90,7 @@ export default async function MeetingsPage({
 
       {params.error && <div className="form-error">{errors[params.error] ?? "Die Aktion konnte nicht ausgeführt werden."}</div>}
       {params.created && <div className="form-success">Sitzung wurde angelegt.</div>}
+      {params.deleted && <div className="form-success">Sitzung wurde in den Papierkorb verschoben.</div>}
 
       <section className="stat-grid">
         <article className="stat-card"><span>Geplant</span><strong>{Number(count.planned ?? 0)}</strong><small>kommende Sitzungen</small></article>
