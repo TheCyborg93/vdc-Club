@@ -4,9 +4,11 @@ import { getDb } from "@/lib/db";
 import { hasPermission, requirePermission } from "@/lib/permissions";
 import {
   createMemberAccountAction,
+  deleteUnusedMemberAction,
   updateMemberAction,
   updateMemberRolesAction,
 } from "@/app/mitglieder/actions";
+import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 
 const roleLabels: Record<string, string> = {
   admin: "Administrator",
@@ -45,6 +47,7 @@ const errors: Record<string, string> = {
   account: "Für den Zugang werden E-Mail und ein Passwort mit mindestens 12 Zeichen benötigt.",
   account_exists: "Für dieses Mitglied oder diese E-Mail existiert bereits ein Benutzerzugang.",
   last_admin: "Der letzte aktive Administrator kann seine Adminrolle nicht verlieren.",
+  member_delete: "Dieses Mitglied besitzt bereits Vereins-, Login-, Finanz-, Team-, Sitzungs- oder Trainingshistorie. Setze es stattdessen auf Inaktiv.",
 };
 
 export const dynamic = "force-dynamic";
@@ -397,6 +400,23 @@ export default async function MemberDetailPage({
           </div>
         </article>
       </section>
+
+      {canManageAccounts && (
+        <article className="panel destructive-zone">
+          <span className="eyebrow">Gefahrenbereich</span>
+          <h2>Fehleingabe endgültig löschen</h2>
+          <p>Nur ein vollständig unbenutztes Mitglied ohne Login, Mannschaft, Beiträge, Finanzen, Sitzungen, Aufgaben, Dokumente, Training oder Importverknüpfung kann gelöscht werden. Für echte Austritte den Mitgliedsstatus verwenden.</p>
+          <form action={deleteUnusedMemberAction}>
+            <input type="hidden" name="id" value={id} />
+            <ConfirmSubmitButton
+              message={"Mitglied „"+String(member.first_name)+" "+String(member.last_name)+"“ endgültig löschen? Das funktioniert nur, wenn keinerlei Vereinshistorie existiert."}
+              requireText="LÖSCHEN"
+            >
+              Unbenutztes Mitglied endgültig löschen
+            </ConfirmSubmitButton>
+          </form>
+        </article>
+      )}
     </div>
   );
 }
