@@ -61,7 +61,15 @@ const emptyData: DashboardData = {
   alerts: [],
 };
 
-export async function getDashboardData(): Promise<DashboardData> {
+function severityRank(value: string) {
+  if (value === "critical") return 0;
+  if (value === "warning") return 1;
+  return 2;
+}
+
+export async function getDashboardData(
+  options: { includeSystem?: boolean } = {},
+): Promise<DashboardData> {
   const sql = getDb();
   if (!sql) return emptyData;
 
@@ -74,8 +82,7 @@ export async function getDashboardData(): Promise<DashboardData> {
       activity,
       tasks,
       events,
-      integrations,
-      alerts,
+      businessAlerts,
     ] = await Promise.all([
       sql`SELECT count(*)::int AS count FROM members WHERE status = 'active'`,
       sql`SELECT count(*)::int AS count FROM teams WHERE status = 'active'`,
@@ -118,17 +125,7 @@ export async function getDashboardData(): Promise<DashboardData> {
         LIMIT 5
       `,
       sql`
-        SELECT integration_key,display_name,status,last_sync_at
-        FROM integration_connections
-        ORDER BY
-          CASE integration_key
-            WHEN 'vdc_tc' THEN 0
-            WHEN 'vdc_turnier' THEN 1
-            ELSE 2
-          END
-      `,
-      sql`
-        SELECT kind,title,detail,href,severity
+        SELECT kind,title,detail,href,severity,sort_date
         FROM (
           SELECT
             'fee'::text AS kind,
@@ -211,18 +208,6 @@ export async function getDashboardData(): Promise<DashboardData> {
           WHERE d.status='active'
             AND d.valid_until IS NOT NULL
             AND d.valid_until <= CURRENT_DATE + interval '30 days'
-
-          UNION ALL
-
-          SELECT
-            'integration',
-            display_name || ': Integration gestört',
-            COALESCE(last_error,'Status: ' || status),
-            '/einstellungen',
-            'critical',
-            COALESCE(last_sync_at,updated_at)
-          FROM integration_connections
-          WHERE status='error'
         ) warnings
         ORDER BY
           CASE severity WHEN 'critical' THEN 0 WHEN 'warning' THEN 1 ELSE 2 END,
@@ -230,6 +215,41 @@ export async function getDashboardData(): Promise<DashboardData> {
         LIMIT 8
       `,
     ]);
+
+    const integrations = options.includeSystem
+      ? await sql`
+          SELECT integration_key,display_name,status,last_sync_at
+          FROM integration_connections
+          ORDER BY
+            CASE integration_key
+              WHEN 'vdc_tc' THEN 0
+              WHEN 'vdc_turnier' THEN 1
+              ELSE 2
+            END
+        `
+      : [];
+
+    const systemAlerts = options.includeSystem
+      ? await sql`
+          SELECT
+            'integration'::text AS kind,
+            display_name || ': Integration gestört' AS title,
+            COALESCE(last_error,'Status: ' || status) AS detail,
+            '/admin/integrationen'::text AS href,
+            'critical'::text AS severity,
+            COALESCE(last_sync_at,updated_at) AS sort_date
+          FROM integration_connections
+          WHERE status='error'
+        `
+      : [];
+
+    const mergedAlerts = [...businessAlerts, ...systemAlerts]
+      .sort((a, b) => {
+        const severityDiff = severityRank(String(a.severity)) - severityRank(String(b.severity));
+        if (severityDiff !== 0) return severityDiff;
+        return new Date(String(a.sort_date ?? 0)).getTime() - new Date(String(b.sort_date ?? 0)).getTime();
+      })
+      .slice(0, 8);
 
     const activityRow = activity[0] ?? {};
 
@@ -262,7 +282,7 @@ export async function getDashboardData(): Promise<DashboardData> {
         status: String(row.status),
         lastSyncAt: row.last_sync_at ? String(row.last_sync_at) : null,
       })),
-      alerts: alerts.map((row) => ({
+      alerts: mergedAlerts.map((row) => ({
         kind: String(row.kind),
         title: String(row.title),
         detail: String(row.detail),
