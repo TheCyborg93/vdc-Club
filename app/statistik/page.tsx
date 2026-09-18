@@ -30,7 +30,7 @@ export default async function StatisticsPage() {
         sql`
           SELECT
             (SELECT count(*) FROM members WHERE status='active')::int AS members,
-            (SELECT count(*) FROM teams WHERE status='active')::int AS teams,
+            (SELECT count(*) FROM teams WHERE status='active' AND deleted_at IS NULL)::int AS teams,
             (SELECT count(*) FROM club_events
              WHERE deleted_at IS NULL
                AND source='vdc_turnier'
@@ -49,6 +49,7 @@ export default async function StatisticsPage() {
           FROM teams t
           LEFT JOIN team_members tm ON tm.team_id=t.id
           WHERE t.status='active'
+            AND t.deleted_at IS NULL
           GROUP BY t.id
           ORDER BY CASE t.team_type WHEN 'first' THEN 0 WHEN 'second' THEN 1 ELSE 2 END,t.name
         `,
