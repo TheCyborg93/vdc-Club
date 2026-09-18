@@ -2213,3 +2213,447 @@ body{
   .training-state-buttons{grid-template-columns:1fr}
   .training-month-grid{grid-template-columns:repeat(2,1fr)}
 }
+
+
+/* ---- Training report ------------------------------------- */
+.training-heading-actions{
+  display:flex;
+  gap:8px;
+  align-items:center;
+  flex-wrap:wrap;
+}
+
+.training-report-heading{
+  display:flex;
+  justify-content:space-between;
+  gap:18px;
+  align-items:flex-start;
+}
+
+.training-report-actions{
+  display:flex;
+  gap:8px;
+  align-items:flex-end;
+  flex-wrap:wrap;
+}
+
+.training-report-actions form{
+  display:flex;
+  gap:6px;
+  align-items:flex-end;
+}
+
+.training-report-actions label{
+  display:grid;
+  gap:4px;
+  color:#777378;
+  font-size:8px;
+  font-weight:800;
+}
+
+.training-report-actions select{
+  min-width:90px;
+  padding:7px 9px;
+  border:1px solid rgba(255,255,255,.10);
+  border-radius:8px;
+  background:#17171b;
+  color:#f0ece7;
+  font-size:9px;
+}
+
+.training-report-meta{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:8px;
+}
+
+.training-report-meta>div{
+  padding:10px 12px;
+  border:1px solid rgba(255,255,255,.075);
+  border-radius:9px;
+  background:#18181c;
+}
+
+.training-report-meta span,
+.training-report-meta strong{display:block}
+
+.training-report-meta span{
+  color:#777378;
+  font-size:8px;
+}
+
+.training-report-meta strong{
+  margin-top:4px;
+  color:#e8e4de;
+  font-size:10px;
+}
+
+.training-report-split{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:12px;
+}
+
+.training-report-weekdays{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px;
+}
+
+.training-report-weekdays>div{
+  padding:14px;
+  border:1px solid rgba(255,255,255,.075);
+  border-radius:9px;
+  background:#18181c;
+}
+
+.training-report-weekdays span,
+.training-report-weekdays strong{display:block}
+
+.training-report-weekdays span{
+  color:#777378;
+  font-size:8px;
+}
+
+.training-report-weekdays strong{
+  margin-top:5px;
+  color:#f0ece7;
+  font-size:18px;
+}
+
+.training-report-seasons{
+  display:grid;
+  gap:7px;
+}
+
+.training-report-seasons>div{
+  padding:10px 0;
+  border-top:1px solid rgba(255,255,255,.07);
+}
+
+.training-report-seasons>div:first-child{border-top:0}
+
+.training-report-seasons strong,
+.training-report-seasons span{display:block}
+
+.training-report-seasons strong{font-size:10px}
+.training-report-seasons span{
+  margin-top:3px;
+  color:#777378;
+  font-size:8px;
+}
+
+.training-report-note{
+  margin:-2px 0 12px!important;
+  color:#777378!important;
+  font-size:8px!important;
+}
+
+.training-team-comparison{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:10px;
+}
+
+.training-team-card{
+  padding:13px;
+  border:1px solid rgba(255,255,255,.08);
+  border-radius:11px;
+  background:#18181c;
+}
+
+.training-team-head{
+  display:flex;
+  justify-content:space-between;
+  gap:12px;
+  align-items:flex-start;
+}
+
+.training-team-head strong,
+.training-team-head span{display:block}
+
+.training-team-head strong{font-size:12px}
+.training-team-head span{
+  margin-top:3px;
+  color:#777378;
+  font-size:8px;
+}
+
+.training-team-head>b{
+  color:#e87762;
+  font-size:19px;
+}
+
+.training-team-metrics{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:6px;
+  margin-top:12px;
+}
+
+.training-team-metrics>div{
+  padding:8px;
+  border-radius:8px;
+  background:#222226;
+}
+
+.training-team-metrics span,
+.training-team-metrics strong{display:block}
+
+.training-team-metrics span{
+  color:#777378;
+  font-size:7px;
+}
+
+.training-team-metrics strong{
+  margin-top:3px;
+  color:#e7e3dd;
+  font-size:10px;
+}
+
+.training-team-rate{
+  height:6px;
+  margin-top:11px;
+  overflow:hidden;
+  border-radius:99px;
+  background:#2a2a2e;
+}
+
+.training-team-rate i{
+  display:block;
+  height:100%;
+  border-radius:inherit;
+  background:linear-gradient(90deg,#9e2819,#dd4931);
+}
+
+.training-report-months{
+  display:grid;
+  gap:7px;
+}
+
+.training-report-month{
+  display:grid;
+  grid-template-columns:minmax(150px,1fr) 70px minmax(160px,2fr);
+  gap:10px;
+  align-items:center;
+  padding:9px 0;
+  border-top:1px solid rgba(255,255,255,.07);
+}
+
+.training-report-month:first-child{border-top:0}
+
+.training-report-month strong,
+.training-report-month span{display:block}
+
+.training-report-month strong{font-size:9px}
+.training-report-month span{
+  margin-top:3px;
+  color:#777378;
+  font-size:7px;
+}
+
+.training-report-month>b{
+  color:#e4dfd8;
+  font-size:10px;
+  text-align:right;
+}
+
+.training-report-month-track{
+  height:6px;
+  overflow:hidden;
+  border-radius:99px;
+  background:#29292d;
+}
+
+.training-report-month-track i{
+  display:block;
+  height:100%;
+  border-radius:inherit;
+  background:linear-gradient(90deg,#a82718,#df4930);
+}
+
+.training-team-month-table{
+  margin-top:14px;
+  overflow-x:auto;
+  border-top:1px solid rgba(255,255,255,.08);
+  padding-top:12px;
+}
+
+.training-team-month-head,
+.training-team-month-row{
+  display:grid;
+  grid-auto-flow:column;
+  grid-auto-columns:minmax(58px,1fr);
+  min-width:620px;
+  align-items:center;
+}
+
+.training-team-month-head{
+  color:#777378;
+  font-size:7px;
+  text-transform:uppercase;
+  letter-spacing:.06em;
+}
+
+.training-team-month-head span:first-child,
+.training-team-month-row strong{
+  position:sticky;
+  left:0;
+  z-index:1;
+  min-width:110px;
+  background:#1b1b1f;
+}
+
+.training-team-month-row{
+  padding:7px 0;
+  border-top:1px solid rgba(255,255,255,.055);
+  font-size:8px;
+}
+
+.training-team-month-row strong{font-size:8px}
+.training-team-month-row span{
+  color:#aaa5a1;
+  text-align:center;
+}
+
+.training-report-member-table{
+  overflow-x:auto;
+}
+
+.training-report-member-head,
+.training-report-member-row{
+  display:grid;
+  grid-template-columns:minmax(180px,1.5fr) minmax(120px,1fr) 80px 70px 100px;
+  gap:10px;
+  align-items:center;
+  min-width:680px;
+}
+
+.training-report-member-head{
+  padding:8px 0;
+  color:#777378;
+  font-size:7px;
+  text-transform:uppercase;
+  letter-spacing:.06em;
+}
+
+.training-report-member-row{
+  padding:9px 0;
+  border-top:1px solid rgba(255,255,255,.06);
+  color:#d9d5cf;
+}
+
+.training-report-member-row strong{font-size:9px}
+.training-report-member-row span{
+  color:#827e82;
+  font-size:8px;
+}
+
+.training-report-member-row b{
+  color:#e17560;
+  font-size:9px;
+}
+
+.training-report-footer{
+  padding:10px 0;
+  color:#777378;
+  font-size:8px;
+}
+
+.training-report-footer p{margin:0!important}
+
+@media(max-width:900px){
+  .training-report-heading{display:grid}
+  .training-report-meta{grid-template-columns:1fr}
+  .training-report-split{grid-template-columns:1fr}
+  .training-team-comparison{grid-template-columns:1fr}
+  .training-team-metrics{grid-template-columns:1fr 1fr}
+}
+
+@media(max-width:620px){
+  .training-report-actions{align-items:stretch}
+  .training-report-actions form{width:100%}
+  .training-report-actions label{flex:1}
+  .training-report-actions select{width:100%}
+  .training-report-weekdays{grid-template-columns:1fr}
+  .training-report-month{
+    grid-template-columns:1fr 60px;
+  }
+  .training-report-month-track{grid-column:1 / -1}
+}
+
+@media print{
+  .app-sidebar,
+  .topbar,
+  .drawer-backdrop,
+  .training-report-actions,
+  .back-link,
+  .mobile-nav{
+    display:none!important;
+  }
+
+  .app-main,
+  .page-content{
+    margin:0!important;
+    padding:0!important;
+    width:100%!important;
+    max-width:none!important;
+  }
+
+  body,
+  .app-shell,
+  .app-main{
+    background:#fff!important;
+    color:#111!important;
+  }
+
+  .training-report-page{
+    gap:10px!important;
+    color:#111!important;
+  }
+
+  .training-report-page .panel,
+  .training-report-page .stat-card,
+  .training-report-meta>div,
+  .training-team-card,
+  .training-report-weekdays>div{
+    background:#fff!important;
+    color:#111!important;
+    border-color:#cfcfcf!important;
+    box-shadow:none!important;
+    break-inside:avoid;
+  }
+
+  .training-report-page h1,
+  .training-report-page h2,
+  .training-report-page strong,
+  .training-report-page b{
+    color:#111!important;
+  }
+
+  .training-report-page span,
+  .training-report-page small,
+  .training-report-page p{
+    color:#555!important;
+  }
+
+  .training-report-member-row,
+  .training-report-month,
+  .training-team-month-row{
+    border-color:#ddd!important;
+  }
+
+  .training-report-member-row{
+    color:#111!important;
+    text-decoration:none!important;
+  }
+
+  .training-team-month-head span:first-child,
+  .training-team-month-row strong{
+    background:#fff!important;
+  }
+
+  .training-report-section{
+    break-inside:avoid;
+  }
+}
