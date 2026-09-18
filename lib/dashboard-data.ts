@@ -2,10 +2,12 @@ import { getDb } from "@/lib/db";
 import { ensureTrainingSchedule } from "@/lib/training";
 
 export type DashboardTask = {
+  id: string;
   title: string;
   category: string;
   dueDate: string | null;
   priority: string;
+  status: string;
 };
 
 export type DashboardEvent = {
@@ -40,6 +42,23 @@ export type DashboardTraining = {
   personalRate: number;
 };
 
+export type DashboardResolution = {
+  id: string;
+  number: string | null;
+  title: string;
+  status: string;
+  decidedAt: string;
+};
+
+export type DashboardDocumentReview = {
+  id: string;
+  title: string;
+  category: string;
+  status: string;
+  reviewOn: string | null;
+  validUntil: string | null;
+};
+
 export type DashboardRoleMetric = {
   label: string;
   value: string;
@@ -63,6 +82,8 @@ export type DashboardData = {
   alerts: DashboardAlert[];
   training: DashboardTraining | null;
   roleMetrics: DashboardRoleMetric[];
+  resolutions: DashboardResolution[];
+  reviewDocuments: DashboardDocumentReview[];
 };
 
 const emptyData: DashboardData = {
@@ -80,6 +101,8 @@ const emptyData: DashboardData = {
   alerts: [],
   training: null,
   roleMetrics: [],
+  resolutions: [],
+  reviewDocuments: [],
 };
 
 function severityRank(value: string) {
@@ -133,14 +156,14 @@ export async function getDashboardData(
         WHERE deleted_at IS NULL
       `,
       sql`
-        SELECT title, COALESCE(category, 'Allgemein') AS category, due_date, priority
+        SELECT id::text,title,COALESCE(category, 'Allgemein') AS category,due_date,priority,status
         FROM tasks
         WHERE deleted_at IS NULL
           AND status IN ('open','in_progress','blocked')
         ORDER BY
           CASE priority WHEN 'urgent' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 ELSE 4 END,
           due_date NULLS LAST
-        LIMIT 4
+        LIMIT 5
       `,
       sql`
         SELECT
@@ -578,6 +601,30 @@ export async function getDashboardData(
       `;
     }
 
+    const resolutionRows=await sql`
+      SELECT id::text,resolution_number,title,status,decided_at
+      FROM resolutions
+      ORDER BY
+        CASE status WHEN 'open' THEN 0 WHEN 'in_progress' THEN 1 WHEN 'implemented' THEN 2 ELSE 3 END,
+        decided_at DESC
+      LIMIT 3
+    `;
+
+    const reviewDocumentRows=await sql`
+      SELECT id::text,title,category,status,review_on,valid_until
+      FROM documents
+      WHERE deleted_at IS NULL
+        AND (
+          status='review'
+          OR (review_on IS NOT NULL AND review_on<=CURRENT_DATE+interval '30 days')
+          OR (valid_until IS NOT NULL AND valid_until<=CURRENT_DATE+interval '30 days')
+        )
+      ORDER BY
+        CASE WHEN status='review' THEN 0 ELSE 1 END,
+        COALESCE(review_on,valid_until,CURRENT_DATE)
+      LIMIT 3
+    `;
+
     const mergedAlerts = [...businessAlerts, ...systemAlerts]
       .sort((a, b) => {
         const severityDiff = severityRank(String(a.severity)) - severityRank(String(b.severity));
@@ -601,10 +648,12 @@ export async function getDashboardData(
       leagueEvents: Number(activityRow.league_events ?? 0),
       connectedIntegrations: integrations.filter((row) => row.status === "connected").length,
       tasks: tasks.map((row) => ({
+        id: String(row.id),
         title: String(row.title),
         category: String(row.category),
         dueDate: row.due_date ? String(row.due_date) : null,
         priority: String(row.priority),
+        status: String(row.status),
       })),
       events: events.map((row) => ({
         title: String(row.title),
@@ -646,6 +695,21 @@ export async function getDashboardData(
         tone:["warning","critical","success"].includes(String(row.tone))
           ? String(row.tone) as DashboardRoleMetric["tone"]
           : "neutral",
+      })),
+      resolutions:resolutionRows.map((row)=>({
+        id:String(row.id),
+        number:row.resolution_number ? String(row.resolution_number) : null,
+        title:String(row.title),
+        status:String(row.status),
+        decidedAt:String(row.decided_at),
+      })),
+      reviewDocuments:reviewDocumentRows.map((row)=>({
+        id:String(row.id),
+        title:String(row.title),
+        category:String(row.category),
+        status:String(row.status),
+        reviewOn:row.review_on ? String(row.review_on) : null,
+        validUntil:row.valid_until ? String(row.valid_until) : null,
       })),
     };
   } catch {
