@@ -184,7 +184,9 @@ export default async function DocumentsPage({
                 <div className="document-icon">{doc.category==="Protokoll" ? "PRO" : doc.category==="Vertrag" ? "VER" : "DOC"}</div>
                 <div className="document-main">
                   <div className="document-title-row">
-                    <strong>{String(doc.title)}</strong>
+                    <Link href={"/dokumente/"+String(doc.id)} className="document-title-link">
+                      <strong>{String(doc.title)}</strong>
+                    </Link>
                     <span className={`document-status document-${doc.status}`}>
                       {statusLabels[String(doc.status)] ?? String(doc.status)}
                     </span>
@@ -214,6 +216,7 @@ export default async function DocumentsPage({
                 </div>
 
                 <div className="document-actions">
+                  <Link href={"/dokumente/"+String(doc.id)} className="mini-button">Details</Link>
                   {doc.storage_ref && (
                     doc.storage_type==="upload"
                       ? (
