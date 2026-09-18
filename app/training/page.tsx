@@ -65,6 +65,7 @@ export default async function TrainingPage({
     pause_removed?: string;
     error?: string;
     filter?: string;
+    deleted?: string;
   }>;
 }) {
   const actor=await requirePermission("training.read");
@@ -89,7 +90,8 @@ export default async function TrainingPage({
             count(a.member_id) FILTER (WHERE a.attendance='present')::int AS present
           FROM training_sessions s
           LEFT JOIN training_attendance a ON a.session_id=s.id
-          WHERE s.scheduled_at >= now()
+          WHERE s.deleted_at IS NULL
+            AND s.scheduled_at >= now()
           GROUP BY s.id
           ORDER BY s.scheduled_at
           LIMIT 10
@@ -112,7 +114,8 @@ export default async function TrainingPage({
           FROM training_sessions s
           LEFT JOIN training_attendance a ON a.session_id=s.id
           LEFT JOIN members m ON m.id=a.member_id
-          WHERE s.scheduled_at < now()
+          WHERE s.deleted_at IS NULL
+            AND s.scheduled_at < now()
           GROUP BY s.id
           ORDER BY s.scheduled_at DESC
           LIMIT 12
@@ -150,6 +153,7 @@ export default async function TrainingPage({
           LEFT JOIN training_attendance a ON a.member_id=m.id
           LEFT JOIN training_sessions s
             ON s.id=a.session_id
+           AND s.deleted_at IS NULL
            AND s.attendance_recorded_at IS NOT NULL
            AND s.status='completed'
            AND EXTRACT(YEAR FROM s.scheduled_at AT TIME ZONE 'Europe/Berlin')
@@ -163,7 +167,8 @@ export default async function TrainingPage({
             (
               SELECT count(*)::int
               FROM training_sessions
-              WHERE attendance_recorded_at IS NOT NULL
+              WHERE deleted_at IS NULL
+                AND attendance_recorded_at IS NOT NULL
                 AND status='completed'
                 AND EXTRACT(YEAR FROM scheduled_at AT TIME ZONE 'Europe/Berlin')
                     = EXTRACT(YEAR FROM CURRENT_DATE)
@@ -176,7 +181,8 @@ export default async function TrainingPage({
                   count(a.member_id) FILTER (WHERE a.attendance='present')::numeric AS present_count
                 FROM training_sessions s
                 LEFT JOIN training_attendance a ON a.session_id=s.id
-                WHERE s.attendance_recorded_at IS NOT NULL
+                WHERE s.deleted_at IS NULL
+                  AND s.attendance_recorded_at IS NOT NULL
                   AND s.status='completed'
                   AND EXTRACT(YEAR FROM s.scheduled_at AT TIME ZONE 'Europe/Berlin')
                       = EXTRACT(YEAR FROM CURRENT_DATE)
@@ -186,14 +192,16 @@ export default async function TrainingPage({
             (
               SELECT scheduled_at
               FROM training_sessions
-              WHERE scheduled_at>=now() AND status<>'cancelled'
+              WHERE deleted_at IS NULL
+                AND scheduled_at>=now() AND status<>'cancelled'
               ORDER BY scheduled_at
               LIMIT 1
             ) AS next_training,
             (
               SELECT count(*)::int
               FROM training_sessions
-              WHERE scheduled_at<now()
+              WHERE deleted_at IS NULL
+                AND scheduled_at<now()
                 AND status<>'cancelled'
                 AND attendance_recorded_at IS NULL
             ) AS pending
@@ -210,13 +218,15 @@ export default async function TrainingPage({
               count(a.member_id) FILTER (WHERE a.attendance='present')::numeric AS present_count
             FROM training_sessions s2
             LEFT JOIN training_attendance a ON a.session_id=s2.id
-            WHERE s2.attendance_recorded_at IS NOT NULL
+            WHERE s2.deleted_at IS NULL
+              AND s2.attendance_recorded_at IS NOT NULL
               AND s2.status='completed'
               AND EXTRACT(YEAR FROM s2.scheduled_at AT TIME ZONE 'Europe/Berlin')
                   = EXTRACT(YEAR FROM CURRENT_DATE)
             GROUP BY s2.id
           ) x ON x.id=s.id
-          WHERE EXTRACT(ISODOW FROM s.scheduled_at AT TIME ZONE 'Europe/Berlin') IN (2,5)
+          WHERE s.deleted_at IS NULL
+            AND EXTRACT(ISODOW FROM s.scheduled_at AT TIME ZONE 'Europe/Berlin') IN (2,5)
           GROUP BY 1
           ORDER BY 1
         `,
@@ -232,11 +242,13 @@ export default async function TrainingPage({
               count(a.member_id) FILTER (WHERE a.attendance='present')::numeric AS present_count
             FROM training_sessions s2
             LEFT JOIN training_attendance a ON a.session_id=s2.id
-            WHERE s2.attendance_recorded_at IS NOT NULL
+            WHERE s2.deleted_at IS NULL
+              AND s2.attendance_recorded_at IS NOT NULL
               AND s2.status='completed'
             GROUP BY s2.id
           ) x ON x.id=s.id
-          WHERE s.scheduled_at >= date_trunc('month',now()) - interval '11 months'
+          WHERE s.deleted_at IS NULL
+            AND s.scheduled_at >= date_trunc('month',now()) - interval '11 months'
           GROUP BY 1
           ORDER BY 1
         `,
@@ -277,6 +289,7 @@ export default async function TrainingPage({
     duplicate_training:"Zu diesem Zeitpunkt existiert bereits ein Training.",
     pause:"Die Trainingspause konnte nicht gespeichert werden.",
     database:"Datenbank ist nicht verfügbar.",
+    protected_delete:"Dieses Training enthält Anwesenheitsdaten oder ist kein löschbares Sondertraining.",
   };
 
   return (
@@ -301,6 +314,7 @@ export default async function TrainingPage({
       {params.refreshed && <div className="form-success">Trainingskalender wurde für die nächsten 12 Monate aktualisiert.</div>}
       {params.pause && <div className="form-success">Trainingspause wurde eingetragen.</div>}
       {params.pause_removed && <div className="form-success">Trainingspause wurde aufgehoben.</div>}
+      {params.deleted && <div className="form-success">Sondertraining wurde in den Papierkorb verschoben.</div>}
 
       <section className="stat-grid">
         <article className="stat-card">
