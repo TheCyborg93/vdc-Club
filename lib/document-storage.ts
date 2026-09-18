@@ -1,4 +1,5 @@
 import {
+  DeleteObjectCommand,
   GetObjectCommand,
   PutObjectCommand,
   S3Client,
@@ -53,6 +54,14 @@ export async function uploadDocumentObject({
 export async function getDocumentObject(key:string) {
   const client=getClient();
   return client.send(new GetObjectCommand({
+    Bucket:bucket,
+    Key:key,
+  }));
+}
+
+export async function deleteDocumentObject(key:string) {
+  const client=getClient();
+  await client.send(new DeleteObjectCommand({
     Bucket:bucket,
     Key:key,
   }));
