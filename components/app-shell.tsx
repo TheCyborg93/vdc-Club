@@ -159,21 +159,6 @@ export function AppShell({
         </header>
 
         <main className="page-content">{children}</main>
-
-        <nav className="mobile-nav">
-          {visibleNavigation.slice(0, 5).map((item) => {
-            const active = item.href === "/"
-              ? pathname === "/"
-              : pathname.startsWith(item.href);
-
-            return (
-              <Link key={item.href} href={item.href} className={active ? "active" : ""}>
-                <span>{item.short}</span>
-                <small>{item.label}</small>
-              </Link>
-            );
-          })}
-        </nav>
       </div>
 
       {open && (
