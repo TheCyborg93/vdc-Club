@@ -18,3 +18,10 @@ Dashboard, Mitglieder, Mannschaften, Vorstand & Rollen, Aufgaben, Kalender, Sitz
 npm install
 npm run dev
 ```
+
+
+## Papierkorb
+
+Normales Löschen verschiebt unterstützte Datensätze zunächst in den Admin-Papierkorb. Dort können Administratoren sie wiederherstellen oder nach Eingabe von `LÖSCHEN` endgültig entfernen.
+
+Unterstützt werden Aufgaben, Dokumente, manuelle Kalendertermine, geplante Sitzungen, unbenutzte Sondertrainings, Trainingspausen, unbenutzte Trainingssaisons, unbenutzte Sponsoren und vollständig leere lokale Mannschaften. Historische oder fachlich schützenswerte Daten bleiben archiviert, storniert oder deaktiviert statt hart gelöscht.
