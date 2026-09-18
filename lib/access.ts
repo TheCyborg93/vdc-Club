@@ -3,6 +3,7 @@ export type Permission =
   | "teams.read" | "teams.write"
   | "tasks.read" | "tasks.write"
   | "calendar.read" | "calendar.write"
+  | "training.read" | "training.write"
   | "meetings.read" | "meetings.write"
   | "resolutions.read" | "resolutions.write"
   | "finance.read" | "finance.write"
@@ -15,20 +16,20 @@ export const rolePermissions: Record<string, Permission[] | ["*"]> = {
   admin: ["*"],
   board: [
     "members.read", "teams.read", "tasks.read", "tasks.write",
-    "calendar.read", "meetings.read", "resolutions.read",
+    "calendar.read", "training.read", "meetings.read", "resolutions.read",
     "sponsors.read", "documents.read", "statistics.read",
   ],
   chair: [
     "members.read", "members.write", "teams.read", "teams.write",
     "tasks.read", "tasks.write", "calendar.read", "calendar.write",
-    "meetings.read", "meetings.write", "resolutions.read", "resolutions.write",
+    "training.read", "training.write", "meetings.read", "meetings.write", "resolutions.read", "resolutions.write",
     "finance.read", "sponsors.read", "sponsors.write",
     "documents.read", "documents.write", "statistics.read",
   ],
   vice_chair: [
     "members.read", "members.write", "teams.read", "teams.write",
     "tasks.read", "tasks.write", "calendar.read", "calendar.write",
-    "meetings.read", "meetings.write", "resolutions.read", "resolutions.write",
+    "training.read", "training.write", "meetings.read", "meetings.write", "resolutions.read", "resolutions.write",
     "sponsors.read", "sponsors.write",
     "documents.read", "documents.write", "statistics.read",
   ],
@@ -44,9 +45,9 @@ export const rolePermissions: Record<string, Permission[] | ["*"]> = {
   ],
   sport_director: [
     "members.read", "teams.read", "teams.write", "tasks.read", "tasks.write",
-    "calendar.read", "calendar.write", "statistics.read",
+    "calendar.read", "calendar.write", "training.read", "training.write", "statistics.read",
   ],
-  team_captain: ["members.read", "teams.read", "tasks.read", "calendar.read", "statistics.read"],
+  team_captain: ["members.read", "teams.read", "tasks.read", "calendar.read", "training.read", "statistics.read"],
   tournament_director: ["members.read", "tasks.read", "tasks.write", "calendar.read", "calendar.write", "documents.read"],
 };
 
@@ -67,6 +68,8 @@ export const permissionLabels: Record<Permission,string> = {
   "tasks.write":"Aufgaben bearbeiten",
   "calendar.read":"Kalender ansehen",
   "calendar.write":"Kalender bearbeiten",
+  "training.read":"Training ansehen",
+  "training.write":"Training & Anwesenheit verwalten",
   "meetings.read":"Sitzungen ansehen",
   "meetings.write":"Sitzungen bearbeiten",
   "resolutions.read":"Beschlüsse ansehen",
