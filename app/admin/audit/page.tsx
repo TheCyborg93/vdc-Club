@@ -34,6 +34,10 @@ const actionLabels: Record<string,string> = {
   "trash.storage_cleanup_failed":"Storage-Bereinigung fehlgeschlagen",
   "agenda.deleted":"TOP gelöscht",
   "training.attendance_reset":"Trainingsanwesenheit zurückgesetzt",
+  "team.deleted_unused":"Unbenutzte Mannschaft endgültig gelöscht",
+  "sponsor.deleted_unused":"Unbenutzten Sponsor endgültig gelöscht",
+  "member.deleted_unused":"Unbenutztes Mitglied endgültig gelöscht",
+  "training.season_deleted":"Unbenutzte Trainingssaison gelöscht",
 };
 
 function formatDateTime(value: unknown) {
