@@ -26,6 +26,7 @@ export const navigation: NavItem[] = [
 
   { href: "/mannschaften", label: "Mannschaften", short: "MA", group: "Sportbetrieb", permission: "teams.read" },
   { href: "/kalender", label: "Kalender", short: "KA", group: "Sportbetrieb", permission: "calendar.read" },
+  { href: "/training", label: "Training", short: "TR", group: "Sportbetrieb", permission: "training.read" },
   { href: "/statistik", label: "Vereinsstatistik", short: "ST", group: "Sportbetrieb", permission: "statistics.read" },
 
   { href: "/aufgaben", label: "Aufgaben", short: "AU", group: "Vorstandsarbeit", permission: "tasks.read" },
