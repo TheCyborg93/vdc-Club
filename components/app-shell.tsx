@@ -44,32 +44,54 @@ export function AppShell({
       .join("") || "VD";
   }, [user.displayName]);
 
-  const visibleNavigation = navigation.filter((item) => !item.permission || hasPermission(user.roles, item.permission));
+  const visibleNavigation = navigation.filter(
+    (item) => !item.permission || hasPermission(user.roles, item.permission),
+  );
 
   const primaryRole = user.roles.includes("admin")
     ? "Administrator"
     : roleLabels[user.roles[0] ?? ""] ?? "Vereinszugang";
 
+  const currentItem = [...visibleNavigation]
+    .sort((a, b) => b.href.length - a.href.length)
+    .find((item) => item.href === "/" ? pathname === "/" : pathname.startsWith(item.href));
+
   return (
     <div className="app-shell">
       <aside className={`sidebar ${open ? "is-open" : ""}`}>
         <div className="brand">
-          <div className="brand-mark">VDC</div>
-          <div>
-            <strong>VDC Club</strong>
-            <span>Vorstandsportal</span>
+          <div className="brand-mark" aria-hidden="true">
+            <span>VDC</span>
+            <i />
           </div>
+          <div className="brand-copy">
+            <strong>Vestischer Dart Club</strong>
+            <span>e.V. · Club Office</span>
+          </div>
+        </div>
+
+        <div className="sidebar-identity">
+          <span>Vereinszentrale</span>
+          <strong>Saison 2026/27</strong>
         </div>
 
         <nav className="nav">
           {groups.map((group) => {
             const items = visibleNavigation.filter((item) => item.group === group);
             if (!items.length) return null;
+
             return (
               <div className="nav-group" key={group}>
-                <div className="nav-group-title">{group}</div>
+                <div className="nav-group-title">
+                  <span>{group}</span>
+                  <i />
+                </div>
+
                 {items.map((item) => {
-                  const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
+                  const active = item.href === "/"
+                    ? pathname === "/"
+                    : pathname.startsWith(item.href);
+
                   return (
                     <Link
                       key={item.href}
@@ -78,7 +100,8 @@ export function AppShell({
                       onClick={() => setOpen(false)}
                     >
                       <span className="nav-icon">{item.short}</span>
-                      <span>{item.label}</span>
+                      <span className="nav-label">{item.label}</span>
+                      <span className="nav-chevron">›</span>
                     </Link>
                   );
                 })}
@@ -88,7 +111,6 @@ export function AppShell({
         </nav>
 
         <div className="sidebar-footer">
-          <div className="season-chip">Saison 2026/27</div>
           <div className="user-row">
             <div className="avatar">{initials}</div>
             <div className="user-meta">
@@ -96,24 +118,43 @@ export function AppShell({
               <span>{primaryRole}</span>
             </div>
           </div>
+
           <form action={logoutAction}>
             <button type="submit" className="logout-button">Abmelden</button>
           </form>
+
+          <div className="club-signature">VDC · MARL · 2026/27</div>
         </div>
       </aside>
 
       <div className="content-shell">
         <header className="topbar">
-          <button className="menu-button" onClick={() => setOpen((value) => !value)} aria-label="Navigation öffnen">
-            ☰
-          </button>
-          <div>
-            <span className="eyebrow">Vestischer Darts Club</span>
-            <strong>Vereinszentrale</strong>
+          <div className="topbar-left">
+            <button
+              className="menu-button"
+              onClick={() => setOpen((value) => !value)}
+              aria-label="Navigation öffnen"
+            >
+              <span />
+              <span />
+              <span />
+            </button>
+
+            <div className="topbar-title">
+              <span className="eyebrow">VDC // CLUB OFFICE</span>
+              <strong>{currentItem?.label ?? "Vereinszentrale"}</strong>
+            </div>
           </div>
+
           <div className="topbar-actions">
-            <button className="ghost-button">Suche</button>
-            <button className="primary-button">+ Neu</button>
+            <div className="system-live"><i /> LIVE</div>
+            <div className="topbar-user">
+              <div className="avatar avatar-small">{initials}</div>
+              <div>
+                <strong>{user.displayName}</strong>
+                <span>{primaryRole}</span>
+              </div>
+            </div>
           </div>
         </header>
 
@@ -121,7 +162,10 @@ export function AppShell({
 
         <nav className="mobile-nav">
           {visibleNavigation.slice(0, 5).map((item) => {
-            const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
+            const active = item.href === "/"
+              ? pathname === "/"
+              : pathname.startsWith(item.href);
+
             return (
               <Link key={item.href} href={item.href} className={active ? "active" : ""}>
                 <span>{item.short}</span>
@@ -132,7 +176,13 @@ export function AppShell({
         </nav>
       </div>
 
-      {open && <button className="sidebar-backdrop" onClick={() => setOpen(false)} aria-label="Navigation schließen" />}
+      {open && (
+        <button
+          className="sidebar-backdrop"
+          onClick={() => setOpen(false)}
+          aria-label="Navigation schließen"
+        />
+      )}
     </div>
   );
 }
