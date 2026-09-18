@@ -104,7 +104,7 @@ export default async function MemberDetailPage({
         COALESCE(string_agg(DISTINCT t.short_name, ', ') FILTER (WHERE t.id IS NOT NULL), '') AS teams
       FROM members m
       LEFT JOIN team_members tm ON tm.member_id = m.id AND tm.is_active = true
-      LEFT JOIN teams t ON t.id = tm.team_id AND t.status = 'active'
+      LEFT JOIN teams t ON t.id = tm.team_id AND t.status = 'active' AND t.deleted_at IS NULL
       WHERE m.id = ${id}::uuid
       GROUP BY m.id
       LIMIT 1
