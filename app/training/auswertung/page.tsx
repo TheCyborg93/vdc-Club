@@ -565,7 +565,7 @@ export default async function TrainingReportPage({
 
           {seasons.some((season)=>!season.is_active) && (
             <div className="training-season-activate-list">
-              <span className="eyebrow">Unbenutzte Saison entfernen</span>
+              <span className="eyebrow">Unbenutzte Saison löschen</span>
               <div>
                 {seasons.filter((season)=>!season.is_active).map((season)=>(
                   <form action={deleteTrainingSeasonAction} key={"delete-"+String(season.id)}>
