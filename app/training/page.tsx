@@ -255,7 +255,8 @@ export default async function TrainingPage({
         sql`
           SELECT id::text,starts_on,ends_on,reason
           FROM training_blackouts
-          WHERE ends_on>=CURRENT_DATE
+          WHERE deleted_at IS NULL
+            AND ends_on>=CURRENT_DATE
           ORDER BY starts_on
           LIMIT 10
         `,
