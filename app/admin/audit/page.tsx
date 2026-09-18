@@ -34,6 +34,7 @@ const actionLabels: Record<string,string> = {
   "resolution.created":"Beschluss angelegt",
   "task.status_changed":"Aufgabenstatus geändert",
   "resolution.status_changed":"Beschlussstatus geändert",
+  "resolution.implementation_updated":"Umsetzungsnotiz geändert",
   "resolution.task_created":"Folgeaufgabe zu Beschluss angelegt",
   "trash.moved":"In Papierkorb verschoben",
   "trash.restored":"Aus Papierkorb wiederhergestellt",
