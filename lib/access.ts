@@ -11,7 +11,7 @@ export type Permission =
   | "statistics.read"
   | "settings.manage";
 
-const rolePermissions: Record<string, Permission[] | ["*"]> = {
+export const rolePermissions: Record<string, Permission[] | ["*"]> = {
   admin: ["*"],
   board: [
     "members.read", "teams.read", "tasks.read", "tasks.write",
@@ -55,4 +55,32 @@ export function hasPermission(roles: string[], permission: Permission) {
     const permissions = rolePermissions[role] ?? [];
     return permissions[0] === "*" || (permissions as Permission[]).includes(permission);
   });
+}
+
+
+export const permissionLabels: Record<Permission,string> = {
+  "members.read":"Mitglieder ansehen",
+  "members.write":"Mitglieder bearbeiten",
+  "teams.read":"Mannschaften ansehen",
+  "teams.write":"Mannschaften bearbeiten",
+  "tasks.read":"Aufgaben ansehen",
+  "tasks.write":"Aufgaben bearbeiten",
+  "calendar.read":"Kalender ansehen",
+  "calendar.write":"Kalender bearbeiten",
+  "meetings.read":"Sitzungen ansehen",
+  "meetings.write":"Sitzungen bearbeiten",
+  "resolutions.read":"Beschlüsse ansehen",
+  "resolutions.write":"Beschlüsse bearbeiten",
+  "finance.read":"Finanzen ansehen",
+  "finance.write":"Finanzen bearbeiten",
+  "sponsors.read":"Sponsoren ansehen",
+  "sponsors.write":"Sponsoren bearbeiten",
+  "documents.read":"Dokumente ansehen",
+  "documents.write":"Dokumente bearbeiten",
+  "statistics.read":"Statistik ansehen",
+  "settings.manage":"Administration verwalten",
+};
+
+export function permissionsForRole(role: string) {
+  return rolePermissions[role] ?? [];
 }
