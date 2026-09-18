@@ -21,7 +21,8 @@ function formatDate(value: unknown) {
 }
 
 export default async function StatisticsPage() {
-  await requirePermission("statistics.read");
+  const actor = await requirePermission("statistics.read");
+  const isAdmin = actor.roles.includes("admin");
   const sql = getDb();
 
   const [summaryRows, teams, integrations, activityRows, tournaments, trainings] = sql
@@ -49,16 +50,18 @@ export default async function StatisticsPage() {
           GROUP BY t.id
           ORDER BY CASE t.team_type WHEN 'first' THEN 0 WHEN 'second' THEN 1 ELSE 2 END,t.name
         `,
-        sql`
-          SELECT
-            i.integration_key,i.display_name,i.status,i.last_sync_at,
-            count(l.id) FILTER (WHERE l.entity_type='player')::int AS linked_players,
-            count(l.id) FILTER (WHERE l.entity_type IN ('match','tournament','training_day'))::int AS linked_activities
-          FROM integration_connections i
-          LEFT JOIN integration_entity_links l ON l.integration_key=i.integration_key
-          GROUP BY i.integration_key,i.display_name,i.status,i.last_sync_at
-          ORDER BY CASE i.integration_key WHEN 'vdc_tc' THEN 0 WHEN 'vdc_turnier' THEN 1 ELSE 2 END
-        `,
+        isAdmin
+          ? sql`
+              SELECT
+                i.integration_key,i.display_name,i.status,i.last_sync_at,
+                count(l.id) FILTER (WHERE l.entity_type='player')::int AS linked_players,
+                count(l.id) FILTER (WHERE l.entity_type IN ('match','tournament','training_day'))::int AS linked_activities
+              FROM integration_connections i
+              LEFT JOIN integration_entity_links l ON l.integration_key=i.integration_key
+              GROUP BY i.integration_key,i.display_name,i.status,i.last_sync_at
+              ORDER BY CASE i.integration_key WHEN 'vdc_tc' THEN 0 WHEN 'vdc_turnier' THEN 1 ELSE 2 END
+            `
+          : Promise.resolve([]),
         sql`
           SELECT event_type,count(*)::int AS count
           FROM club_events
@@ -102,7 +105,7 @@ export default async function StatisticsPage() {
         <div>
           <span className="eyebrow">Auswertung</span>
           <h1>Vereinsstatistik</h1>
-          <p>Live-Auswertung aus Club, TC, Turnier und Training – mit Kadern, Aktivitäten und Datenabdeckung.</p>
+          <p>Vereinsweite Auswertung zu Kadern, Spielbetrieb, Turnieren und Training.</p>
         </div>
       </section>
 
@@ -130,28 +133,29 @@ export default async function StatisticsPage() {
           </div>
         </article>
 
-        <article className="panel">
-          <div className="panel-head"><div><span className="eyebrow">Integrationen</span><h2>Datenabdeckung Mitglieder</h2></div></div>
-          <div className="coverage-list">
-            {integrations.map((integration) => {
-              const linked = Number(integration.linked_players ?? 0);
-              const coverage = pct(linked,members);
-              return (
-                <div className="coverage-row" key={String(integration.integration_key)}>
-                  <div className="coverage-head">
-                    <div>
-                      <strong>{String(integration.display_name)}</strong>
-                      <span>{linked} von {members} Mitgliedern verknüpft</span>
+        {isAdmin && (
+          <article className="panel">
+            <div className="panel-head"><div><span className="eyebrow">Integrationen</span><h2>Datenabdeckung Mitglieder</h2></div></div>
+            <div className="coverage-list">
+              {integrations.map((integration) => {
+                const linked = Number(integration.linked_players ?? 0);
+                const coverage = pct(linked,members);
+                return (
+                  <div className="coverage-row" key={String(integration.integration_key)}>
+                    <div className="coverage-head">
+                      <div>
+                        <strong>{String(integration.display_name)}</strong>
+                        <span>{linked} von {members} Mitgliedern verknüpft</span>
+                      </div>
+                      <b>{coverage}%</b>
                     </div>
-                    <b>{coverage}%</b>
+                    <div className="coverage-track"><span style={{ width: `${coverage}%` }} /></div>
                   </div>
-                  <div className="coverage-track"><span style={{ width: `${coverage}%` }} /></div>
-                </div>
-              );
-            })}
-          </div>
-          <p className="form-hint">Training liegt aktuell bei 20/21 eindeutigen Zuordnungen. Ein abweichender Quellname wird bewusst nicht automatisch zusammengeführt.</p>
-        </article>
+                );
+              })}
+            </div>
+          </article>
+        )}
       </section>
 
       <section className="panel-grid">
@@ -170,7 +174,7 @@ export default async function StatisticsPage() {
               );
             })}
           </div>
-          <div className="statistics-footnote">TC-Ligaspiele im Club-Kalender: <strong>{Number(summary.league_matches ?? 0)}</strong></div>
+          <div className="statistics-footnote">Ligaspiele im Club-Kalender: <strong>{Number(summary.league_matches ?? 0)}</strong></div>
         </article>
 
         <article className="panel">
