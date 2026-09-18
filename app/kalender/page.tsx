@@ -4,6 +4,7 @@ import {
   createEventAction,
   deleteEventAction,
 } from "@/app/kalender/actions";
+import { ensureTrainingSchedule } from "@/lib/training";
 
 const typeLabels: Record<string, string> = {
   club: "Verein",
@@ -41,6 +42,7 @@ export default async function CalendarPage({
   searchParams: Promise<{ error?: string; created?: string; deleted?: string }>;
 }) {
   const actor = await requirePermission("calendar.read");
+  await ensureTrainingSchedule(365);
   const sql = getDb();
   const params = await searchParams;
 
@@ -56,9 +58,12 @@ export default async function CalendarPage({
             e.location,
             e.source,
             e.description,
-            m.id::text AS meeting_id
+            m.id::text AS meeting_id,
+            ts.id::text AS training_session_id,
+            ts.status AS training_status
           FROM club_events e
           LEFT JOIN meetings m ON m.event_id = e.id
+          LEFT JOIN training_sessions ts ON ts.event_id = e.id
           WHERE e.starts_at >= now() - interval '1 day'
           ORDER BY e.starts_at ASC
           LIMIT 80
@@ -70,7 +75,16 @@ export default async function CalendarPage({
                 AND starts_at < date_trunc('week', now()) + interval '7 days'
             )::int AS week,
             count(*) FILTER (WHERE event_type = 'league' AND starts_at >= now())::int AS league,
-            count(*) FILTER (WHERE event_type = 'training' AND starts_at >= now())::int AS training,
+            count(*) FILTER (
+              WHERE event_type = 'training'
+                AND starts_at >= now()
+                AND NOT EXISTS (
+                  SELECT 1
+                  FROM training_sessions ts
+                  WHERE ts.event_id=club_events.id
+                    AND ts.status='cancelled'
+                )
+            )::int AS training,
             count(*) FILTER (WHERE event_type = 'board' AND starts_at >= now())::int AS board
           FROM club_events
         `,
@@ -79,6 +93,7 @@ export default async function CalendarPage({
 
   const count = counts[0] ?? {};
   const canWrite = hasPermission(actor.roles, "calendar.write");
+  const isAdmin = actor.roles.includes("admin");
 
   return (
     <div className="page-stack">
@@ -121,12 +136,13 @@ export default async function CalendarPage({
                   <span>{formatDateTime(event.starts_at)}</span>
                   <small>
                     {event.location ? String(event.location) : "Ort offen"}
-                    {event.source !== "club" ? ` · Quelle: ${event.source}` : ""}
+                    {isAdmin && event.source !== "club" ? ` · Quelle: ${event.source}` : ""}
                   </small>
                   {event.description && <p>{String(event.description)}</p>}
                 </div>
                 <div className="calendar-event-actions">
                   {event.meeting_id && <a className="mini-button" href={`/sitzungen/${event.meeting_id}`}>Sitzung öffnen</a>}
+                  {event.training_session_id && <a className="mini-button" href={`/training/${event.training_session_id}`}>Training öffnen</a>}
                   {canWrite && event.source === "club" && !event.meeting_id && (
                     <form action={deleteEventAction}>
                       <input type="hidden" name="id" value={String(event.id)} />
