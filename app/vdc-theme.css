@@ -3209,3 +3209,85 @@ body{
   background:rgba(106,212,255,.055)!important;
   color:#96c9d8!important;
 }
+
+
+/* ---- Recycle bin & destructive actions ------------------- */
+.danger-button{
+  border-color:rgba(214,72,54,.28)!important;
+  background:rgba(214,72,54,.08)!important;
+  color:#e58170!important;
+}
+.danger-button:hover{
+  border-color:rgba(214,72,54,.48)!important;
+  background:rgba(214,72,54,.14)!important;
+  color:#fff!important;
+}
+.trash-warning-panel{
+  border-color:rgba(214,72,54,.18)!important;
+  background:
+    linear-gradient(135deg,rgba(214,72,54,.065),transparent 55%),
+    #18181c!important;
+}
+.trash-warning-panel strong{
+  display:block;
+  color:#ee8c7b;
+  font-size:10px;
+}
+.trash-warning-panel p{
+  margin:5px 0 0!important;
+  color:#857f82!important;
+  font-size:8px!important;
+  line-height:1.5;
+}
+.trash-list{display:grid}
+.trash-row{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:14px;
+  padding:12px 0;
+  border-top:1px solid rgba(255,255,255,.07);
+}
+.trash-row:first-child{border-top:0}
+.trash-row-main{
+  min-width:0;
+}
+.trash-row-main strong,
+.trash-row-main span,
+.trash-row-main small{
+  display:block;
+}
+.trash-row-main strong{
+  color:#e9e4de;
+  font-size:10px;
+}
+.trash-row-main span{
+  margin-top:3px;
+  color:#817d81;
+  font-size:8px;
+}
+.trash-row-main small{
+  margin-top:4px;
+  color:#656166;
+  font-size:7px;
+}
+.trash-row-main p{
+  margin:5px 0 0!important;
+  color:#827d81!important;
+  font-size:8px!important;
+}
+.trash-row-actions{
+  display:flex;
+  gap:6px;
+  flex-wrap:wrap;
+  justify-content:flex-end;
+}
+@media(max-width:680px){
+  .trash-row{
+    display:grid;
+    align-items:start;
+  }
+  .trash-row-actions{
+    justify-content:flex-start;
+  }
+}
