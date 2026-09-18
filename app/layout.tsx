@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { getCurrentUser } from "@/lib/auth";
 import "./globals.css";
+import "./vdc-theme.css";
 
 export const metadata: Metadata = {
   title: "VDC Club",
