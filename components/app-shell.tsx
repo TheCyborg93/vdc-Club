@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { ReactNode, useMemo, useState } from "react";
 import { logoutAction } from "@/app/auth/actions";
 import { groups, navigation } from "@/lib/navigation";
+import { hasPermission } from "@/lib/access";
 
 type ShellUser = {
   displayName: string;
@@ -43,6 +44,8 @@ export function AppShell({
       .join("") || "VD";
   }, [user.displayName]);
 
+  const visibleNavigation = navigation.filter((item) => !item.permission || hasPermission(user.roles, item.permission));
+
   const primaryRole = user.roles.includes("admin")
     ? "Administrator"
     : roleLabels[user.roles[0] ?? ""] ?? "Vereinszugang";
@@ -60,7 +63,7 @@ export function AppShell({
 
         <nav className="nav">
           {groups.map((group) => {
-            const items = navigation.filter((item) => item.group === group);
+            const items = visibleNavigation.filter((item) => item.group === group);
             if (!items.length) return null;
             return (
               <div className="nav-group" key={group}>
@@ -117,7 +120,7 @@ export function AppShell({
         <main className="page-content">{children}</main>
 
         <nav className="mobile-nav">
-          {navigation.slice(0, 5).map((item) => {
+          {visibleNavigation.slice(0, 5).map((item) => {
             const active = item.href === "/" ? pathname === "/" : pathname.startsWith(item.href);
             return (
               <Link key={item.href} href={item.href} className={active ? "active" : ""}>
