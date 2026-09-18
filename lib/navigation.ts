@@ -10,6 +10,7 @@ export type NavItem = {
 
 export const navigation: NavItem[] = [
   { href: "/", label: "Dashboard", short: "DB", group: "Übersicht" },
+  { href: "/verein", label: "Vereinsprofil", short: "VD", group: "Verein", permission: "members.read" },
   { href: "/mitglieder", label: "Mitglieder", short: "MI", group: "Verein", permission: "members.read" },
   { href: "/mannschaften", label: "Mannschaften", short: "MA", group: "Verein", permission: "teams.read" },
   { href: "/vorstand", label: "Vorstand & Rollen", short: "VR", group: "Verein", permission: "members.read" },
