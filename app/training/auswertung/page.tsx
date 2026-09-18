@@ -110,11 +110,6 @@ export default async function TrainingReportPage({
           team_session AS (
             SELECT
               r.id AS team_id,
-              r.name,
-              r.short_name,
-              r.league,
-              r.season,
-              r.roster_count,
               s.id AS session_id,
               count(a.member_id)::int AS tracked_count,
               count(a.member_id) FILTER (WHERE a.attendance='present')::int AS present_count,
@@ -127,27 +122,37 @@ export default async function TrainingReportPage({
             LEFT JOIN training_attendance a
               ON a.session_id=s.id
              AND a.member_id=tm.member_id
-            GROUP BY
-              r.id,r.name,r.short_name,r.league,r.season,r.roster_count,s.id
+            GROUP BY r.id,s.id
+          ),
+          team_agg AS (
+            SELECT
+              team_id,
+              count(session_id)::int AS trainings,
+              COALESCE(round(avg(present_count),1),0) AS avg_present,
+              COALESCE(sum(present_count),0)::int AS present_total,
+              COALESCE(sum(excused_count),0)::int AS excused_total,
+              CASE
+                WHEN sum(tracked_count)=0 THEN 0
+                ELSE round((sum(present_count)::numeric / sum(tracked_count)::numeric) * 100)::int
+              END AS attendance_rate
+            FROM team_session
+            GROUP BY team_id
           )
           SELECT
-            team_id::text AS id,
-            name,
-            short_name,
-            league,
-            season,
-            roster_count,
-            count(session_id)::int AS trainings,
-            COALESCE(round(avg(present_count),1),0) AS avg_present,
-            COALESCE(sum(present_count),0)::int AS present_total,
-            COALESCE(sum(excused_count),0)::int AS excused_total,
-            CASE
-              WHEN sum(tracked_count)=0 THEN 0
-              ELSE round((sum(present_count)::numeric / sum(tracked_count)::numeric) * 100)::int
-            END AS attendance_rate
-          FROM team_session
-          GROUP BY team_id,name,short_name,league,season,roster_count
-          ORDER BY short_name NULLS LAST,name
+            r.id::text AS id,
+            r.name,
+            r.short_name,
+            r.league,
+            r.season,
+            r.roster_count,
+            COALESCE(a.trainings,0)::int AS trainings,
+            COALESCE(a.avg_present,0) AS avg_present,
+            COALESCE(a.present_total,0)::int AS present_total,
+            COALESCE(a.excused_total,0)::int AS excused_total,
+            COALESCE(a.attendance_rate,0)::int AS attendance_rate
+          FROM roster r
+          LEFT JOIN team_agg a ON a.team_id=r.id
+          ORDER BY r.short_name NULLS LAST,r.name
         `,
         sql`
           SELECT
