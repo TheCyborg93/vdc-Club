@@ -68,6 +68,7 @@ export async function updateTeamAction(formData: FormData) {
       team_type = ${teamType || null},
       status = ${status}
     WHERE id = ${id}::uuid
+      AND deleted_at IS NULL
   `;
 
   revalidatePath("/mannschaften");
@@ -182,7 +183,7 @@ export async function removeTeamMemberAction(formData: FormData) {
 
 
 export async function deleteUnusedTeamAction(formData: FormData) {
-  const actor=await requirePermission("settings.manage");
+  const actor=await requirePermission("teams.write");
   const sql=getDb();
   if (!sql) redirect("/mannschaften?error=database");
 
@@ -197,6 +198,7 @@ export async function deleteUnusedTeamAction(formData: FormData) {
       EXISTS(SELECT 1 FROM integration_entity_links l WHERE l.local_id=t.id) AS has_integration
     FROM teams t
     WHERE t.id=${id}::uuid
+      AND t.deleted_at IS NULL
     LIMIT 1
   `;
   const team=rows[0];
@@ -212,10 +214,19 @@ export async function deleteUnusedTeamAction(formData: FormData) {
     redirect(`/mannschaften/${id}?error=team_delete`);
   }
 
-  await sql`DELETE FROM teams WHERE id=${id}::uuid`;
-  await writeAudit(actor.id,"team.deleted_unused","team",id,{name:String(team.name)});
+  await sql`
+    UPDATE teams
+    SET
+      deleted_at=now(),
+      deleted_by=${actor.id}::uuid,
+      delete_reason='Über Mannschaftsverwaltung gelöscht.'
+    WHERE id=${id}::uuid
+  `;
+
+  await writeAudit(actor.id,"trash.moved","team",id,{name:String(team.name)});
 
   revalidatePath("/mannschaften");
+  revalidatePath("/admin/papierkorb");
   revalidatePath("/");
   redirect("/mannschaften?deleted=1");
 }
