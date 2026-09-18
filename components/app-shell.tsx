@@ -11,6 +11,16 @@ type ShellUser = {
   displayName: string;
   email: string;
   roles: string[];
+  memberId: string | null;
+};
+
+type ShellNotification = {
+  key: string;
+  title: string;
+  detail: string;
+  href: string;
+  severity: "critical" | "warning" | "info";
+  read: boolean;
 };
 
 const roleLabels: Record<string, string> = {
@@ -28,12 +38,16 @@ const roleLabels: Record<string, string> = {
 export function AppShell({
   children,
   user,
+  notifications,
 }: {
   children: ReactNode;
   user: ShellUser;
+  notifications: { items: ShellNotification[]; unread: number };
 }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const [notificationsOpen,setNotificationsOpen] = useState(false);
+  const [quickOpen,setQuickOpen] = useState(false);
 
   const initials = useMemo(() => {
     return user.displayName
@@ -51,6 +65,14 @@ export function AppShell({
   const primaryRole = user.roles.includes("admin")
     ? "Administrator"
     : roleLabels[user.roles[0] ?? ""] ?? "Vereinszugang";
+
+  const quickActions = [
+    hasPermission(user.roles,"members.write") ? { href:"/mitglieder", label:"Mitglied" } : null,
+    hasPermission(user.roles,"tasks.write") ? { href:"/aufgaben", label:"Aufgabe" } : null,
+    hasPermission(user.roles,"meetings.write") ? { href:"/sitzungen", label:"Sitzung" } : null,
+    hasPermission(user.roles,"documents.write") ? { href:"/dokumente", label:"Dokument" } : null,
+    hasPermission(user.roles,"calendar.write") ? { href:"/kalender", label:"Termin" } : null,
+  ].filter((item): item is { href:string; label:string } => Boolean(item));
 
   const currentItem = [...visibleNavigation]
     .sort((a, b) => b.href.length - a.href.length)
@@ -147,6 +169,83 @@ export function AppShell({
           </div>
 
           <div className="topbar-actions">
+            <form action="/suche" method="get" className="topbar-search">
+              <input name="q" placeholder="Suchen …" aria-label="Globale Suche" />
+              <button type="submit" aria-label="Suchen">⌕</button>
+            </form>
+
+            {quickActions.length > 0 && (
+              <div className="topbar-popover-wrap">
+                <button
+                  type="button"
+                  className="quick-action-button"
+                  onClick={() => {
+                    setQuickOpen((value)=>!value);
+                    setNotificationsOpen(false);
+                  }}
+                >
+                  + Neu
+                </button>
+                {quickOpen && (
+                  <div className="topbar-popover quick-actions-popover">
+                    <span className="popover-eyebrow">Schnell anlegen</span>
+                    {quickActions.map((item)=>(
+                      <Link key={item.label} href={item.href} onClick={()=>setQuickOpen(false)}>
+                        <strong>{item.label}</strong><span>›</span>
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="topbar-popover-wrap">
+              <button
+                type="button"
+                className={`notification-button ${notifications.unread ? "has-unread" : ""}`}
+                onClick={() => {
+                  setNotificationsOpen((value)=>!value);
+                  setQuickOpen(false);
+                }}
+                aria-label="Hinweise"
+              >
+                <span>!</span>
+                {notifications.unread > 0 && <b>{notifications.unread > 99 ? "99+" : notifications.unread}</b>}
+              </button>
+
+              {notificationsOpen && (
+                <div className="topbar-popover notification-popover">
+                  <div className="notification-popover-head">
+                    <div><span className="popover-eyebrow">Persönlich</span><strong>Hinweise</strong></div>
+                    <b>{notifications.unread}</b>
+                  </div>
+
+                  <div className="notification-popover-list">
+                    {notifications.items.length===0 ? (
+                      <span className="notification-popover-empty">Keine offenen Hinweise.</span>
+                    ) : notifications.items.map((item)=>(
+                      <Link
+                        href={item.href}
+                        className={`notification-popover-row notification-${item.severity} ${item.read ? "is-read" : ""}`}
+                        key={item.key}
+                        onClick={()=>setNotificationsOpen(false)}
+                      >
+                        <i />
+                        <div>
+                          <strong>{item.title}</strong>
+                          <span>{item.detail}</span>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+
+                  <Link href="/hinweise" className="notification-popover-all" onClick={()=>setNotificationsOpen(false)}>
+                    Alle Hinweise anzeigen
+                  </Link>
+                </div>
+              )}
+            </div>
+
             {user.roles.includes("admin") && (
               <Link href="/admin" className="admin-topbar-link">ADMIN</Link>
             )}
