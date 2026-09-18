@@ -28,6 +28,10 @@ const actionLabels: Record<string,string> = {
   "task.status_changed":"Aufgabenstatus geändert",
   "resolution.status_changed":"Beschlussstatus geändert",
   "resolution.task_created":"Folgeaufgabe zu Beschluss angelegt",
+  "trash.moved":"In Papierkorb verschoben",
+  "trash.restored":"Aus Papierkorb wiederhergestellt",
+  "trash.permanently_deleted":"Endgültig gelöscht",
+  "trash.storage_cleanup_failed":"Storage-Bereinigung fehlgeschlagen",
 };
 
 function formatDateTime(value: unknown) {
