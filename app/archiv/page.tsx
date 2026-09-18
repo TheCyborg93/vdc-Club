@@ -4,6 +4,7 @@ import { hasPermission, requirePermission } from "@/lib/permissions";
 import { restoreDocumentAction } from "@/app/dokumente/actions";
 import { moveToTrashAction } from "@/app/admin/papierkorb/actions";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
+import { meetingStatusLabel,resolutionStatusLabel,sponsorStatusLabel } from "@/lib/ui-labels";
 
 export const dynamic="force-dynamic";
 
@@ -155,7 +156,7 @@ export default async function ArchivePage({
             {meetings.map((meeting)=>(
               <Link href={"/sitzungen/"+String(meeting.id)} key={String(meeting.id)}>
                 <strong>{String(meeting.title)}</strong>
-                <span>{formatDate(meeting.starts_at)} · {String(meeting.status)}</span>
+                <span>{formatDate(meeting.starts_at)} · {meetingStatusLabel(meeting.status)}</span>
               </Link>
             ))}
           </div>
@@ -175,7 +176,7 @@ export default async function ArchivePage({
                   {resolution.resolution_number ? String(resolution.resolution_number)+" · " : ""}
                   {String(resolution.title)}
                 </strong>
-                <span>{String(resolution.status)} · {formatDate(resolution.implemented_at ?? resolution.decided_at)}</span>
+                <span>{resolutionStatusLabel(resolution.status)} · {formatDate(resolution.implemented_at ?? resolution.decided_at)}</span>
               </Link>
             ))}
           </div>
@@ -205,7 +206,7 @@ export default async function ArchivePage({
                 {sponsors.length===0 ? <div className="empty-state">Keine ehemaligen Sponsoren.</div> : sponsors.map((sponsor)=>(
                   <Link href="/sponsoren" key={String(sponsor.id)}>
                     <strong>{String(sponsor.name)}</strong>
-                    <span>{String(sponsor.status)} · Vertragsende {formatDate(sponsor.contract_end)}</span>
+                    <span>{sponsorStatusLabel(sponsor.status)} · Vertragsende {formatDate(sponsor.contract_end)}</span>
                   </Link>
                 ))}
               </div>
