@@ -66,11 +66,13 @@ export default async function AdminDataQualityPage() {
           SELECT m.id::text,m.title,m.starts_at
           FROM meetings m
           WHERE m.status='completed'
+            AND m.deleted_at IS NULL
             AND NOT EXISTS (
               SELECT 1 FROM documents d
               WHERE d.meeting_id=m.id
                 AND d.category='Protokoll'
                 AND d.status<>'archived'
+                AND d.deleted_at IS NULL
             )
           ORDER BY m.starts_at DESC
           LIMIT 20
@@ -84,6 +86,7 @@ export default async function AdminDataQualityPage() {
               WHERE t.source_type='resolution'
                 AND t.source_id=r.id
                 AND t.status<>'cancelled'
+                AND t.deleted_at IS NULL
             )
           ORDER BY r.decided_at
           LIMIT 30
@@ -92,6 +95,7 @@ export default async function AdminDataQualityPage() {
           SELECT id::text,title,category,status,review_on,valid_until
           FROM documents
           WHERE status IN ('active','review')
+            AND deleted_at IS NULL
             AND (
               (review_on IS NOT NULL AND review_on<=CURRENT_DATE+interval '30 days')
               OR
@@ -103,7 +107,8 @@ export default async function AdminDataQualityPage() {
         sql`
           SELECT id::text,scheduled_at
           FROM training_sessions
-          WHERE scheduled_at<now()
+          WHERE deleted_at IS NULL
+            AND scheduled_at<now()
             AND status<>'cancelled'
             AND attendance_recorded_at IS NULL
           ORDER BY scheduled_at DESC
