@@ -34,9 +34,9 @@ export default async function StatisticsPage() {
             (SELECT count(*) FROM club_events
              WHERE source='vdc_turnier'
                AND EXTRACT(YEAR FROM starts_at AT TIME ZONE 'Europe/Berlin')=EXTRACT(YEAR FROM CURRENT_DATE))::int AS tournaments,
-            (SELECT count(*) FROM club_events
-             WHERE source='vdc_training'
-               AND EXTRACT(YEAR FROM starts_at AT TIME ZONE 'Europe/Berlin')=EXTRACT(YEAR FROM CURRENT_DATE))::int AS trainings,
+            (SELECT count(*) FROM training_sessions
+             WHERE status<>'cancelled'
+               AND EXTRACT(YEAR FROM scheduled_at AT TIME ZONE 'Europe/Berlin')=EXTRACT(YEAR FROM CURRENT_DATE))::int AS trainings,
             (SELECT count(*) FROM club_events WHERE source='vdc_tc' AND event_type='league')::int AS league_matches
         `,
         sql`
@@ -83,13 +83,20 @@ export default async function StatisticsPage() {
         `,
         sql`
           SELECT
-            e.starts_at,
-            l.metadata->>'status' AS status,
-            COALESCE((l.metadata->>'players')::int,0) AS players
-          FROM integration_entity_links l
-          JOIN club_events e ON e.id=l.local_id
-          WHERE l.integration_key='vdc_training' AND l.entity_type='training_day'
-          ORDER BY e.starts_at DESC
+            s.scheduled_at AS starts_at,
+            s.status,
+            s.attendance_recorded_at,
+            count(a.member_id) FILTER (WHERE a.attendance='present')::int AS players,
+            string_agg(
+              CASE WHEN a.attendance='present' THEN m.first_name || ' ' || m.last_name END,
+              ', ' ORDER BY m.last_name,m.first_name
+            ) FILTER (WHERE a.attendance='present') AS present_names
+          FROM training_sessions s
+          LEFT JOIN training_attendance a ON a.session_id=s.id
+          LEFT JOIN members m ON m.id=a.member_id
+          WHERE s.scheduled_at < now()
+          GROUP BY s.id
+          ORDER BY s.scheduled_at DESC
           LIMIT 12
         `,
       ])
@@ -196,8 +203,20 @@ export default async function StatisticsPage() {
           {trainings.length === 0 ? <div className="empty-state">Noch keine Trainingstage synchronisiert.</div> : trainings.map((training,index) => (
             <div key={String(training.starts_at)+index}>
               <span>{formatDate(training.starts_at)}</span>
-              <strong>{Number(training.players)} Spieler</strong>
-              <small>{training.status ? String(training.status) : "Status offen"}</small>
+              <strong>
+                {training.attendance_recorded_at
+                  ? `${Number(training.players)} anwesend`
+                  : training.status==="cancelled"
+                    ? "Abgesagt"
+                    : "Anwesenheit offen"}
+              </strong>
+              <small>
+                {training.present_names
+                  ? String(training.present_names)
+                  : training.attendance_recorded_at
+                    ? "Keine Anwesenheit"
+                    : "Noch nicht erfasst"}
+              </small>
             </div>
           ))}
         </div>
