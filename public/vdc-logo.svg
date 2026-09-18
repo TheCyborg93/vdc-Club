@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" role="img" aria-label="Vestischer Dart Club">
+  <defs>
+    <radialGradient id="board" cx="50%" cy="42%" r="60%">
+      <stop offset="0" stop-color="#252529"/>
+      <stop offset="1" stop-color="#111114"/>
+    </radialGradient>
+    <linearGradient id="red" x1="0" x2="1">
+      <stop stop-color="#ff4a2d"/>
+      <stop offset="1" stop-color="#b61e17"/>
+    </linearGradient>
+  </defs>
+  <circle cx="60" cy="60" r="56" fill="#3a3a3e" stroke="#f2eee7" stroke-width="3"/>
+  <circle cx="60" cy="60" r="47" fill="url(#board)" stroke="#d7d1c8" stroke-width="2"/>
+  <circle cx="60" cy="60" r="35" fill="none" stroke="#f2eee7" stroke-width="7" stroke-dasharray="10 7"/>
+  <circle cx="60" cy="60" r="24" fill="none" stroke="#58585d" stroke-width="7" stroke-dasharray="8 5"/>
+  <g stroke="#77777d" stroke-width="1.3" opacity=".8">
+    <path d="M60 13v94M13 60h94M27 27l66 66M93 27 27 93"/>
+  </g>
+  <path d="M37 39h46L76 73 60 92 44 73Z" fill="#18181b" stroke="#f2eee7" stroke-width="1.4"/>
+  <path d="M48 47h8l4 21 4-21h8l-8 33h-8Z" fill="#09090b"/>
+  <circle cx="60" cy="60" r="8" fill="#f2eee7"/>
+  <circle cx="60" cy="60" r="5" fill="url(#red)"/>
+  <g fill="url(#red)" stroke="#ff6a4e" stroke-width=".6">
+    <path d="m42 18 8 2 7 21-5 2-10-18Z"/>
+    <path d="m60 15 8 1 1 25h-5l-4-20Z"/>
+    <path d="m84 24 7 4-15 21-4-3 8-18Z"/>
+  </g>
+  <g fill="#f2eee7">
+    <path d="m50 42 5-1 5 18-4 2Z"/>
+    <path d="m64 41 5 0-2 20-4-1Z"/>
+    <path d="m72 47 4 2-10 14-4-3Z"/>
+  </g>
+</svg>
