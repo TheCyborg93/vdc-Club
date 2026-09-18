@@ -95,7 +95,16 @@ export async function POST(request: Request) {
           'vdc_tc',
           ${team.externalId}
         )
-        ON CONFLICT DO NOTHING
+        ON CONFLICT (external_source,external_id) WHERE external_id IS NOT NULL
+        DO UPDATE SET
+          name=EXCLUDED.name,
+          short_name=EXCLUDED.short_name,
+          league=EXCLUDED.league,
+          season=EXCLUDED.season,
+          venue=EXCLUDED.venue,
+          team_type=EXCLUDED.team_type,
+          status='active',
+          updated_at=now()
         RETURNING id::text
       `;
 
