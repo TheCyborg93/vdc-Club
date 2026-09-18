@@ -67,7 +67,6 @@ export function AppShell({
   const [open, setOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [notificationsOpen,setNotificationsOpen] = useState(false);
-  const [quickOpen,setQuickOpen] = useState(false);
 
   useEffect(()=>{
     setCollapsed(window.localStorage.getItem("vdc-sidebar-collapsed")==="1");
@@ -94,30 +93,6 @@ export function AppShell({
     ? "Administrator"
     : roleLabels[user.roles[0] ?? ""] ?? "Vereinszugang";
 
-  const quickActions = [
-    hasPermission(user.roles,"tasks.write")
-      ? { href:"/aufgaben", label:"Aufgabe", icon:"AU" }
-      : null,
-    hasPermission(user.roles,"calendar.write")
-      ? { href:"/kalender", label:"Termin", icon:"KA" }
-      : null,
-    hasPermission(user.roles,"meetings.write")
-      ? { href:"/sitzungen", label:"Sitzung", icon:"SI" }
-      : null,
-    hasPermission(user.roles,"resolutions.write")
-      ? { href:"/beschluesse", label:"Beschluss", icon:"BE" }
-      : null,
-    hasPermission(user.roles,"documents.write")
-      ? { href:"/dokumente", label:"Dokument", icon:"DO" }
-      : null,
-    hasPermission(user.roles,"training.write")
-      ? { href:"/training", label:"Training", icon:"TR" }
-      : null,
-    hasPermission(user.roles,"members.write")
-      ? { href:"/mitglieder", label:"Mitglied", icon:"MI" }
-      : null,
-  ].filter((item): item is { href:string; label:string; icon:string } => Boolean(item));
-
   const currentItem = [...visibleNavigation]
     .sort((a, b) => b.href.length - a.href.length)
     .find((item) => item.href === "/" ? pathname === "/" : pathname.startsWith(item.href));
@@ -131,7 +106,6 @@ export function AppShell({
       setCollapsed((value)=>!value);
     }
     setNotificationsOpen(false);
-    setQuickOpen(false);
   }
 
   return (
@@ -242,7 +216,6 @@ export function AppShell({
                 className={`notification-button ${notifications.unread ? "has-unread" : ""}`}
                 onClick={() => {
                   setNotificationsOpen((value)=>!value);
-                  setQuickOpen(false);
                 }}
                 aria-label="Hinweise"
               >
@@ -292,37 +265,6 @@ export function AppShell({
               )}
             </div>
 
-            {quickActions.length > 0 && (
-              <div className="topbar-popover-wrap">
-                <button
-                  type="button"
-                  className="quick-action-button"
-                  onClick={() => {
-                    setQuickOpen((value)=>!value);
-                    setNotificationsOpen(false);
-                  }}
-                >
-                  <span>＋</span> Neu
-                </button>
-                {quickOpen && (
-                  <div className="topbar-popover quick-actions-popover">
-                    <span className="popover-eyebrow">Schnell anlegen</span>
-                    <div className="quick-action-grid">
-                      {quickActions.map((item)=>(
-                        <Link
-                          key={item.label}
-                          href={item.href}
-                          onClick={()=>setQuickOpen(false)}
-                        >
-                          <span>{item.icon}</span>
-                          <strong>{item.label}</strong>
-                        </Link>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
           </div>
         </header>
 
