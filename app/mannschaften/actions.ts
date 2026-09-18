@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getDb } from "@/lib/db";
 import { requirePermission } from "@/lib/permissions";
+import { writeAudit } from "@/lib/audit";
 
 function value(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
@@ -177,4 +178,44 @@ export async function removeTeamMemberAction(formData: FormData) {
   revalidatePath("/mannschaften");
   revalidatePath(`/mannschaften/${teamId}`);
   redirect(`/mannschaften/${teamId}?removed=1`);
+}
+
+
+export async function deleteUnusedTeamAction(formData: FormData) {
+  const actor=await requirePermission("settings.manage");
+  const sql=getDb();
+  if (!sql) redirect("/mannschaften?error=database");
+
+  const id=value(formData,"id");
+  if (!id) redirect("/mannschaften?error=missing");
+
+  const rows=await sql`
+    SELECT
+      t.id::text,t.name,t.external_source,t.external_id,
+      EXISTS(SELECT 1 FROM team_members tm WHERE tm.team_id=t.id) AS has_members,
+      EXISTS(SELECT 1 FROM club_events e WHERE e.team_id=t.id) AS has_events,
+      EXISTS(SELECT 1 FROM integration_entity_links l WHERE l.local_id=t.id) AS has_integration
+    FROM teams t
+    WHERE t.id=${id}::uuid
+    LIMIT 1
+  `;
+  const team=rows[0];
+
+  if (
+    !team ||
+    team.external_source ||
+    team.external_id ||
+    team.has_members ||
+    team.has_events ||
+    team.has_integration
+  ) {
+    redirect(`/mannschaften/${id}?error=team_delete`);
+  }
+
+  await sql`DELETE FROM teams WHERE id=${id}::uuid`;
+  await writeAudit(actor.id,"team.deleted_unused","team",id,{name:String(team.name)});
+
+  revalidatePath("/mannschaften");
+  revalidatePath("/");
+  redirect("/mannschaften?deleted=1");
 }
