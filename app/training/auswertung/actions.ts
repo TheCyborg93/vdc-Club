@@ -27,7 +27,7 @@ export async function saveTrainingSeasonAction(formData: FormData) {
   }
 
   if (isActive) {
-    await sql`UPDATE training_seasons SET is_active=false WHERE is_active=true`;
+    await sql`UPDATE training_seasons SET is_active=false WHERE is_active=true AND deleted_at IS NULL`;
   }
 
   let seasonId=id;
@@ -42,6 +42,7 @@ export async function saveTrainingSeasonAction(formData: FormData) {
         notes=${notes || null},
         is_active=${isActive}
       WHERE id=${id}::uuid
+        AND deleted_at IS NULL
       RETURNING id::text
     `;
     seasonId=String(rows[0]?.id ?? id);
@@ -59,7 +60,10 @@ export async function saveTrainingSeasonAction(formData: FormData) {
         starts_on=EXCLUDED.starts_on,
         ends_on=EXCLUDED.ends_on,
         is_active=EXCLUDED.is_active,
-        notes=EXCLUDED.notes
+        notes=EXCLUDED.notes,
+        deleted_at=NULL,
+        deleted_by=NULL,
+        delete_reason=NULL
       RETURNING id::text
     `;
     seasonId=String(rows[0]?.id ?? "");
@@ -91,6 +95,7 @@ export async function activateTrainingSeasonAction(formData: FormData) {
     UPDATE training_seasons
     SET is_active=true
     WHERE id=${id}::uuid
+      AND deleted_at IS NULL
     RETURNING id::text,label
   `;
 
@@ -116,10 +121,15 @@ export async function deleteTrainingSeasonAction(formData: FormData) {
 
   const rows=await sql`
     SELECT
-      id::text,label,is_active,
-      EXISTS(SELECT 1 FROM teams t WHERE t.season=training_seasons.label) AS has_teams
-    FROM training_seasons
-    WHERE id=${id}::uuid
+      s.id::text,s.label,s.is_active,
+      EXISTS(
+        SELECT 1 FROM teams t
+        WHERE t.deleted_at IS NULL
+          AND t.season=s.label
+      ) AS has_teams
+    FROM training_seasons s
+    WHERE s.id=${id}::uuid
+      AND s.deleted_at IS NULL
     LIMIT 1
   `;
   const season=rows[0];
@@ -128,12 +138,21 @@ export async function deleteTrainingSeasonAction(formData: FormData) {
     redirect(`/training/auswertung?mode=season&season=${id}&error=season_delete`);
   }
 
-  await sql`DELETE FROM training_seasons WHERE id=${id}::uuid`;
-  await writeAudit(actor.id,"training.season_deleted","training_season",id,{
+  await sql`
+    UPDATE training_seasons
+    SET
+      deleted_at=now(),
+      deleted_by=${actor.id}::uuid,
+      delete_reason='Trainingssaison entfernt.'
+    WHERE id=${id}::uuid
+  `;
+
+  await writeAudit(actor.id,"trash.moved","training_season",id,{
     label:String(season.label),
   });
 
   revalidatePath("/training");
   revalidatePath("/training/auswertung");
+  revalidatePath("/admin/papierkorb");
   redirect("/training/auswertung?mode=season&deleted=1");
 }
