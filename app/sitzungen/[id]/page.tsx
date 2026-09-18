@@ -7,8 +7,10 @@ import {
   addAttendeeAction,
   createResolutionFromAgendaAction,
   deleteAgendaItemAction,
+  updateAgendaNotesAction,
   updateAgendaStatusAction,
   updateAttendanceAction,
+  updateMeetingDetailsAction,
   updateMeetingStatusAction,
 } from "@/app/sitzungen/actions";
 import { moveToTrashAction } from "@/app/admin/papierkorb/actions";
@@ -34,6 +36,10 @@ const errors: Record<string, string> = {
   resolution: "Für einen Beschluss werden Titel und Beschlusstext benötigt.",
   protected_delete: "Diese Sitzung kann nicht gelöscht werden, weil sie bereits abgeschlossen ist oder Beschlüsse/Dokumente enthält.",
   agenda_delete: "Dieser TOP kann nicht gelöscht werden, weil bereits ein Beschluss dazu existiert oder die Sitzung abgeschlossen ist.",
+  meeting_locked: "Diese Änderung ist im aktuellen Sitzungsstatus nicht möglich.",
+  open_agenda: "Die Sitzung kann noch nicht beendet werden. Offene oder aktive TOPs müssen zuerst erledigt oder vertagt werden.",
+  attendance_open: "Die Sitzung kann noch nicht beendet werden. Bei allen eingeladenen Personen muss die Anwesenheit geklärt sein.",
+  invalid_transition: "Dieser Statuswechsel ist nicht zulässig.",
 };
 
 export const dynamic = "force-dynamic";
@@ -53,12 +59,34 @@ function formatDateTime(value: unknown) {
   }).format(date);
 }
 
+function dateTimeLocal(value: unknown) {
+  if (!value) return "";
+  const date=new Date(String(value));
+  if (Number.isNaN(date.getTime())) return "";
+  const parts=new Intl.DateTimeFormat("en-CA",{
+    year:"numeric",month:"2-digit",day:"2-digit",
+    hour:"2-digit",minute:"2-digit",hourCycle:"h23",
+    timeZone:"Europe/Berlin",
+  }).formatToParts(date);
+  const map=Object.fromEntries(parts.map((part)=>[part.type,part.value]));
+  return `${map.year}-${map.month}-${map.day}T${map.hour}:${map.minute}`;
+}
+
 export default async function MeetingDetailPage({
   params,
   searchParams,
 }: {
   params: Promise<{ id: string }>;
-  searchParams: Promise<{ error?: string; agenda?: string; resolution?: string; created?: string; agenda_deleted?: string }>;
+  searchParams: Promise<{
+    error?: string;
+    agenda?: string;
+    resolution?: string;
+    created?: string;
+    agenda_deleted?: string;
+    notes?: string;
+    saved?: string;
+    status?: string;
+  }>;
 }) {
   const actor = await requirePermission("meetings.read");
   const sql = getDb();
@@ -136,7 +164,10 @@ export default async function MeetingDetailPage({
   const invitedIds = new Set(attendees.map((row) => String(row.member_id)));
   const availableMembers = members.filter((row) => !invitedIds.has(String(row.id)));
   const presentCount = attendees.filter((row) => row.attendance === "present").length;
+  const unresolvedAttendanceCount = attendees.filter((row) => row.attendance === "invited").length;
   const openAgendaCount = agenda.filter((row) => ["open", "active"].includes(String(row.status))).length;
+  const meetingEditable = ["planned","cancelled"].includes(String(meeting.status));
+  const meetingRunning = meeting.status === "running";
 
   return (
     <div className="page-stack">
@@ -154,20 +185,71 @@ export default async function MeetingDetailPage({
           </div>
           {canWrite && (
             <div className="meeting-status-actions">
-              {meeting.status !== "running" && meeting.status !== "completed" && (
+              {meeting.status === "planned" && (
+                <>
+                  <form action={updateMeetingStatusAction}>
+                    <input type="hidden" name="meetingId" value={id} />
+                    <input type="hidden" name="status" value="running" />
+                    <button className="primary-button">Sitzung starten</button>
+                  </form>
+                  <form action={updateMeetingStatusAction}>
+                    <input type="hidden" name="meetingId" value={id} />
+                    <input type="hidden" name="status" value="cancelled" />
+                    <button className="mini-button">Absagen</button>
+                  </form>
+                </>
+              )}
+
+              {meeting.status === "cancelled" && (
+                <form action={updateMeetingStatusAction}>
+                  <input type="hidden" name="meetingId" value={id} />
+                  <input type="hidden" name="status" value="planned" />
+                  <button className="primary-button">Wieder planen</button>
+                </form>
+              )}
+
+              {meeting.status === "running" && (
+                <>
+                  <form action={updateMeetingStatusAction}>
+                    <input type="hidden" name="meetingId" value={id} />
+                    <input type="hidden" name="status" value="completed" />
+                    <button
+                      className="light-button"
+                      disabled={openAgendaCount>0 || unresolvedAttendanceCount>0}
+                      title={
+                        openAgendaCount>0
+                          ? "Offene TOPs zuerst abschließen."
+                          : unresolvedAttendanceCount>0
+                            ? "Anwesenheit aller eingeladenen Personen klären."
+                            : undefined
+                      }
+                    >
+                      Sitzung beenden
+                    </button>
+                  </form>
+                  {(openAgendaCount>0 || unresolvedAttendanceCount>0) && (
+                    <span className="meeting-close-hint">
+                      {openAgendaCount>0 ? openAgendaCount+" TOP(s) offen" : ""}
+                      {openAgendaCount>0 && unresolvedAttendanceCount>0 ? " · " : ""}
+                      {unresolvedAttendanceCount>0 ? unresolvedAttendanceCount+" Anwesenheit(en) ungeklärt" : ""}
+                    </span>
+                  )}
+                </>
+              )}
+
+              {meeting.status === "completed" && (
                 <form action={updateMeetingStatusAction}>
                   <input type="hidden" name="meetingId" value={id} />
                   <input type="hidden" name="status" value="running" />
-                  <button className="primary-button">Sitzung starten</button>
+                  <ConfirmSubmitButton
+                    message="Sitzung wieder öffnen? Das Ende wird zurückgesetzt und die Sitzung kann weiter bearbeitet werden."
+                    className="mini-button"
+                  >
+                    Wieder öffnen
+                  </ConfirmSubmitButton>
                 </form>
               )}
-              {meeting.status === "running" && (
-                <form action={updateMeetingStatusAction}>
-                  <input type="hidden" name="meetingId" value={id} />
-                  <input type="hidden" name="status" value="completed" />
-                  <button className="light-button">Sitzung beenden</button>
-                </form>
-              )}
+
               {["planned","cancelled"].includes(String(meeting.status)) && (
                 <form action={moveToTrashAction}>
                   <input type="hidden" name="type" value="meeting" />
@@ -185,12 +267,13 @@ export default async function MeetingDetailPage({
       </section>
 
       {query.error && <div className="form-error">{errors[query.error] ?? "Die Aktion konnte nicht ausgeführt werden."}</div>}
-      {(query.agenda || query.resolution || query.created) && <div className="form-success">Sitzung wurde aktualisiert.</div>}
+      {(query.agenda || query.resolution || query.created || query.saved || query.status) && <div className="form-success">Sitzung wurde aktualisiert.</div>}
+      {query.notes && <div className="form-success">Ergebnisnotiz wurde gespeichert.</div>}
       {query.agenda_deleted && <div className="form-success">TOP wurde gelöscht.</div>}
 
       <section className="meeting-summary-grid">
         <article><span>TOPs</span><strong>{agenda.length}</strong><small>{openAgendaCount} offen</small></article>
-        <article><span>Teilnehmer</span><strong>{attendees.length}</strong><small>{presentCount} anwesend</small></article>
+        <article><span>Teilnehmer</span><strong>{attendees.length}</strong><small>{presentCount} anwesend{unresolvedAttendanceCount ? " · "+unresolvedAttendanceCount+" offen" : ""}</small></article>
         <article><span>Beschlüsse</span><strong>{agenda.filter((row) => row.resolution_id).length}</strong><small>in dieser Sitzung</small></article>
         <article><span>Status</span><strong>{String(meeting.status)}</strong><small>{meeting.ended_at ? `beendet ${formatDateTime(meeting.ended_at)}` : "laufend / geplant"}</small></article>
       </section>
@@ -219,6 +302,28 @@ export default async function MeetingDetailPage({
                     </div>
                     {item.description && <p>{String(item.description)}</p>}
 
+                    {meetingRunning && canWrite ? (
+                      <form action={updateAgendaNotesAction} className="agenda-result-form">
+                        <input type="hidden" name="meetingId" value={id} />
+                        <input type="hidden" name="agendaItemId" value={String(item.id)} />
+                        <label>
+                          Ergebnisnotiz
+                          <textarea
+                            name="notes"
+                            rows={2}
+                            defaultValue={item.notes ? String(item.notes) : ""}
+                            placeholder="Diskussion, Ergebnis oder wichtige Hinweise zum TOP …"
+                          />
+                        </label>
+                        <button className="mini-button">Notiz speichern</button>
+                      </form>
+                    ) : item.notes ? (
+                      <div className="agenda-result-note">
+                        <span>Ergebnisnotiz</span>
+                        <p>{String(item.notes)}</p>
+                      </div>
+                    ) : null}
+
                     {item.resolution_id ? (
                       <div className="resolution-inline">
                         <span className="eyebrow">Beschluss</span>
@@ -233,7 +338,7 @@ export default async function MeetingDetailPage({
                       </div>
                     ) : (
                       <>
-                        {canWrite && (
+                        {canWrite && meetingRunning && (
                           <div className="agenda-actions">
                             {item.status !== "active" && (
                               <form action={updateAgendaStatusAction}>
@@ -271,7 +376,7 @@ export default async function MeetingDetailPage({
                           </div>
                         )}
 
-                        {canResolve && (
+                        {canResolve && meetingRunning && (
                           <details className="resolution-form-wrap">
                             <summary>Beschluss zu diesem TOP erfassen</summary>
                             <form action={createResolutionFromAgendaAction} className="form-stack">
@@ -317,7 +422,7 @@ export default async function MeetingDetailPage({
             </div>
           </article>
 
-          {canWrite && (
+          {canWrite && ["planned","running"].includes(String(meeting.status)) && (
             <article className="panel">
               <div className="panel-head"><div><span className="eyebrow">Vorbereitung</span><h2>TOP hinzufügen</h2></div></div>
               <form action={addAgendaItemAction} className="form-stack">
@@ -345,7 +450,7 @@ export default async function MeetingDetailPage({
                     <strong>{String(attendee.first_name)} {String(attendee.last_name)}</strong>
                     <span>{attendanceLabels[String(attendee.attendance)] ?? String(attendee.attendance)}</span>
                   </div>
-                  {canWrite && (
+                  {canWrite && ["planned","running"].includes(String(meeting.status)) && (
                     <form action={updateAttendanceAction}>
                       <input type="hidden" name="meetingId" value={id} />
                       <input type="hidden" name="memberId" value={String(attendee.member_id)} />
@@ -362,7 +467,7 @@ export default async function MeetingDetailPage({
               ))}
             </div>
 
-            {canWrite && availableMembers.length > 0 && (
+            {canWrite && ["planned","running"].includes(String(meeting.status)) && availableMembers.length > 0 && (
               <form action={addAttendeeAction} className="form-stack attendee-add-form">
                 <input type="hidden" name="meetingId" value={id} />
                 <label>Teilnehmer hinzufügen
@@ -380,7 +485,21 @@ export default async function MeetingDetailPage({
             )}
           </article>
 
-          {meeting.notes && (
+          {canWrite && meetingEditable && (
+            <article className="panel">
+              <div className="panel-head"><div><span className="eyebrow">Sitzung</span><h2>Details bearbeiten</h2></div></div>
+              <form action={updateMeetingDetailsAction} className="form-stack">
+                <input type="hidden" name="meetingId" value={id} />
+                <label>Titel<input name="title" defaultValue={String(meeting.title)} required /></label>
+                <label>Start<input name="startsAt" type="datetime-local" defaultValue={dateTimeLocal(meeting.starts_at)} required /></label>
+                <label>Ort<input name="location" defaultValue={meeting.location ? String(meeting.location) : ""} /></label>
+                <label>Vorbereitung / Notiz<textarea name="notes" rows={3} defaultValue={meeting.notes ? String(meeting.notes) : ""} /></label>
+                <button className="mini-button">Sitzungsdaten speichern</button>
+              </form>
+            </article>
+          )}
+
+          {meeting.notes && !meetingEditable && (
             <article className="panel">
               <div className="panel-head"><div><span className="eyebrow">Vorbereitung</span><h2>Notiz</h2></div></div>
               <p>{String(meeting.notes)}</p>
