@@ -338,7 +338,7 @@ export default async function TrainingReportPage({
                 <div><span>Teilnahmen</span><strong>{Number(team.present_total ?? 0)}</strong></div>
                 <div><span>Entschuldigt</span><strong>{Number(team.excused_total ?? 0)}</strong></div>
               </div>
-              <div className="training-team-rate"><i style={{width:${pct(team.attendance_rate)}%}} /></div>
+              <div className="training-team-rate"><i style={{width:`${pct(team.attendance_rate)}%`}} /></div>
             </div>
           ))}
         </div>
@@ -358,7 +358,7 @@ export default async function TrainingReportPage({
                 </div>
                 <b>{Number(row.avg_present ?? 0).toLocaleString("de-DE")} Ø</b>
                 <div className="training-report-month-track">
-                  <i style={{width:${Math.round((Number(row.avg_present ?? 0)/maxOverall)*100)}%}} />
+                  <i style={{width:`${Math.round((Number(row.avg_present ?? 0)/maxOverall)*100)}%`}} />
                 </div>
               </div>
             ))}
@@ -400,7 +400,7 @@ export default async function TrainingReportPage({
             <span>Mitglied</span><span>Mannschaft</span><span>Besucht</span><span>Quote</span><span>Zuletzt da</span>
           </div>
           {members.map((member)=>(
-            <Link href={${/mitglieder/${member.id}}} className="training-report-member-row" key={String(member.id)}>
+            <Link href={`/mitglieder/${member.id}`} className="training-report-member-row" key={String(member.id)}>
               <strong>{String(member.first_name)} {String(member.last_name)}</strong>
               <span>{String(member.teams)}</span>
               <span>{Number(member.attended ?? 0)}/{Number(member.recorded ?? 0)}</span>
