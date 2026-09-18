@@ -319,7 +319,7 @@ export default async function MeetingDetailPage({
                     <form action={updateAttendanceAction}>
                       <input type="hidden" name="meetingId" value={id} />
                       <input type="hidden" name="memberId" value={String(attendee.member_id)} />
-                      <select name="attendance" defaultValue={String(attendee.attendance)} onChange={(undefined as never)}>
+                      <select name="attendance" defaultValue={String(attendee.attendance)}>
                         <option value="invited">Eingeladen</option>
                         <option value="present">Anwesend</option>
                         <option value="absent">Abwesend</option>
