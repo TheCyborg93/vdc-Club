@@ -17,7 +17,7 @@ export default async function AdminDataQualityPage() {
         sql`
           SELECT
             (SELECT count(*) FROM members WHERE status='active')::int AS active_members,
-            (SELECT count(*) FROM teams WHERE status='active')::int AS active_teams,
+            (SELECT count(*) FROM teams WHERE status='active' AND deleted_at IS NULL)::int AS active_teams,
             (SELECT count(*) FROM app_users WHERE status='active')::int AS active_users,
             (
               SELECT count(DISTINCT u.id)
@@ -44,7 +44,7 @@ export default async function AdminDataQualityPage() {
           WHERE m.status='active'
             AND NOT EXISTS (
               SELECT 1 FROM team_members tm
-              JOIN teams t ON t.id=tm.team_id AND t.status='active'
+              JOIN teams t ON t.id=tm.team_id AND t.status='active' AND t.deleted_at IS NULL
               WHERE tm.member_id=m.id AND tm.is_active=true
             )
           ORDER BY m.last_name,m.first_name
@@ -54,6 +54,7 @@ export default async function AdminDataQualityPage() {
           SELECT t.id::text,t.name,t.short_name
           FROM teams t
           WHERE t.status='active'
+            AND t.deleted_at IS NULL
             AND NOT EXISTS (
               SELECT 1 FROM team_members tm
               WHERE tm.team_id=t.id
