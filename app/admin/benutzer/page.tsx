@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getDb } from "@/lib/db";
+import { permissionLabels, rolePermissions, type Permission } from "@/lib/access";
 import {
   revokeAdminUserSessionsAction,
   unlockAdminUserAction,
@@ -169,6 +170,36 @@ export default async function AdminUsersPage({
           );
         })}
       </section>
+
+      <article className="panel">
+        <div className="panel-head">
+          <div><span className="eyebrow">Berechtigungen</span><h2>Rollen-Matrix</h2></div>
+        </div>
+        <div className="role-matrix">
+          {roles.map((role) => {
+            const key=String(role.key);
+            const permissions=rolePermissions[key] ?? [];
+            const all=permissions[0] === "*";
+            return (
+              <div className="role-matrix-row" key={key}>
+                <div className="role-matrix-title">
+                  <strong>{String(role.name)}</strong>
+                  <span>{role.description ? String(role.description) : key}</span>
+                </div>
+                <div className="role-matrix-permissions">
+                  {all ? (
+                    <span className="permission-chip permission-admin">Alle Berechtigungen</span>
+                  ) : (permissions as Permission[]).map((permission)=>(
+                    <span className="permission-chip" key={permission}>
+                      {permissionLabels[permission]}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </article>
 
       {membersWithoutLogin.length > 0 && (
         <article className="panel">
