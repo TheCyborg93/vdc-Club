@@ -1,0 +1,256 @@
+"use server";
+
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+import { getDb } from "@/lib/db";
+import { requirePermission } from "@/lib/permissions";
+import { hasPermission } from "@/lib/access";
+
+function value(formData: FormData, key: string) {
+  return String(formData.get(key) ?? "").trim();
+}
+
+export async function createMeetingAction(formData: FormData) {
+  await requirePermission("meetings.write");
+  const sql = getDb();
+  if (!sql) redirect("/sitzungen?error=database");
+
+  const title = value(formData, "title");
+  const startsAt = value(formData, "startsAt");
+  const location = value(formData, "location");
+  const notes = value(formData, "notes");
+
+  if (!title || !startsAt) redirect("/sitzungen?error=missing");
+
+  const rows = await sql`
+    WITH new_event AS (
+      INSERT INTO club_events (
+        title, event_type, starts_at, location, source, description
+      )
+      VALUES (
+        ${title},
+        'board',
+        (${startsAt}::timestamp AT TIME ZONE 'Europe/Berlin'),
+        ${location || null},
+        'club',
+        ${notes || null}
+      )
+      RETURNING id, title, starts_at, location
+    ),
+    new_meeting AS (
+      INSERT INTO meetings (event_id, title, starts_at, location, status, notes)
+      SELECT id, title, starts_at, location, 'planned', ${notes || null}
+      FROM new_event
+      RETURNING id
+    )
+    SELECT id::text FROM new_meeting
+  `;
+
+  const id = rows[0]?.id;
+  revalidatePath("/sitzungen");
+  revalidatePath("/kalender");
+  revalidatePath("/");
+  redirect(id ? `/sitzungen/${id}?created=1` : "/sitzungen");
+}
+
+export async function addAgendaItemAction(formData: FormData) {
+  await requirePermission("meetings.write");
+  const sql = getDb();
+  if (!sql) redirect("/sitzungen?error=database");
+
+  const meetingId = value(formData, "meetingId");
+  const title = value(formData, "title");
+  const description = value(formData, "description");
+
+  if (!meetingId || !title) redirect(`/sitzungen/${meetingId}?error=missing`);
+
+  await sql`
+    INSERT INTO agenda_items (meeting_id, position, title, description, status)
+    SELECT
+      ${meetingId}::uuid,
+      COALESCE(MAX(position), 0) + 1,
+      ${title},
+      ${description || null},
+      'open'
+    FROM agenda_items
+    WHERE meeting_id = ${meetingId}::uuid
+  `;
+
+  revalidatePath(`/sitzungen/${meetingId}`);
+  redirect(`/sitzungen/${meetingId}?agenda=1`);
+}
+
+export async function updateAgendaStatusAction(formData: FormData) {
+  await requirePermission("meetings.write");
+  const sql = getDb();
+  if (!sql) redirect("/sitzungen?error=database");
+
+  const meetingId = value(formData, "meetingId");
+  const agendaItemId = value(formData, "agendaItemId");
+  const statusRaw = value(formData, "status");
+  const status = ["open", "active", "done", "deferred"].includes(statusRaw) ? statusRaw : "open";
+
+  await sql`
+    UPDATE agenda_items
+    SET status = ${status}
+    WHERE id = ${agendaItemId}::uuid
+      AND meeting_id = ${meetingId}::uuid
+  `;
+
+  revalidatePath(`/sitzungen/${meetingId}`);
+  redirect(`/sitzungen/${meetingId}`);
+}
+
+export async function addAttendeeAction(formData: FormData) {
+  await requirePermission("meetings.write");
+  const sql = getDb();
+  if (!sql) redirect("/sitzungen?error=database");
+
+  const meetingId = value(formData, "meetingId");
+  const memberId = value(formData, "memberId");
+  if (!meetingId || !memberId) redirect(`/sitzungen/${meetingId}?error=attendee`);
+
+  await sql`
+    INSERT INTO meeting_attendees (meeting_id, member_id, attendance)
+    VALUES (${meetingId}::uuid, ${memberId}::uuid, 'invited')
+    ON CONFLICT (meeting_id, member_id) DO NOTHING
+  `;
+
+  revalidatePath(`/sitzungen/${meetingId}`);
+  redirect(`/sitzungen/${meetingId}`);
+}
+
+export async function updateAttendanceAction(formData: FormData) {
+  await requirePermission("meetings.write");
+  const sql = getDb();
+  if (!sql) redirect("/sitzungen?error=database");
+
+  const meetingId = value(formData, "meetingId");
+  const memberId = value(formData, "memberId");
+  const attendanceRaw = value(formData, "attendance");
+  const attendance = ["invited", "present", "absent", "excused"].includes(attendanceRaw)
+    ? attendanceRaw
+    : "invited";
+
+  await sql`
+    UPDATE meeting_attendees
+    SET attendance = ${attendance}
+    WHERE meeting_id = ${meetingId}::uuid
+      AND member_id = ${memberId}::uuid
+  `;
+
+  revalidatePath(`/sitzungen/${meetingId}`);
+  redirect(`/sitzungen/${meetingId}`);
+}
+
+export async function updateMeetingStatusAction(formData: FormData) {
+  await requirePermission("meetings.write");
+  const sql = getDb();
+  if (!sql) redirect("/sitzungen?error=database");
+
+  const meetingId = value(formData, "meetingId");
+  const statusRaw = value(formData, "status");
+  const status = ["planned", "running", "completed", "cancelled"].includes(statusRaw)
+    ? statusRaw
+    : "planned";
+
+  await sql`
+    UPDATE meetings
+    SET
+      status = ${status},
+      ended_at = CASE WHEN ${status} = 'completed' THEN now() ELSE ended_at END
+    WHERE id = ${meetingId}::uuid
+  `;
+
+  revalidatePath(`/sitzungen/${meetingId}`);
+  revalidatePath("/sitzungen");
+  redirect(`/sitzungen/${meetingId}`);
+}
+
+export async function createResolutionFromAgendaAction(formData: FormData) {
+  const actor = await requirePermission("resolutions.write");
+  const sql = getDb();
+  if (!sql) redirect("/sitzungen?error=database");
+
+  const meetingId = value(formData, "meetingId");
+  const agendaItemId = value(formData, "agendaItemId");
+  const title = value(formData, "title");
+  const decisionText = value(formData, "decisionText");
+  const yes = Number(value(formData, "votesYes") || "0");
+  const no = Number(value(formData, "votesNo") || "0");
+  const abstain = Number(value(formData, "votesAbstain") || "0");
+  const createTaskRequested = formData.get("createTask") === "on";
+  const createTask = createTaskRequested && hasPermission(actor.roles, "tasks.write");
+  const taskOwner = value(formData, "taskOwner");
+  const taskDueDate = value(formData, "taskDueDate");
+
+  if (!meetingId || !agendaItemId || !title || !decisionText) {
+    redirect(`/sitzungen/${meetingId}?error=resolution`);
+  }
+
+  await sql`
+    WITH counter AS (
+      INSERT INTO resolution_counters (year, last_number)
+      VALUES (EXTRACT(YEAR FROM CURRENT_DATE)::int, 1)
+      ON CONFLICT (year)
+      DO UPDATE SET last_number = resolution_counters.last_number + 1
+      RETURNING year, last_number
+    ),
+    new_resolution AS (
+      INSERT INTO resolutions (
+        meeting_id,
+        agenda_item_id,
+        title,
+        decision_text,
+        votes_yes,
+        votes_no,
+        votes_abstain,
+        status,
+        decided_at,
+        resolution_number
+      )
+      SELECT
+        ${meetingId}::uuid,
+        ${agendaItemId}::uuid,
+        ${title},
+        ${decisionText},
+        ${Number.isFinite(yes) ? yes : 0},
+        ${Number.isFinite(no) ? no : 0},
+        ${Number.isFinite(abstain) ? abstain : 0},
+        'open',
+        now(),
+        year::text || '-' || lpad(last_number::text, 3, '0')
+      FROM counter
+      RETURNING id, title
+    ),
+    new_task AS (
+      INSERT INTO tasks (
+        title, description, category, status, priority,
+        due_date, owner_member_id, source_type, source_id
+      )
+      SELECT
+        'Beschluss umsetzen: ' || title,
+        ${decisionText},
+        'Beschluss',
+        'open',
+        'medium',
+        ${taskDueDate || null}::date,
+        ${taskOwner || null}::uuid,
+        'resolution',
+        id
+      FROM new_resolution
+      WHERE ${createTask}
+      RETURNING id
+    )
+    UPDATE agenda_items
+    SET status = 'done'
+    WHERE id = ${agendaItemId}::uuid
+      AND meeting_id = ${meetingId}::uuid
+  `;
+
+  revalidatePath(`/sitzungen/${meetingId}`);
+  revalidatePath("/beschluesse");
+  revalidatePath("/aufgaben");
+  revalidatePath("/");
+  redirect(`/sitzungen/${meetingId}?resolution=1`);
+}
