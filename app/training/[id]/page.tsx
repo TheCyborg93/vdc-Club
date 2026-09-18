@@ -4,6 +4,7 @@ import { getDb } from "@/lib/db";
 import { hasPermission, requirePermission } from "@/lib/permissions";
 import {
   cancelTrainingSessionAction,
+  resetTrainingAttendanceAction,
   restoreTrainingSessionAction,
 } from "@/app/training/actions";
 import { TrainingAttendanceEditor } from "@/components/training-attendance-editor";
@@ -38,7 +39,7 @@ export default async function TrainingDetailPage({
   searchParams,
 }: {
   params: Promise<{ id:string }>;
-  searchParams: Promise<{ error?:string; saved?:string; cancelled?:string; restored?:string; created?:string }>;
+  searchParams: Promise<{ error?:string; saved?:string; cancelled?:string; restored?:string; created?:string; reset?:string }>;
 }) {
   const actor=await requirePermission("training.read");
   const sql=getDb();
@@ -123,6 +124,7 @@ export default async function TrainingDetailPage({
       {query.cancelled && <div className="form-success">Trainingstag wurde als abgesagt markiert.</div>}
       {query.restored && <div className="form-success">Trainingstag wurde wieder aktiviert.</div>}
       {query.created && <div className="form-success">Sondertraining wurde angelegt.</div>}
+      {query.reset && <div className="form-success">Trainingsanwesenheit wurde zurückgesetzt. Der Trainingstag ist wieder offen.</div>}
 
       <section className="meeting-summary-grid">
         <article><span>Anwesend</span><strong>{Number(c.present ?? 0)}</strong><small>Mitglieder</small></article>
@@ -189,6 +191,17 @@ export default async function TrainingDetailPage({
               <div><span>Status</span><strong>{statusLabels[String(session.status)] ?? String(session.status)}</strong></div>
               <div><span>Art</span><strong>{session.source==="special" ? "Sondertraining" : "Regeltraining"}</strong></div>
             </div>
+
+            {session.attendance_recorded_at && (
+              <form action={resetTrainingAttendanceAction}>
+                <input type="hidden" name="sessionId" value={id} />
+                <ConfirmSubmitButton
+                  message="Gespeicherte Anwesenheit wirklich zurücksetzen? Alle Anwesenheitswerte dieses Trainingstags werden gelöscht."
+                >
+                  Anwesenheit zurücksetzen
+                </ConfirmSubmitButton>
+              </form>
+            )}
 
             {session.status==="cancelled" ? (
               <form action={restoreTrainingSessionAction}>
