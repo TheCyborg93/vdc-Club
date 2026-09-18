@@ -5,8 +5,8 @@ import { hasPermission, requirePermission } from "@/lib/permissions";
 import {
   cancelTrainingSessionAction,
   restoreTrainingSessionAction,
-  saveTrainingAttendanceAction,
 } from "@/app/training/actions";
+import { TrainingAttendanceEditor } from "@/components/training-attendance-editor";
 
 export const dynamic = "force-dynamic";
 
@@ -36,7 +36,7 @@ export default async function TrainingDetailPage({
   searchParams,
 }: {
   params: Promise<{ id:string }>;
-  searchParams: Promise<{ error?:string; saved?:string; cancelled?:string; restored?:string }>;
+  searchParams: Promise<{ error?:string; saved?:string; cancelled?:string; restored?:string; created?:string }>;
 }) {
   const actor=await requirePermission("training.read");
   const sql=getDb();
@@ -52,6 +52,7 @@ export default async function TrainingDetailPage({
         s.id::text,
         s.scheduled_at,
         s.status,
+        s.source,
         s.notes,
         s.attendance_recorded_at,
         s.completed_at
@@ -103,7 +104,7 @@ export default async function TrainingDetailPage({
           <Link href="/training" className="back-link">← Training</Link>
           <span className="eyebrow">Trainingstag</span>
           <h1>{formatDateTime(session.scheduled_at)}</h1>
-          <p>Beginn 19:00 Uhr · Ende offen</p>
+          <p>{session.source==="special" ? "Sondertraining" : "Vereinstraining"} · Ende offen</p>
         </div>
         <div className="meeting-hero-side">
           <b className={`status-badge training-status-${session.status}`}>
@@ -117,6 +118,7 @@ export default async function TrainingDetailPage({
       {query.saved && <div className="form-success">Anwesenheit wurde gespeichert.</div>}
       {query.cancelled && <div className="form-success">Trainingstag wurde als abgesagt markiert.</div>}
       {query.restored && <div className="form-success">Trainingstag wurde wieder aktiviert.</div>}
+      {query.created && <div className="form-success">Sondertraining wurde angelegt.</div>}
 
       <section className="meeting-summary-grid">
         <article><span>Anwesend</span><strong>{Number(c.present ?? 0)}</strong><small>Mitglieder</small></article>
@@ -149,39 +151,25 @@ export default async function TrainingDetailPage({
             <div className="training-info-box">Dieser Trainingstag ist abgesagt und zählt nicht in die Aktivitätsquote.</div>
           )}
 
-          <form action={saveTrainingAttendanceAction} className="training-attendance-form">
-            <input type="hidden" name="sessionId" value={id} />
-
-            <div className="training-attendance-list">
-              {members.map((member)=>(
-                <div className="training-attendance-row" key={String(member.id)}>
-                  <div className="member-avatar">
-                    {String(member.first_name).slice(0,1)}{String(member.last_name).slice(0,1)}
-                  </div>
-                  <div>
-                    <strong>{String(member.first_name)} {String(member.last_name)}</strong>
-                    <span>{member.status==="passive" ? "Passives Mitglied" : "Aktives Mitglied"}</span>
-                  </div>
-                  <select
-                    name={`attendance_${member.id}`}
-                    defaultValue={member.attendance ? String(member.attendance) : "absent"}
-                    disabled={!editable}
-                  >
-                    <option value="present">Anwesend</option>
-                    <option value="absent">Nicht anwesend</option>
-                    <option value="excused">Entschuldigt</option>
-                  </select>
-                </div>
-              ))}
-            </div>
-
-            {editable && (
-              <div className="training-save-bar">
-                <p>Nicht auf „Anwesend“ gesetzte Mitglieder werden für diesen erfassten Trainingstag als nicht anwesend geführt.</p>
-                <button className="primary-button">Anwesenheit speichern</button>
-              </div>
-            )}
-          </form>
+          <TrainingAttendanceEditor
+            sessionId={id}
+            editable={editable}
+            initialNote={
+              session.notes && !String(session.notes).startsWith("pause:")
+                ? String(session.notes)
+                : ""
+            }
+            members={members.map((member)=>({
+              id:String(member.id),
+              firstName:String(member.first_name),
+              lastName:String(member.last_name),
+              status:String(member.status),
+              attendance:
+                member.attendance==="present" || member.attendance==="excused"
+                  ? member.attendance
+                  : "absent",
+            }))}
+          />
         </article>
 
         {canWrite && (
@@ -192,9 +180,10 @@ export default async function TrainingDetailPage({
 
             <div className="training-session-meta">
               <div><span>Termin</span><strong>{formatDateTime(session.scheduled_at)}</strong></div>
-              <div><span>Beginn</span><strong>19:00 Uhr</strong></div>
+              <div><span>Beginn</span><strong>{new Intl.DateTimeFormat("de-DE",{hour:"2-digit",minute:"2-digit",timeZone:"Europe/Berlin"}).format(new Date(String(session.scheduled_at)))} Uhr</strong></div>
               <div><span>Ende</span><strong>Offen</strong></div>
               <div><span>Status</span><strong>{statusLabels[String(session.status)] ?? String(session.status)}</strong></div>
+              <div><span>Art</span><strong>{session.source==="special" ? "Sondertraining" : "Regeltraining"}</strong></div>
             </div>
 
             {session.status==="cancelled" ? (
