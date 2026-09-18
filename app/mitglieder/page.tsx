@@ -9,6 +9,19 @@ const errors: Record<string, string> = {
   duplicate: "Mitgliedsnummer oder andere eindeutige Daten sind bereits vergeben.",
 };
 
+const statusLabels: Record<string,string> = {
+  active:"Aktiv",
+  passive:"Passiv",
+  inactive:"Inaktiv",
+};
+
+const membershipTypeLabels: Record<string,string> = {
+  regular:"Regulär",
+  youth:"Jugend",
+  honorary:"Ehrenmitglied",
+  other:"Sonstige",
+};
+
 export const dynamic = "force-dynamic";
 
 export default async function MembersPage({
@@ -22,7 +35,7 @@ export default async function MembersPage({
 
   const [members, counts] = sql
     ? await Promise.all([
-        sql`
+        sql\`
           SELECT
             m.id::text,
             m.member_number,
@@ -30,27 +43,37 @@ export default async function MembersPage({
             m.last_name,
             m.email,
             m.status,
+            m.membership_type,
             m.join_date,
+            m.notice_date,
+            m.leave_date,
             COALESCE(
-              string_agg(DISTINCT t.name, ', ') FILTER (WHERE t.id IS NOT NULL),
+              string_agg(DISTINCT t.short_name, ', ') FILTER (WHERE t.id IS NOT NULL),
               ''
             ) AS teams
           FROM members m
           LEFT JOIN team_members tm ON tm.member_id = m.id AND tm.is_active = true
           LEFT JOIN teams t ON t.id = tm.team_id AND t.status = 'active'
           GROUP BY m.id
-          ORDER BY m.last_name, m.first_name
-        `,
-        sql`
+          ORDER BY
+            CASE m.status WHEN 'active' THEN 0 WHEN 'passive' THEN 1 ELSE 2 END,
+            m.last_name, m.first_name
+        \`,
+        sql\`
           SELECT
             count(*) FILTER (WHERE status = 'active')::int AS active,
-            count(*) FILTER (WHERE join_date >= DATE '2026-07-01')::int AS new_season,
-            (SELECT count(*)::int FROM board_positions WHERE is_active = true) AS board_count,
-            (SELECT count(*)::int FROM team_members WHERE is_captain = true AND is_active = true) AS captain_count
+            count(*) FILTER (WHERE status = 'passive')::int AS passive,
+            count(*) FILTER (
+              WHERE join_date >= date_trunc('year',CURRENT_DATE)::date
+            )::int AS joined_year,
+            count(*) FILTER (
+              WHERE notice_date IS NOT NULL
+                AND (leave_date IS NULL OR leave_date >= CURRENT_DATE)
+            )::int AS notices
           FROM members
-        `,
+        \`,
       ])
-    : [[], [{ active: 0, new_season: 0, board_count: 0, captain_count: 0 }]];
+    : [[], [{ active: 0, passive: 0, joined_year: 0, notices: 0 }]];
 
   const count = counts[0] ?? {};
   const canWrite = hasPermission(user.roles, "members.write");
@@ -61,7 +84,7 @@ export default async function MembersPage({
         <div>
           <span className="eyebrow">Verein</span>
           <h1>Mitglieder</h1>
-          <p>Zentrale Mitgliederdaten, Mannschaften, Funktionen und Benutzerzugänge.</p>
+          <p>Zentrale Mitgliederdaten mit Status, Mitgliedsart, Eintritt, Kündigung und Mannschaftszuordnung.</p>
         </div>
       </section>
 
@@ -70,9 +93,9 @@ export default async function MembersPage({
 
       <section className="stat-grid">
         <article className="stat-card"><span>Aktive Mitglieder</span><strong>{Number(count.active ?? 0)}</strong><small>aktueller Bestand</small></article>
-        <article className="stat-card"><span>Neue Mitglieder</span><strong>{Number(count.new_season ?? 0)}</strong><small>Saison 2026/27</small></article>
-        <article className="stat-card"><span>Vorstand</span><strong>{Number(count.board_count ?? 0)}</strong><small>aktive Funktionen</small></article>
-        <article className="stat-card"><span>Team Captains</span><strong>{Number(count.captain_count ?? 0)}</strong><small>aktive Zuordnungen</small></article>
+        <article className="stat-card"><span>Passive Mitglieder</span><strong>{Number(count.passive ?? 0)}</strong><small>aktueller Bestand</small></article>
+        <article className="stat-card"><span>Eintritte</span><strong>{Number(count.joined_year ?? 0)}</strong><small>dieses Jahr</small></article>
+        <article className="stat-card"><span>Kündigungen</span><strong>{Number(count.notices ?? 0)}</strong><small>vorgemerkt</small></article>
       </section>
 
       <section className={canWrite ? "management-grid" : "management-grid single"}>
@@ -85,20 +108,26 @@ export default async function MembersPage({
             {members.length === 0 ? (
               <div className="empty-state">Noch keine Mitglieder vorhanden.</div>
             ) : members.map((member) => (
-              <Link className="member-row" key={String(member.id)} href={`/mitglieder/${member.id}`}>
+              <Link className="member-row" key={String(member.id)} href={\`/mitglieder/\${member.id}\`}>
                 <div className="member-avatar">
                   {String(member.first_name).slice(0,1)}{String(member.last_name).slice(0,1)}
                 </div>
                 <div className="member-main">
                   <strong>{String(member.first_name)} {String(member.last_name)}</strong>
                   <span>
-                    {member.member_number ? `#${member.member_number} · ` : ""}
-                    {member.email ? String(member.email) : "Keine E-Mail"}
+                    {member.member_number ? \`#\${member.member_number} · \` : ""}
+                    {membershipTypeLabels[String(member.membership_type ?? "regular")] ?? "Mitglied"}
+                    {member.teams ? \` · \${member.teams}\` : ""}
                   </span>
+                  {member.notice_date && (
+                    <small className="member-notice">
+                      Kündigung {member.leave_date ? \`zum \${new Intl.DateTimeFormat("de-DE").format(new Date(String(member.leave_date)))}\` : "vorgemerkt"}
+                    </small>
+                  )}
                 </div>
                 <div className="member-meta">
-                  <span>{member.teams ? String(member.teams) : "Keine Mannschaft"}</span>
-                  <b className={`status-badge status-${member.status}`}>{String(member.status)}</b>
+                  <span>{member.email ? String(member.email) : "Keine E-Mail"}</span>
+                  <b className={\`status-badge status-\${member.status}\`}>{statusLabels[String(member.status)] ?? String(member.status)}</b>
                 </div>
               </Link>
             ))}
@@ -120,13 +149,23 @@ export default async function MembersPage({
                 <label>Mitgliedsnummer<input name="memberNumber" /></label>
                 <label>Eintritt<input name="joinDate" type="date" /></label>
               </div>
-              <label>Status
-                <select name="status" defaultValue="active">
-                  <option value="active">Aktiv</option>
-                  <option value="passive">Passiv</option>
-                  <option value="inactive">Inaktiv</option>
-                </select>
-              </label>
+              <div className="form-grid">
+                <label>Mitgliedsart
+                  <select name="membershipType" defaultValue="regular">
+                    <option value="regular">Regulär</option>
+                    <option value="youth">Jugend</option>
+                    <option value="honorary">Ehrenmitglied</option>
+                    <option value="other">Sonstige</option>
+                  </select>
+                </label>
+                <label>Status
+                  <select name="status" defaultValue="active">
+                    <option value="active">Aktiv</option>
+                    <option value="passive">Passiv</option>
+                    <option value="inactive">Inaktiv</option>
+                  </select>
+                </label>
+              </div>
               <button className="primary-button" type="submit">Mitglied speichern</button>
             </form>
           </article>
