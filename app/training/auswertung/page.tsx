@@ -71,13 +71,13 @@ export default async function TrainingReportPage({
   const mode=params.mode==="season" && activeSeason ? "season" : "year";
   const rangeStart=mode==="season"
     ? String(activeSeason!.starts_on)
-    : ${selectedYear}-01-01;
+    : `${selectedYear}-01-01`;
   const rangeEnd=mode==="season"
     ? String(activeSeason!.ends_on)
-    : ${selectedYear}-12-31;
+    : `${selectedYear}-12-31`;
   const teamSeasonFilter=mode==="season" ? String(activeSeason!.label) : null;
-  const reportLabel=mode==="season" ? ${Saison ${activeSeason!.label}} : String(selectedYear);
-  const periodLabel=${${formatDate(rangeStart)} – ${formatDate(rangeEnd)}};
+  const reportLabel=mode==="season" ? `Saison ${activeSeason!.label}` : String(selectedYear);
+  const periodLabel=`${formatDate(rangeStart)} – ${formatDate(rangeEnd)}`;
 
   const [yearRows,summaryRows,teams,monthly,teamMonthly,members]=sql
     ? await Promise.all([
@@ -379,7 +379,7 @@ export default async function TrainingReportPage({
         </article>
 
         <article className="panel">
-          <div className="panel-head"><div><span className="eyebrow">Mannschaften</span><h2>{mode==="season" ? ${Saison ${activeSeason?.label}} : "Aktive Teams"}</h2></div></div>
+          <div className="panel-head"><div><span className="eyebrow">Mannschaften</span><h2>{mode==="season" ? `Saison ${activeSeason?.label}` : "Aktive Teams"}</h2></div></div>
           <div className="training-report-seasons">
             {teams.length===0 ? (
               <div className="empty-state">Für diesen Zeitraum ist keine passende aktive Mannschaft hinterlegt.</div>
@@ -395,7 +395,7 @@ export default async function TrainingReportPage({
 
       <article className="panel training-report-section">
         <div className="panel-head"><div><span className="eyebrow">Vergleich</span><h2>Mannschaften</h2></div></div>
-        <p className="training-report-note">Die Mannschaftsauswertung verwendet die aktuell aktive Kaderzuordnung{mode==="season" ? ${ und Teams der Saison ${activeSeason?.label}} : ""}.</p>
+        <p className="training-report-note">Die Mannschaftsauswertung verwendet die aktuell aktive Kaderzuordnung{mode==="season" ? ` und Teams der Saison ${activeSeason?.label}` : ""}.</p>
 
         <div className="training-team-comparison">
           {teams.length===0 ? (
@@ -415,7 +415,7 @@ export default async function TrainingReportPage({
                 <div><span>Teilnahmen</span><strong>{Number(team.present_total ?? 0)}</strong></div>
                 <div><span>Entschuldigt</span><strong>{Number(team.excused_total ?? 0)}</strong></div>
               </div>
-              <div className="training-team-rate"><i style={{width:${pct(team.attendance_rate)}%}} /></div>
+              <div className="training-team-rate"><i style={{width:`${pct(team.attendance_rate)}%`}} /></div>
             </div>
           ))}
         </div>
@@ -435,7 +435,7 @@ export default async function TrainingReportPage({
                 </div>
                 <b>{Number(row.avg_present ?? 0).toLocaleString("de-DE")} Ø</b>
                 <div className="training-report-month-track">
-                  <i style={{width:${Math.round((Number(row.avg_present ?? 0)/maxOverall)*100)}%}} />
+                  <i style={{width:`${Math.round((Number(row.avg_present ?? 0)/maxOverall)*100)}%`}} />
                 </div>
               </div>
             ))}
@@ -477,7 +477,7 @@ export default async function TrainingReportPage({
             <span>Mitglied</span><span>Mannschaft</span><span>Besucht</span><span>Quote</span><span>Zuletzt da</span>
           </div>
           {members.map((member)=>(
-            <Link href={${/mitglieder/${member.id}}} className="training-report-member-row" key={String(member.id)}>
+            <Link href={`/mitglieder/${member.id}`} className="training-report-member-row" key={String(member.id)}>
               <strong>{String(member.first_name)} {String(member.last_name)}</strong>
               <span>{String(member.teams)}</span>
               <span>{Number(member.attended ?? 0)}/{Number(member.recorded ?? 0)}</span>
