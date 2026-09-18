@@ -7,6 +7,8 @@ import {
   restoreTrainingSessionAction,
 } from "@/app/training/actions";
 import { TrainingAttendanceEditor } from "@/components/training-attendance-editor";
+import { moveToTrashAction } from "@/app/admin/papierkorb/actions";
+import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 
 export const dynamic = "force-dynamic";
 
@@ -58,6 +60,7 @@ export default async function TrainingDetailPage({
         s.completed_at
       FROM training_sessions s
       WHERE s.id=${id}::uuid
+        AND s.deleted_at IS NULL
       LIMIT 1
     `,
     sql`
@@ -115,6 +118,7 @@ export default async function TrainingDetailPage({
 
       {query.error==="future" && <div className="form-error">Die Anwesenheit kann erst ab Beginn des Trainingstags gespeichert werden.</div>}
       {query.error==="session" && <div className="form-error">Für einen abgesagten Trainingstag kann keine Anwesenheit gespeichert werden.</div>}
+      {query.error==="protected_delete" && <div className="form-error">Dieses Training kann nicht gelöscht werden. Nur Sondertrainings ohne gespeicherte Anwesenheit sind löschbar.</div>}
       {query.saved && <div className="form-success">Anwesenheit wurde gespeichert.</div>}
       {query.cancelled && <div className="form-success">Trainingstag wurde als abgesagt markiert.</div>}
       {query.restored && <div className="form-success">Trainingstag wurde wieder aktiviert.</div>}
@@ -197,6 +201,22 @@ export default async function TrainingDetailPage({
                 <button className="ghost-button">Training absagen</button>
               </form>
             )}
+
+            {session.source==="special"
+              && !session.attendance_recorded_at
+              && session.status!=="completed"
+              && Number(c.present ?? 0)+Number(c.absent ?? 0)+Number(c.excused ?? 0)===0
+              && (
+                <form action={moveToTrashAction}>
+                  <input type="hidden" name="type" value="training" />
+                  <input type="hidden" name="id" value={id} />
+                  <ConfirmSubmitButton
+                    message={"Sondertraining vom "+formatDateTime(session.scheduled_at)+" in den Papierkorb verschieben?"}
+                  >
+                    Sondertraining löschen
+                  </ConfirmSubmitButton>
+                </form>
+              )}
           </aside>
         )}
       </section>
