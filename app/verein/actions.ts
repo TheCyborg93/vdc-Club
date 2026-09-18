@@ -47,17 +47,17 @@ export async function updateClubProfileAction(formData: FormData) {
     redirect("/verein?error=invalid");
   }
 
-  await sql\`
+  await sql`
     INSERT INTO club_profile (
       id, club_name, short_name, legal_form, street, postal_code, city,
       email, phone, website, founded_on, fiscal_year_start_month,
       default_annual_fee, fee_due_month, fee_due_day, notes
     )
     VALUES (
-      1, \${clubName}, \${shortName}, \${legalForm || null}, \${street || null},
-      \${postalCode || null}, \${city || null}, \${email || null}, \${phone || null},
-      \${website || null}, \${foundedOn || null}::date, \${fiscalYearStartMonth},
-      \${defaultAnnualFee}, \${feeDueMonth}, \${feeDueDay}, \${notes || null}
+      1, ${clubName}, ${shortName}, ${legalForm || null}, ${street || null},
+      ${postalCode || null}, ${city || null}, ${email || null}, ${phone || null},
+      ${website || null}, ${foundedOn || null}::date, ${fiscalYearStartMonth},
+      ${defaultAnnualFee}, ${feeDueMonth}, ${feeDueDay}, ${notes || null}
     )
     ON CONFLICT (id)
     DO UPDATE SET
@@ -76,7 +76,7 @@ export async function updateClubProfileAction(formData: FormData) {
       fee_due_month=EXCLUDED.fee_due_month,
       fee_due_day=EXCLUDED.fee_due_day,
       notes=EXCLUDED.notes
-  \`;
+  `;
 
   revalidatePath("/verein");
   revalidatePath("/finanzen");
