@@ -20,6 +20,14 @@ const actionLabels: Record<string,string> = {
   "training.season_created":"Trainingssaison angelegt",
   "training.season_updated":"Trainingssaison geändert",
   "training.season_activated":"Trainingssaison aktiviert",
+  "document.created":"Dokument registriert",
+  "document.status_changed":"Dokumentstatus geändert",
+  "document.archived":"Dokument archiviert",
+  "document.restored":"Dokument wiederhergestellt",
+  "meeting.status_changed":"Sitzungsstatus geändert",
+  "task.status_changed":"Aufgabenstatus geändert",
+  "resolution.status_changed":"Beschlussstatus geändert",
+  "resolution.task_created":"Folgeaufgabe zu Beschluss angelegt",
 };
 
 function formatDateTime(value: unknown) {
