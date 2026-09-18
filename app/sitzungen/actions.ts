@@ -151,6 +151,16 @@ export async function updateAgendaStatusAction(formData: FormData) {
   const statusRaw=value(formData,"status");
   const status=["open","active","done","deferred"].includes(statusRaw) ? statusRaw : "open";
 
+  if (status==="active") {
+    await sql`
+      UPDATE agenda_items
+      SET status='open'
+      WHERE meeting_id=${meetingId}::uuid
+        AND status='active'
+        AND id<>${agendaItemId}::uuid
+    `;
+  }
+
   const rows=await sql`
     UPDATE agenda_items
     SET status=${status}
@@ -163,7 +173,7 @@ export async function updateAgendaStatusAction(formData: FormData) {
           AND m.deleted_at IS NULL
           AND m.status='running'
       )
-    RETURNING id::text
+    RETURNING id::text,position
   `;
 
   if (!rows.length) redirect(`/sitzungen/${meetingId}?error=meeting_locked`);
@@ -173,8 +183,34 @@ export async function updateAgendaStatusAction(formData: FormData) {
     status,
   });
 
+  let targetId=agendaItemId;
+  if (["done","deferred"].includes(status)) {
+    const next=await sql`
+      SELECT id::text
+      FROM agenda_items
+      WHERE meeting_id=${meetingId}::uuid
+        AND position>${Number(rows[0].position)}
+        AND status IN ('open','active')
+      ORDER BY position
+      LIMIT 1
+    `;
+    if (next[0]?.id) {
+      targetId=String(next[0].id);
+    } else {
+      const firstOpen=await sql`
+        SELECT id::text
+        FROM agenda_items
+        WHERE meeting_id=${meetingId}::uuid
+          AND status IN ('open','active')
+        ORDER BY position
+        LIMIT 1
+      `;
+      if (firstOpen[0]?.id) targetId=String(firstOpen[0].id);
+    }
+  }
+
   revalidatePath(`/sitzungen/${meetingId}`);
-  redirect(`/sitzungen/${meetingId}`);
+  redirect(`/sitzungen/${meetingId}?top=${targetId}`);
 }
 
 export async function updateAgendaNotesAction(formData: FormData) {
@@ -210,7 +246,7 @@ export async function updateAgendaNotesAction(formData: FormData) {
 
   revalidatePath(`/sitzungen/${meetingId}`);
   revalidatePath(`/sitzungen/${meetingId}/protokoll`);
-  redirect(`/sitzungen/${meetingId}?notes=1`);
+  redirect(`/sitzungen/${meetingId}?top=${agendaItemId}&notes=1`);
 }
 
 export async function deleteAgendaItemAction(formData: FormData) {
