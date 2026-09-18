@@ -110,6 +110,61 @@ export async function saveTrainingAttendanceAction(formData: FormData) {
   redirect(`/training/${sessionId}?saved=1`);
 }
 
+
+export async function resetTrainingAttendanceAction(formData: FormData) {
+  const actor=await requirePermission("training.write");
+  const sql=getDb();
+  if (!sql) redirect("/training?error=database");
+
+  const sessionId=value(formData,"sessionId");
+  if (!sessionId) redirect("/training?error=missing");
+
+  const rows=await sql`
+    SELECT id::text,source,event_id::text,notes,attendance_recorded_at
+    FROM training_sessions
+    WHERE id=${sessionId}::uuid
+      AND deleted_at IS NULL
+    LIMIT 1
+  `;
+  const session=rows[0];
+
+  if (!session || !session.attendance_recorded_at) {
+    redirect(${/training/${sessionId}?error=session}$);
+  }
+
+  await sql`DELETE FROM training_attendance WHERE session_id=${sessionId}::uuid`;
+
+  await sql`
+    UPDATE training_sessions
+    SET
+      status='planned',
+      attendance_recorded_at=NULL,
+      completed_at=NULL
+    WHERE id=${sessionId}::uuid
+      AND deleted_at IS NULL
+  `;
+
+  if (session.event_id) {
+    await sql`
+      UPDATE club_events
+      SET
+        title=CASE WHEN ${String(session.source)}='special' THEN 'Sondertraining' ELSE 'Vereinstraining' END,
+        description=CASE
+          WHEN ${String(session.source)}='special' THEN COALESCE(${session.notes ? String(session.notes) : null},'Sondertraining · Ende offen')
+          ELSE 'Regeltraining · Beginn 19:00 Uhr · Ende offen'
+        END,
+        updated_at=now()
+      WHERE id=${String(session.event_id)}::uuid
+        AND deleted_at IS NULL
+    `;
+  }
+
+  await writeAudit(actor.id,"training.attendance_reset","training_session",sessionId);
+
+  revalidateTraining(sessionId);
+  redirect(${/training/${sessionId}?reset=1}$);
+}
+
 export async function cancelTrainingSessionAction(formData: FormData) {
   const actor = await requirePermission("training.write");
   const sql = getDb();
