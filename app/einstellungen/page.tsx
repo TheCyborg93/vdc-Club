@@ -64,7 +64,11 @@ export default async function SettingsPage({
             (SELECT count(*)::int FROM integration_entity_links l
              WHERE l.integration_key=i.integration_key AND l.entity_type='player') AS players,
             (SELECT count(*)::int FROM integration_entity_links l
-             WHERE l.integration_key=i.integration_key AND l.entity_type='match') AS matches
+             WHERE l.integration_key=i.integration_key AND l.entity_type='match') AS matches,
+            (SELECT count(*)::int FROM integration_entity_links l
+             WHERE l.integration_key=i.integration_key AND l.entity_type='tournament') AS tournaments,
+            (SELECT count(*)::int FROM integration_entity_links l
+             WHERE l.integration_key=i.integration_key AND l.entity_type='training_day') AS training_days
           FROM integration_connections i
           ORDER BY
             CASE i.integration_key
@@ -142,9 +146,27 @@ export default async function SettingsPage({
 
               <div className="integration-metrics">
                 <div><span>Verknüpft</span><strong>{Number(connection.linked_entities ?? 0)}</strong></div>
-                <div><span>Teams</span><strong>{Number(connection.teams ?? 0)}</strong></div>
-                <div><span>Spieler</span><strong>{Number(connection.players ?? 0)}</strong></div>
-                <div><span>Spiele</span><strong>{Number(connection.matches ?? 0)}</strong></div>
+                <div>
+                  <span>{key === "vdc_tc" ? "Teams" : key === "vdc_turnier" ? "Turniere" : "Trainings"}</span>
+                  <strong>
+                    {key === "vdc_tc"
+                      ? Number(connection.teams ?? 0)
+                      : key === "vdc_turnier"
+                        ? Number(connection.tournaments ?? 0)
+                        : Number(connection.training_days ?? 0)}
+                  </strong>
+                </div>
+                <div><span>Mitglieder</span><strong>{Number(connection.players ?? 0)}</strong></div>
+                <div>
+                  <span>{key === "vdc_tc" ? "Spiele" : "Aktivitäten"}</span>
+                  <strong>
+                    {key === "vdc_tc"
+                      ? Number(connection.matches ?? 0)
+                      : key === "vdc_turnier"
+                        ? Number(connection.tournaments ?? 0)
+                        : Number(connection.training_days ?? 0)}
+                  </strong>
+                </div>
               </div>
 
               <div className="integration-meta">
@@ -197,9 +219,10 @@ export default async function SettingsPage({
             <div><strong>Turnier / Training</strong><span>Fachmodule</span></div>
           </div>
           <p>Die Fach-Apps bleiben eigenständig. VDC‑Club hält die stabilen Mitglieder- und Mannschaftsbezüge und übernimmt nur die Daten, die für den Gesamtverein benötigt werden.</p>
-          <div className="api-note">
-            <span>TC Push Endpoint</span>
-            <code>POST /api/integrations/vdc-tc/sync</code>
+          <div className="api-endpoint-list">
+            <div className="api-note"><span>TC Push</span><code>POST /api/integrations/vdc-tc/sync</code></div>
+            <div className="api-note"><span>Turnier Push</span><code>POST /api/integrations/vdc-turnier/sync</code></div>
+            <div className="api-note"><span>Training Push</span><code>POST /api/integrations/vdc-training/sync</code></div>
           </div>
         </article>
       </section>
