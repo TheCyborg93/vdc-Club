@@ -22,6 +22,26 @@ function formatDate(value: unknown) {
   return Number.isNaN(date.getTime()) ? "–" : new Intl.DateTimeFormat("de-DE").format(date);
 }
 
+function formatBytes(value: unknown) {
+  const bytes=Number(value ?? 0);
+  if (!Number.isFinite(bytes) || bytes<=0) return "";
+  if (bytes<1024) return bytes+" B";
+  if (bytes<1024*1024) return (bytes/1024).toLocaleString("de-DE",{maximumFractionDigits:1})+" KB";
+  return (bytes/(1024*1024)).toLocaleString("de-DE",{maximumFractionDigits:1})+" MB";
+}
+
+const errorLabels: Record<string,string> = {
+  database:"Die Datenbank ist nicht verfügbar.",
+  missing:"Titel und Kategorie sind erforderlich.",
+  invalid:"Der hinterlegte externe Link ist ungültig.",
+  source:"Bitte entweder eine Datei hochladen oder einen externen Link verwenden – nicht beides.",
+  empty:"Die ausgewählte Datei ist leer.",
+  size:"Die Datei ist zu groß. Maximal erlaubt sind 4 MB.",
+  type:"Dieser Dateityp ist nicht erlaubt.",
+  storage:"Der private Dokumentenspeicher ist noch nicht konfiguriert.",
+  upload:"Die Datei konnte nicht in den privaten Speicher hochgeladen werden.",
+};
+
 export default async function DocumentsPage({
   searchParams,
 }: {
@@ -29,6 +49,7 @@ export default async function DocumentsPage({
     error?:string;
     created?:string;
     archived?:string;
+    uploaded?:string;
     q?:string;
     category?:string;
     status?:string;
@@ -48,6 +69,7 @@ export default async function DocumentsPage({
           SELECT
             d.id::text,d.title,d.category,d.storage_type,d.storage_ref,d.status,
             d.document_date,d.valid_until,d.review_on,d.notes,d.created_at,
+            d.original_filename,d.file_size_bytes,d.mime_type,d.uploaded_at,
             m.first_name,m.last_name,
             mt.id::text AS meeting_id,mt.title AS meeting_title,
             r.resolution_number,r.title AS resolution_title,
@@ -108,8 +130,9 @@ export default async function DocumentsPage({
         <Link href="/archiv" className="ghost-button">Archiv · {Number(c.archived ?? 0)}</Link>
       </section>
 
-      {params.error && <div className="form-error">Das Dokument konnte nicht gespeichert werden.</div>}
+      {params.error && <div className="form-error">{errorLabels[params.error] ?? "Das Dokument konnte nicht gespeichert werden."}</div>}
       {(params.created || params.archived) && <div className="form-success">Dokumentenregister wurde aktualisiert.</div>}
+      {params.uploaded && <div className="form-success">Datei wurde sicher hochgeladen und im Dokumentenregister gespeichert.</div>}
 
       <section className="stat-grid">
         <article className="stat-card"><span>Dokumente</span><strong>{Number(c.total ?? 0)}</strong><small>aktive Ablage</small></article>
@@ -167,6 +190,12 @@ export default async function DocumentsPage({
                   <div className="document-deadlines">
                     {doc.review_on && <small>Prüfen am {formatDate(doc.review_on)}</small>}
                     {doc.valid_until && <small>Gültig bis {formatDate(doc.valid_until)}</small>}
+                    {doc.storage_type==="upload" && doc.original_filename && (
+                      <small className="document-file-chip">
+                        Datei: {String(doc.original_filename)}
+                        {doc.file_size_bytes ? " · "+formatBytes(doc.file_size_bytes) : ""}
+                      </small>
+                    )}
                   </div>
                   <div className="document-links">
                     {doc.meeting_title && <span>Sitzung: {String(doc.meeting_title)}</span>}
@@ -180,9 +209,16 @@ export default async function DocumentsPage({
 
                 <div className="document-actions">
                   {doc.storage_ref && (
-                    doc.storage_type==="internal"
-                      ? <Link href={String(doc.storage_ref)} className="mini-button">Öffnen</Link>
-                      : <a href={String(doc.storage_ref)} target="_blank" rel="noreferrer" className="mini-button">Öffnen</a>
+                    doc.storage_type==="upload"
+                      ? (
+                        <>
+                          <Link href={"/api/documents/"+String(doc.id)+"/file"} target="_blank" className="mini-button">Datei öffnen</Link>
+                          <Link href={"/api/documents/"+String(doc.id)+"/file?download=1"} className="mini-button">Download</Link>
+                        </>
+                      )
+                      : doc.storage_type==="internal"
+                        ? <Link href={String(doc.storage_ref)} className="mini-button">Öffnen</Link>
+                        : <a href={String(doc.storage_ref)} target="_blank" rel="noreferrer" className="mini-button">Öffnen</a>
                   )}
                   {canWrite && (
                     <>
@@ -210,7 +246,7 @@ export default async function DocumentsPage({
         {canWrite && (
           <article className="panel sticky-panel">
             <div className="panel-head"><div><span className="eyebrow">Neu</span><h2>Dokument registrieren</h2></div></div>
-            <form action={createDocumentAction} className="form-stack">
+            <form action={createDocumentAction} className="form-stack" encType="multipart/form-data">
               <label>Titel<input name="title" required /></label>
               <label>Kategorie
                 <select name="category" defaultValue="Allgemein">
@@ -224,7 +260,20 @@ export default async function DocumentsPage({
                   <option>Angebot</option>
                 </select>
               </label>
-              <label>Link / externe Datei<input name="storageRef" type="url" placeholder="https://…" /></label>
+              <div className="document-upload-box">
+                <span className="eyebrow">Datei hochladen</span>
+                <label>
+                  Datei
+                  <input
+                    name="file"
+                    type="file"
+                    accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.odt,.ods,.txt,.jpg,.jpeg,.png,.webp"
+                  />
+                </label>
+                <small>Max. 4 MB · PDF, Office, OpenDocument, TXT und gängige Bilder.</small>
+              </div>
+              <div className="document-source-divider"><span>ODER</span></div>
+              <label>Externer Link<input name="storageRef" type="url" placeholder="https://…" /></label>
               <div className="form-grid">
                 <label>Dokumentdatum<input name="documentDate" type="date" /></label>
                 <label>Prüfen am<input name="reviewOn" type="date" /></label>
