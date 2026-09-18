@@ -49,7 +49,13 @@ const eventTypeLabels: Record<string,string> = {
 export default async function DashboardPage() {
   const user = await requireUser();
   const isAdmin = user.roles.includes("admin");
-  const data = await getDashboardData({ includeSystem: isAdmin });
+  const canTraining = hasPermission(user.roles,"training.read");
+  const canTrainingWrite = hasPermission(user.roles,"training.write");
+  const data = await getDashboardData({
+    includeSystem: isAdmin,
+    includeTraining: canTraining,
+    memberId: user.memberId,
+  });
   const canTasks = hasPermission(user.roles,"tasks.read");
   const canTeams = hasPermission(user.roles,"teams.read");
   const canCalendar = hasPermission(user.roles,"calendar.read");
@@ -221,6 +227,46 @@ export default async function DashboardPage() {
             <div><span>Trainingstage</span><strong>{data.trainingDaysYear}</strong></div>
           </div>
         </article>
+        )}
+
+        {canTraining && data.training && (
+          <article className="panel training-dashboard-card">
+            <div className="panel-head">
+              <div><span className="eyebrow">Training</span><h2>Dein Training</h2></div>
+              <Link className="text-link" href="/training">Training</Link>
+            </div>
+            <div className="training-dashboard-next">
+              <span>Nächster Termin</span>
+              <strong>
+                {data.training.nextAt
+                  ? new Intl.DateTimeFormat("de-DE",{
+                      weekday:"short",day:"2-digit",month:"2-digit",
+                      hour:"2-digit",minute:"2-digit",
+                      timeZone:"Europe/Berlin",
+                    }).format(new Date(data.training.nextAt))
+                  : "Kein Termin"}
+              </strong>
+              <small>Dienstag & Freitag · 19:00 Uhr · Ende offen</small>
+            </div>
+            {user.memberId && (
+              <div className="training-dashboard-personal">
+                <div>
+                  <span>Aktivität {new Date().getFullYear()}</span>
+                  <strong>{data.training.personalRate}%</strong>
+                </div>
+                <div>
+                  <span>Besucht</span>
+                  <strong>{data.training.personalAttended}/{data.training.personalRecorded}</strong>
+                </div>
+              </div>
+            )}
+            {canTrainingWrite && data.training.pendingAttendance > 0 && (
+              <Link href="/training" className="training-dashboard-alert">
+                <span>Anwesenheit offen</span>
+                <strong>{data.training.pendingAttendance} Trainingstage prüfen ›</strong>
+              </Link>
+            )}
+          </article>
         )}
 
         {(canMembers || canTeams || canCalendar) && (
