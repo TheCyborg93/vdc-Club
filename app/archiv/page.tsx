@@ -2,6 +2,8 @@ import Link from "next/link";
 import { getDb } from "@/lib/db";
 import { hasPermission, requirePermission } from "@/lib/permissions";
 import { restoreDocumentAction } from "@/app/dokumente/actions";
+import { moveToTrashAction } from "@/app/admin/papierkorb/actions";
+import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 
 export const dynamic="force-dynamic";
 
@@ -32,6 +34,7 @@ export default async function ArchivePage({
           SELECT id::text,title,category,document_date,archived_at,storage_type,storage_ref,original_filename,file_size_bytes
           FROM documents
           WHERE status='archived'
+            AND deleted_at IS NULL
           ORDER BY archived_at DESC NULLS LAST,created_at DESC
           LIMIT 100
         `,
@@ -46,6 +49,7 @@ export default async function ArchivePage({
           SELECT id::text,title,starts_at,ended_at,status
           FROM meetings
           WHERE status IN ('completed','cancelled')
+            AND deleted_at IS NULL
           ORDER BY starts_at DESC
           LIMIT 80
         ` : Promise.resolve([]),
@@ -120,6 +124,13 @@ export default async function ArchivePage({
                   <form action={restoreDocumentAction}>
                     <input type="hidden" name="id" value={String(doc.id)} />
                     <button className="mini-button">Wiederherstellen</button>
+                  </form>
+                  <form action={moveToTrashAction}>
+                    <input type="hidden" name="type" value="document" />
+                    <input type="hidden" name="id" value={String(doc.id)} />
+                    <ConfirmSubmitButton message={"Archiviertes Dokument „"+String(doc.title)+"“ in den Papierkorb verschieben?"}>
+                      Löschen
+                    </ConfirmSubmitButton>
                   </form>
                 )}
               </div>
