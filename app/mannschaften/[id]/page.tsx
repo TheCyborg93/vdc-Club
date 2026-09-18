@@ -115,7 +115,7 @@ export default async function TeamDetailPage({
       {query.error && (
         <div className="form-error">
           {query.error==="team_delete"
-            ? "Diese Mannschaft enthält bereits Kader-/Termin-/Importhistorie und kann nicht endgültig gelöscht werden. Nutze stattdessen den Status „Archiviert“."
+            ? "Diese Mannschaft enthält bereits Kader-, Termin- oder Importhistorie und kann nicht in den Papierkorb verschoben werden. Nutze stattdessen den Status „Archiviert“."
             : "Die Änderung konnte nicht gespeichert werden."}
         </div>
       )}
