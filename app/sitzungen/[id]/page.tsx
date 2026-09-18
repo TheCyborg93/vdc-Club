@@ -15,52 +15,52 @@ import {
 } from "@/app/sitzungen/actions";
 import { moveToTrashAction } from "@/app/admin/papierkorb/actions";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
-import { meetingStatusLabel } from "@/lib/ui-labels";
+import { meetingStatusLabel,taskStatusLabel } from "@/lib/ui-labels";
 
-const attendanceLabels: Record<string, string> = {
-  invited: "Eingeladen",
-  present: "Anwesend",
-  absent: "Abwesend",
-  excused: "Entschuldigt",
+const attendanceLabels:Record<string,string>={
+  invited:"Eingeladen",
+  present:"Anwesend",
+  absent:"Abwesend",
+  excused:"Entschuldigt",
 };
 
-const agendaLabels: Record<string, string> = {
-  open: "Offen",
-  active: "Aktiv",
-  done: "Erledigt",
-  deferred: "Vertagt",
+const agendaLabels:Record<string,string>={
+  open:"Offen",
+  active:"In Bearbeitung",
+  done:"Erledigt",
+  deferred:"Vertagt",
 };
 
-const errors: Record<string, string> = {
-  missing: "Bitte alle erforderlichen Angaben ausfüllen.",
-  attendee: "Teilnehmer konnte nicht hinzugefügt werden.",
-  resolution: "Für einen Beschluss werden Titel und Beschlusstext benötigt.",
-  protected_delete: "Diese Sitzung kann nicht gelöscht werden, weil sie bereits abgeschlossen ist oder Beschlüsse/Dokumente enthält.",
-  agenda_delete: "Dieser TOP kann nicht gelöscht werden, weil bereits ein Beschluss dazu existiert oder die Sitzung abgeschlossen ist.",
-  meeting_locked: "Diese Änderung ist im aktuellen Sitzungsstatus nicht möglich.",
-  open_agenda: "Die Sitzung kann noch nicht beendet werden. Offene oder aktive TOPs müssen zuerst erledigt oder vertagt werden.",
-  attendance_open: "Die Sitzung kann noch nicht beendet werden. Bei allen eingeladenen Personen muss die Anwesenheit geklärt sein.",
-  invalid_transition: "Dieser Statuswechsel ist nicht zulässig.",
+const errors:Record<string,string>={
+  missing:"Bitte alle erforderlichen Angaben ausfüllen.",
+  attendee:"Teilnehmer konnte nicht hinzugefügt werden.",
+  resolution:"Für einen Beschluss werden Titel und Beschlusstext benötigt.",
+  protected_delete:"Diese Sitzung kann nicht gelöscht werden, weil sie bereits abgeschlossen ist oder Beschlüsse/Dokumente enthält.",
+  agenda_delete:"Dieser TOP kann nicht gelöscht werden, weil bereits ein Beschluss dazu existiert oder die Sitzung abgeschlossen ist.",
+  meeting_locked:"Diese Änderung ist im aktuellen Sitzungsstatus nicht möglich.",
+  open_agenda:"Die Sitzung kann noch nicht beendet werden. Offene oder aktive TOPs müssen zuerst erledigt oder vertagt werden.",
+  attendance_open:"Die Sitzung kann noch nicht beendet werden. Bei allen eingeladenen Personen muss die Anwesenheit geklärt sein.",
+  invalid_transition:"Dieser Statuswechsel ist nicht zulässig.",
 };
 
-export const dynamic = "force-dynamic";
+export const dynamic="force-dynamic";
 
-function formatDateTime(value: unknown) {
+function formatDateTime(value:unknown) {
   if (!value) return "";
-  const date = new Date(String(value));
+  const date=new Date(String(value));
   if (Number.isNaN(date.getTime())) return "";
-  return new Intl.DateTimeFormat("de-DE", {
-    weekday: "long",
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone: "Europe/Berlin",
+  return new Intl.DateTimeFormat("de-DE",{
+    weekday:"long",
+    day:"2-digit",
+    month:"long",
+    year:"numeric",
+    hour:"2-digit",
+    minute:"2-digit",
+    timeZone:"Europe/Berlin",
   }).format(date);
 }
 
-function dateTimeLocal(value: unknown) {
+function dateTimeLocal(value:unknown) {
   if (!value) return "";
   const date=new Date(String(value));
   if (Number.isNaN(date.getTime())) return "";
@@ -76,27 +76,28 @@ function dateTimeLocal(value: unknown) {
 export default async function MeetingDetailPage({
   params,
   searchParams,
-}: {
-  params: Promise<{ id: string }>;
-  searchParams: Promise<{
-    error?: string;
-    agenda?: string;
-    resolution?: string;
-    created?: string;
-    agenda_deleted?: string;
-    notes?: string;
-    saved?: string;
-    status?: string;
+}:{
+  params:Promise<{id:string}>;
+  searchParams:Promise<{
+    top?:string;
+    error?:string;
+    agenda?:string;
+    resolution?:string;
+    created?:string;
+    agenda_deleted?:string;
+    notes?:string;
+    saved?:string;
+    status?:string;
   }>;
 }) {
-  const actor = await requirePermission("meetings.read");
-  const sql = getDb();
+  const actor=await requirePermission("meetings.read");
+  const sql=getDb();
   if (!sql) notFound();
 
-  const { id } = await params;
-  const query = await searchParams;
+  const {id}=await params;
+  const query=await searchParams;
 
-  const [meetingRows, agenda, attendees, members] = await Promise.all([
+  const [meetingRows,agenda,attendees,members]=await Promise.all([
     sql`
       SELECT
         m.id::text,
@@ -108,8 +109,8 @@ export default async function MeetingDetailPage({
         m.ended_at,
         e.id::text AS event_id
       FROM meetings m
-      LEFT JOIN club_events e ON e.id = m.event_id
-      WHERE m.id = ${id}::uuid
+      LEFT JOIN club_events e ON e.id=m.event_id
+      WHERE m.id=${id}::uuid
         AND m.deleted_at IS NULL
       LIMIT 1
     `,
@@ -132,9 +133,17 @@ export default async function MeetingDetailPage({
         t.id::text AS task_id,
         t.status AS task_status
       FROM agenda_items ai
-      LEFT JOIN resolutions r ON r.agenda_item_id = ai.id
-      LEFT JOIN tasks t ON t.source_type = 'resolution' AND t.source_id = r.id AND t.deleted_at IS NULL
-      WHERE ai.meeting_id = ${id}::uuid
+      LEFT JOIN resolutions r ON r.agenda_item_id=ai.id
+      LEFT JOIN LATERAL (
+        SELECT tx.id,tx.status
+        FROM tasks tx
+        WHERE tx.source_type='resolution'
+          AND tx.source_id=r.id
+          AND tx.deleted_at IS NULL
+        ORDER BY tx.created_at DESC
+        LIMIT 1
+      ) t ON true
+      WHERE ai.meeting_id=${id}::uuid
       ORDER BY ai.position
     `,
     sql`
@@ -144,125 +153,92 @@ export default async function MeetingDetailPage({
         m.first_name,
         m.last_name
       FROM meeting_attendees ma
-      JOIN members m ON m.id = ma.member_id
-      WHERE ma.meeting_id = ${id}::uuid
-      ORDER BY m.last_name, m.first_name
+      JOIN members m ON m.id=ma.member_id
+      WHERE ma.meeting_id=${id}::uuid
+      ORDER BY m.last_name,m.first_name
     `,
     sql`
-      SELECT id::text, first_name, last_name
+      SELECT id::text,first_name,last_name
       FROM members
-      WHERE status = 'active'
-      ORDER BY last_name, first_name
+      WHERE status='active'
+      ORDER BY last_name,first_name
     `,
   ]);
 
-  const meeting = meetingRows[0];
+  const meeting=meetingRows[0];
   if (!meeting) notFound();
 
-  const canWrite = hasPermission(actor.roles, "meetings.write");
-  const canResolve = hasPermission(actor.roles, "resolutions.write");
-  const canCreateTasks = hasPermission(actor.roles, "tasks.write");
-  const invitedIds = new Set(attendees.map((row) => String(row.member_id)));
-  const availableMembers = members.filter((row) => !invitedIds.has(String(row.id)));
-  const presentCount = attendees.filter((row) => row.attendance === "present").length;
-  const unresolvedAttendanceCount = attendees.filter((row) => row.attendance === "invited").length;
-  const openAgendaCount = agenda.filter((row) => ["open", "active"].includes(String(row.status))).length;
-  const meetingEditable = ["planned","cancelled"].includes(String(meeting.status));
-  const meetingRunning = meeting.status === "running";
+  const canWrite=hasPermission(actor.roles,"meetings.write");
+  const canResolve=hasPermission(actor.roles,"resolutions.write");
+  const canCreateTasks=hasPermission(actor.roles,"tasks.write");
+
+  const invitedIds=new Set(attendees.map((row)=>String(row.member_id)));
+  const availableMembers=members.filter((row)=>!invitedIds.has(String(row.id)));
+  const presentCount=attendees.filter((row)=>row.attendance==="present").length;
+  const unresolvedAttendanceCount=attendees.filter((row)=>row.attendance==="invited").length;
+  const openAgendaCount=agenda.filter((row)=>["open","active"].includes(String(row.status))).length;
+  const meetingEditable=["planned","cancelled"].includes(String(meeting.status));
+  const meetingRunning=meeting.status==="running";
+
+  const preferredAgenda=
+    agenda.find((row)=>String(row.id)===query.top)
+    ?? agenda.find((row)=>row.status==="active")
+    ?? agenda.find((row)=>row.status==="open")
+    ?? agenda[0]
+    ?? null;
+
+  const activeIndex=preferredAgenda
+    ? agenda.findIndex((row)=>String(row.id)===String(preferredAgenda.id))
+    : -1;
+  const previousAgenda=activeIndex>0 ? agenda[activeIndex-1] : null;
+  const nextAgenda=activeIndex>=0 && activeIndex<agenda.length-1 ? agenda[activeIndex+1] : null;
 
   return (
-    <div className="page-stack">
-      <section className="meeting-hero">
+    <div className="page-stack meeting-control-page">
+      <section className="meeting-control-hero">
         <div>
           <Link href="/sitzungen" className="back-link">← Sitzungen</Link>
-          <span className="eyebrow">Sitzungsmodus</span>
-          <h1>{String(meeting.title)}</h1>
-          <p>{formatDateTime(meeting.starts_at)} · {meeting.location ? String(meeting.location) : "Ort offen"}</p>
-        </div>
-        <div className="meeting-hero-side">
-          <div className="meeting-hero-links">
-            <Link href={`/sitzungen/${id}/protokoll`} className="ghost-button">Protokoll</Link>
-            <b className={`status-badge status-${meeting.status}`}>{meetingStatusLabel(meeting.status)}</b>
-          </div>
-          {canWrite && (
-            <div className="meeting-status-actions">
-              {meeting.status === "planned" && (
-                <>
-                  <form action={updateMeetingStatusAction}>
-                    <input type="hidden" name="meetingId" value={id} />
-                    <input type="hidden" name="status" value="running" />
-                    <button className="primary-button">Sitzung starten</button>
-                  </form>
-                  <form action={updateMeetingStatusAction}>
-                    <input type="hidden" name="meetingId" value={id} />
-                    <input type="hidden" name="status" value="cancelled" />
-                    <button className="mini-button">Absagen</button>
-                  </form>
-                </>
-              )}
-
-              {meeting.status === "cancelled" && (
-                <form action={updateMeetingStatusAction}>
-                  <input type="hidden" name="meetingId" value={id} />
-                  <input type="hidden" name="status" value="planned" />
-                  <button className="primary-button">Wieder planen</button>
-                </form>
-              )}
-
-              {meeting.status === "running" && (
-                <>
-                  <form action={updateMeetingStatusAction}>
-                    <input type="hidden" name="meetingId" value={id} />
-                    <input type="hidden" name="status" value="completed" />
-                    <button
-                      className="light-button"
-                      disabled={openAgendaCount>0 || unresolvedAttendanceCount>0}
-                      title={
-                        openAgendaCount>0
-                          ? "Offene TOPs zuerst abschließen."
-                          : unresolvedAttendanceCount>0
-                            ? "Anwesenheit aller eingeladenen Personen klären."
-                            : undefined
-                      }
-                    >
-                      Sitzung beenden
-                    </button>
-                  </form>
-                  {(openAgendaCount>0 || unresolvedAttendanceCount>0) && (
-                    <span className="meeting-close-hint">
-                      {openAgendaCount>0 ? openAgendaCount+" TOP(s) offen" : ""}
-                      {openAgendaCount>0 && unresolvedAttendanceCount>0 ? " · " : ""}
-                      {unresolvedAttendanceCount>0 ? unresolvedAttendanceCount+" Anwesenheit(en) ungeklärt" : ""}
-                    </span>
-                  )}
-                </>
-              )}
-
-              {meeting.status === "completed" && (
-                <form action={updateMeetingStatusAction}>
-                  <input type="hidden" name="meetingId" value={id} />
-                  <input type="hidden" name="status" value="running" />
-                  <ConfirmSubmitButton
-                    message="Sitzung wieder öffnen? Das Ende wird zurückgesetzt und die Sitzung kann weiter bearbeitet werden."
-                    className="mini-button"
-                  >
-                    Wieder öffnen
-                  </ConfirmSubmitButton>
-                </form>
-              )}
-
-              {["planned","cancelled"].includes(String(meeting.status)) && (
-                <form action={moveToTrashAction}>
-                  <input type="hidden" name="type" value="meeting" />
-                  <input type="hidden" name="id" value={id} />
-                  <ConfirmSubmitButton
-                    message={"Sitzung „"+String(meeting.title)+"“ in den Papierkorb verschieben? Bereits verknüpfte Beschlüsse oder Dokumente verhindern das Löschen."}
-                  >
-                    Löschen
-                  </ConfirmSubmitButton>
-                </form>
-              )}
+          <div className="meeting-control-title">
+            <img src="/vdc-logo.svg" alt="" />
+            <div>
+              <span className="eyebrow">Vorstandssitzung · Sitzungsmodus</span>
+              <h1>{String(meeting.title)}</h1>
+              <p>{formatDateTime(meeting.starts_at)} · {meeting.location ? String(meeting.location) : "Ort offen"}</p>
             </div>
+          </div>
+        </div>
+
+        <div className="meeting-control-tools">
+          <Link href={`/sitzungen/${id}/protokoll`} className="ghost-button">Protokoll</Link>
+          <b className={`status-badge status-${meeting.status}`}>{meetingStatusLabel(meeting.status)}</b>
+
+          {canWrite && meeting.status==="planned" && (
+            <form action={updateMeetingStatusAction}>
+              <input type="hidden" name="meetingId" value={id} />
+              <input type="hidden" name="status" value="running" />
+              <button className="primary-button">Sitzung starten</button>
+            </form>
+          )}
+
+          {canWrite && meeting.status==="cancelled" && (
+            <form action={updateMeetingStatusAction}>
+              <input type="hidden" name="meetingId" value={id} />
+              <input type="hidden" name="status" value="planned" />
+              <button className="primary-button">Wieder planen</button>
+            </form>
+          )}
+
+          {canWrite && meeting.status==="completed" && (
+            <form action={updateMeetingStatusAction}>
+              <input type="hidden" name="meetingId" value={id} />
+              <input type="hidden" name="status" value="running" />
+              <ConfirmSubmitButton
+                message="Sitzung wieder öffnen? Das Ende wird zurückgesetzt und die Sitzung kann weiter bearbeitet werden."
+                className="mini-button"
+              >
+                Wieder öffnen
+              </ConfirmSubmitButton>
+            </form>
           )}
         </div>
       </section>
@@ -272,241 +248,358 @@ export default async function MeetingDetailPage({
       {query.notes && <div className="form-success">Ergebnisnotiz wurde gespeichert.</div>}
       {query.agenda_deleted && <div className="form-success">TOP wurde gelöscht.</div>}
 
-      <section className="meeting-summary-grid">
+      <section className="meeting-control-stats">
         <article><span>TOPs</span><strong>{agenda.length}</strong><small>{openAgendaCount} offen</small></article>
-        <article><span>Teilnehmer</span><strong>{attendees.length}</strong><small>{presentCount} anwesend{unresolvedAttendanceCount ? " · "+unresolvedAttendanceCount+" offen" : ""}</small></article>
-        <article><span>Beschlüsse</span><strong>{agenda.filter((row) => row.resolution_id).length}</strong><small>in dieser Sitzung</small></article>
-        <article><span>Status</span><strong>{meetingStatusLabel(meeting.status)}</strong><small>{meeting.ended_at ? `beendet ${formatDateTime(meeting.ended_at)}` : "laufend / geplant"}</small></article>
+        <article><span>Anwesend</span><strong>{presentCount}/{attendees.length}</strong><small>{unresolvedAttendanceCount ? unresolvedAttendanceCount+" ungeklärt" : "vollständig erfasst"}</small></article>
+        <article><span>Beschlüsse</span><strong>{agenda.filter((row)=>row.resolution_id).length}</strong><small>in dieser Sitzung</small></article>
+        <article><span>Status</span><strong>{meetingStatusLabel(meeting.status)}</strong><small>{meeting.ended_at ? "beendet "+formatDateTime(meeting.ended_at) : "aktueller Sitzungsstand"}</small></article>
       </section>
 
-      <section className="meeting-workspace">
-        <div className="meeting-agenda-column">
-          <article className="panel">
-            <div className="panel-head">
-              <div><span className="eyebrow">Tagesordnung</span><h2>TOPs</h2></div>
-              <span className="count-chip">{agenda.length}</span>
+      <section className="meeting-session-shell">
+        <aside className="meeting-top-rail">
+          <div className="meeting-top-rail-head">
+            <div><span className="eyebrow">Tagesordnung</span><h2>TOPs ({agenda.length})</h2></div>
+            <span>{openAgendaCount} offen</span>
+          </div>
+
+          <nav className="meeting-top-list" aria-label="Tagesordnung">
+            {agenda.length===0 ? (
+              <div className="compact-empty">Noch keine TOPs vorhanden.</div>
+            ) : agenda.map((item)=>(
+              <Link
+                href={`/sitzungen/${id}?top=${String(item.id)}`}
+                key={String(item.id)}
+                className={`meeting-top-link top-${item.status} ${preferredAgenda && String(preferredAgenda.id)===String(item.id) ? "is-current" : ""}`}
+              >
+                <span className="meeting-top-number">{Number(item.position)}</span>
+                <div>
+                  <strong>{String(item.title)}</strong>
+                  <small>{agendaLabels[String(item.status)] ?? String(item.status)}</small>
+                </div>
+                {item.resolution_id && <b>✓</b>}
+              </Link>
+            ))}
+          </nav>
+        </aside>
+
+        <article className="meeting-focus-panel">
+          {!preferredAgenda ? (
+            <div className="meeting-focus-empty">
+              <img src="/vdc-logo.svg" alt="" />
+              <h2>Noch keine Tagesordnung</h2>
+              <p>Lege unten den ersten TOP für diese Sitzung an.</p>
             </div>
+          ) : (
+            <>
+              <header className="meeting-focus-head">
+                <div>
+                  <span className="eyebrow">TOP {Number(preferredAgenda.position)}</span>
+                  <h2>{String(preferredAgenda.title)}</h2>
+                </div>
+                <div className="meeting-focus-status">
+                  <span>Status</span>
+                  <b className={`agenda-status agenda-${preferredAgenda.status}`}>
+                    {agendaLabels[String(preferredAgenda.status)] ?? String(preferredAgenda.status)}
+                  </b>
+                </div>
+              </header>
 
-            <div className="agenda-list">
-              {agenda.length === 0 ? (
-                <div className="empty-state">Noch keine Tagesordnungspunkte vorhanden.</div>
-              ) : agenda.map((item) => (
-                <article className={`agenda-card agenda-${item.status}`} key={String(item.id)}>
-                  <div className="agenda-number">{String(item.position).padStart(2, "0")}</div>
-                  <div className="agenda-content">
-                    <div className="agenda-title-row">
-                      <div>
-                        <strong>{String(item.title)}</strong>
-                        <span>{agendaLabels[String(item.status)] ?? String(item.status)}</span>
-                      </div>
-                      {item.resolution_number && <b className="resolution-number">{String(item.resolution_number)}</b>}
-                    </div>
-                    {item.description && <p>{String(item.description)}</p>}
+              <div className="meeting-focus-content">
+                <section className="meeting-focus-section">
+                  <span>Inhalt / Notizen</span>
+                  {preferredAgenda.description ? (
+                    <p>{String(preferredAgenda.description)}</p>
+                  ) : (
+                    <p className="muted-copy">Keine Beschreibung hinterlegt.</p>
+                  )}
 
-                    {meetingRunning && canWrite ? (
-                      <form action={updateAgendaNotesAction} className="agenda-result-form">
-                        <input type="hidden" name="meetingId" value={id} />
-                        <input type="hidden" name="agendaItemId" value={String(item.id)} />
-                        <label>
-                          Ergebnisnotiz
-                          <textarea
-                            name="notes"
-                            rows={2}
-                            defaultValue={item.notes ? String(item.notes) : ""}
-                            placeholder="Diskussion, Ergebnis oder wichtige Hinweise zum TOP …"
-                          />
-                        </label>
-                        <button className="mini-button">Notiz speichern</button>
-                      </form>
-                    ) : item.notes ? (
-                      <div className="agenda-result-note">
-                        <span>Ergebnisnotiz</span>
-                        <p>{String(item.notes)}</p>
-                      </div>
-                    ) : null}
-
-                    {item.resolution_id ? (
-                      <div className="resolution-inline">
-                        <span className="eyebrow">Beschluss</span>
-                        <strong>{String(item.resolution_title)}</strong>
-                        <p>{String(item.decision_text)}</p>
-                        <div className="vote-summary">
-                          <span>Ja {Number(item.votes_yes)}</span>
-                          <span>Nein {Number(item.votes_no)}</span>
-                          <span>Enthaltung {Number(item.votes_abstain)}</span>
-                          {item.task_id && <span>Aufgabe: {String(item.task_status)}</span>}
-                        </div>
-                      </div>
-                    ) : (
-                      <>
-                        {canWrite && meetingRunning && (
-                          <div className="agenda-actions">
-                            {item.status !== "active" && (
-                              <form action={updateAgendaStatusAction}>
-                                <input type="hidden" name="meetingId" value={id} />
-                                <input type="hidden" name="agendaItemId" value={String(item.id)} />
-                                <input type="hidden" name="status" value="active" />
-                                <button className="mini-button">Jetzt behandeln</button>
-                              </form>
-                            )}
-                            {item.status !== "deferred" && (
-                              <form action={updateAgendaStatusAction}>
-                                <input type="hidden" name="meetingId" value={id} />
-                                <input type="hidden" name="agendaItemId" value={String(item.id)} />
-                                <input type="hidden" name="status" value="deferred" />
-                                <button className="mini-button">Vertagen</button>
-                              </form>
-                            )}
-                            {item.status !== "done" && (
-                              <form action={updateAgendaStatusAction}>
-                                <input type="hidden" name="meetingId" value={id} />
-                                <input type="hidden" name="agendaItemId" value={String(item.id)} />
-                                <input type="hidden" name="status" value="done" />
-                                <button className="mini-button">Ohne Beschluss erledigen</button>
-                              </form>
-                            )}
-                            {["planned","running"].includes(String(meeting.status)) && (
-                              <form action={deleteAgendaItemAction}>
-                                <input type="hidden" name="meetingId" value={id} />
-                                <input type="hidden" name="agendaItemId" value={String(item.id)} />
-                                <ConfirmSubmitButton message={"TOP „"+String(item.title)+"“ wirklich löschen?"}>
-                                  TOP löschen
-                                </ConfirmSubmitButton>
-                              </form>
-                            )}
-                          </div>
-                        )}
-
-                        {canResolve && meetingRunning && (
-                          <details className="resolution-form-wrap">
-                            <summary>Beschluss zu diesem TOP erfassen</summary>
-                            <form action={createResolutionFromAgendaAction} className="form-stack">
-                              <input type="hidden" name="meetingId" value={id} />
-                              <input type="hidden" name="agendaItemId" value={String(item.id)} />
-                              <label>Titel<input name="title" defaultValue={String(item.title)} required /></label>
-                              <label>Beschlusstext<textarea name="decisionText" rows={4} required /></label>
-                              <div className="vote-input-grid">
-                                <label>Ja<input name="votesYes" type="number" min="0" defaultValue="0" /></label>
-                                <label>Nein<input name="votesNo" type="number" min="0" defaultValue="0" /></label>
-                                <label>Enthaltung<input name="votesAbstain" type="number" min="0" defaultValue="0" /></label>
-                              </div>
-                              {canCreateTasks && (
-                                <>
-                                  <label className="checkbox-row">
-                                    <input type="checkbox" name="createTask" />
-                                    <span>Direkt Folgeaufgabe erzeugen</span>
-                                  </label>
-                                  <div className="form-grid">
-                                    <label>Verantwortlich
-                                      <select name="taskOwner" defaultValue="">
-                                        <option value="">Noch offen</option>
-                                        {members.map((member) => (
-                                          <option key={String(member.id)} value={String(member.id)}>
-                                            {String(member.first_name)} {String(member.last_name)}
-                                          </option>
-                                        ))}
-                                      </select>
-                                    </label>
-                                    <label>Frist<input name="taskDueDate" type="date" /></label>
-                                  </div>
-                                </>
-                              )}
-                              <button className="primary-button" type="submit">Beschluss speichern</button>
-                            </form>
-                          </details>
-                        )}
-                      </>
-                    )}
-                  </div>
-                </article>
-              ))}
-            </div>
-          </article>
-
-          {canWrite && ["planned","running"].includes(String(meeting.status)) && (
-            <article className="panel">
-              <div className="panel-head"><div><span className="eyebrow">Vorbereitung</span><h2>TOP hinzufügen</h2></div></div>
-              <form action={addAgendaItemAction} className="form-stack">
-                <input type="hidden" name="meetingId" value={id} />
-                <label>Titel<input name="title" required /></label>
-                <label>Beschreibung<textarea name="description" rows={3} /></label>
-                <button className="primary-button" type="submit">TOP hinzufügen</button>
-              </form>
-            </article>
-          )}
-        </div>
-
-        <aside className="meeting-side-column">
-          <article className="panel sticky-panel">
-            <div className="panel-head"><div><span className="eyebrow">Teilnehmer</span><h2>Anwesenheit</h2></div></div>
-            <div className="attendee-list">
-              {attendees.length === 0 ? (
-                <div className="empty-state">Noch niemand eingeladen.</div>
-              ) : attendees.map((attendee) => (
-                <div className="attendee-row" key={String(attendee.member_id)}>
-                  <div className="member-avatar">
-                    {String(attendee.first_name).slice(0,1)}{String(attendee.last_name).slice(0,1)}
-                  </div>
-                  <div>
-                    <strong>{String(attendee.first_name)} {String(attendee.last_name)}</strong>
-                    <span>{attendanceLabels[String(attendee.attendance)] ?? String(attendee.attendance)}</span>
-                  </div>
-                  {canWrite && ["planned","running"].includes(String(meeting.status)) && (
-                    <form action={updateAttendanceAction}>
+                  {meetingRunning && canWrite ? (
+                    <form action={updateAgendaNotesAction} className="meeting-focus-note-form">
                       <input type="hidden" name="meetingId" value={id} />
-                      <input type="hidden" name="memberId" value={String(attendee.member_id)} />
-                      <select name="attendance" defaultValue={String(attendee.attendance)}>
-                        <option value="invited">Eingeladen</option>
-                        <option value="present">Anwesend</option>
-                        <option value="absent">Abwesend</option>
-                        <option value="excused">Entschuldigt</option>
-                      </select>
-                      <button className="mini-button">Speichern</button>
+                      <input type="hidden" name="agendaItemId" value={String(preferredAgenda.id)} />
+                      <textarea
+                        name="notes"
+                        rows={4}
+                        defaultValue={preferredAgenda.notes ? String(preferredAgenda.notes) : ""}
+                        placeholder="Diskussion, Ergebnis und wichtige Hinweise festhalten …"
+                      />
+                      <button className="mini-button">Notiz speichern</button>
                     </form>
+                  ) : preferredAgenda.notes ? (
+                    <div className="meeting-read-note">{String(preferredAgenda.notes)}</div>
+                  ) : null}
+                </section>
+
+                <section className="meeting-focus-section">
+                  <div className="meeting-section-head">
+                    <span>Beschluss</span>
+                    {preferredAgenda.resolution_number && <b>{String(preferredAgenda.resolution_number)}</b>}
+                  </div>
+
+                  {preferredAgenda.resolution_id ? (
+                    <div className="meeting-resolution-summary">
+                      <strong>{String(preferredAgenda.resolution_title)}</strong>
+                      <p>{String(preferredAgenda.decision_text)}</p>
+                      <div>
+                        <span>Ja <b>{Number(preferredAgenda.votes_yes)}</b></span>
+                        <span>Nein <b>{Number(preferredAgenda.votes_no)}</b></span>
+                        <span>Enthaltung <b>{Number(preferredAgenda.votes_abstain)}</b></span>
+                        {preferredAgenda.task_id && (
+                          <span>Aufgabe <b>{taskStatusLabel(preferredAgenda.task_status)}</b></span>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="meeting-no-resolution">
+                      <p>Noch kein Beschluss zu diesem TOP erfasst.</p>
+                      {canResolve && meetingRunning && <span>Über die Aktionsleiste kannst du einen Beschluss erfassen.</span>}
+                    </div>
+                  )}
+                </section>
+
+                {meetingRunning && canWrite && !preferredAgenda.resolution_id && preferredAgenda.status!=="active" && (
+                  <form action={updateAgendaStatusAction} className="meeting-focus-start">
+                    <input type="hidden" name="meetingId" value={id} />
+                    <input type="hidden" name="agendaItemId" value={String(preferredAgenda.id)} />
+                    <input type="hidden" name="status" value="active" />
+                    <button className="primary-button">Diesen TOP jetzt behandeln</button>
+                  </form>
+                )}
+
+                {canWrite && ["planned","running"].includes(String(meeting.status)) && !preferredAgenda.resolution_id && (
+                  <form action={deleteAgendaItemAction} className="meeting-top-delete">
+                    <input type="hidden" name="meetingId" value={id} />
+                    <input type="hidden" name="agendaItemId" value={String(preferredAgenda.id)} />
+                    <ConfirmSubmitButton message={"TOP „"+String(preferredAgenda.title)+"“ wirklich löschen?"}>
+                      TOP löschen
+                    </ConfirmSubmitButton>
+                  </form>
+                )}
+              </div>
+
+              <footer className="meeting-action-bar">
+                {previousAgenda ? (
+                  <Link href={`/sitzungen/${id}?top=${String(previousAgenda.id)}`} className="meeting-action secondary">← Zurück</Link>
+                ) : (
+                  <span className="meeting-action secondary is-disabled">← Zurück</span>
+                )}
+
+                <div className="meeting-action-center">
+                  {meetingRunning && canWrite && !preferredAgenda.resolution_id && !["done","deferred"].includes(String(preferredAgenda.status)) && (
+                    <>
+                      <form action={updateAgendaStatusAction}>
+                        <input type="hidden" name="meetingId" value={id} />
+                        <input type="hidden" name="agendaItemId" value={String(preferredAgenda.id)} />
+                        <input type="hidden" name="status" value="done" />
+                        <button className="meeting-action success">TOP erledigen</button>
+                      </form>
+                      <form action={updateAgendaStatusAction}>
+                        <input type="hidden" name="meetingId" value={id} />
+                        <input type="hidden" name="agendaItemId" value={String(preferredAgenda.id)} />
+                        <input type="hidden" name="status" value="deferred" />
+                        <button className="meeting-action secondary">Vertagen</button>
+                      </form>
+                    </>
+                  )}
+
+                  {canResolve && meetingRunning && !preferredAgenda.resolution_id && (
+                    <details className="meeting-resolution-drawer">
+                      <summary className="meeting-action danger">Beschluss erfassen</summary>
+                      <div className="resolution-drawer-panel">
+                        <div className="resolution-drawer-head">
+                          <div>
+                            <span className="eyebrow">TOP {Number(preferredAgenda.position)}</span>
+                            <h3>Beschluss erfassen</h3>
+                          </div>
+                          <span>Erneut auf „Beschluss erfassen“ klicken zum Schließen.</span>
+                        </div>
+                        <form action={createResolutionFromAgendaAction} className="form-stack">
+                          <input type="hidden" name="meetingId" value={id} />
+                          <input type="hidden" name="agendaItemId" value={String(preferredAgenda.id)} />
+                          <label>Titel<input name="title" defaultValue={String(preferredAgenda.title)} required /></label>
+                          <label>Beschlusstext<textarea name="decisionText" rows={4} required /></label>
+                          <div className="vote-input-grid">
+                            <label>Ja<input name="votesYes" type="number" min="0" defaultValue="0" /></label>
+                            <label>Nein<input name="votesNo" type="number" min="0" defaultValue="0" /></label>
+                            <label>Enthaltung<input name="votesAbstain" type="number" min="0" defaultValue="0" /></label>
+                          </div>
+
+                          {canCreateTasks && (
+                            <>
+                              <label className="checkbox-row">
+                                <input type="checkbox" name="createTask" />
+                                <span>Direkt Folgeaufgabe erzeugen</span>
+                              </label>
+                              <div className="form-grid">
+                                <label>Verantwortlich
+                                  <select name="taskOwner" defaultValue="">
+                                    <option value="">Noch offen</option>
+                                    {members.map((member)=>(
+                                      <option key={String(member.id)} value={String(member.id)}>
+                                        {String(member.first_name)} {String(member.last_name)}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </label>
+                                <label>Frist<input name="taskDueDate" type="date" /></label>
+                              </div>
+                            </>
+                          )}
+
+                          <button className="primary-button" type="submit">Beschluss speichern</button>
+                        </form>
+                      </div>
+                    </details>
                   )}
                 </div>
-              ))}
+
+                {nextAgenda ? (
+                  <Link href={`/sitzungen/${id}?top=${String(nextAgenda.id)}`} className="meeting-action primary">Weiter →</Link>
+                ) : (
+                  <span className="meeting-action primary is-disabled">Weiter →</span>
+                )}
+              </footer>
+            </>
+          )}
+        </article>
+      </section>
+
+      {meetingRunning && canWrite && (
+        <section className="meeting-finish-strip">
+          <div>
+            <strong>Sitzung abschließen</strong>
+            <span>
+              {openAgendaCount>0
+                ? openAgendaCount+" offene/aktive TOPs müssen zuerst erledigt oder vertagt werden."
+                : unresolvedAttendanceCount>0
+                  ? unresolvedAttendanceCount+" Anwesenheiten sind noch ungeklärt."
+                  : "Alle Voraussetzungen sind erfüllt."}
+            </span>
+          </div>
+          <form action={updateMeetingStatusAction}>
+            <input type="hidden" name="meetingId" value={id} />
+            <input type="hidden" name="status" value="completed" />
+            <button
+              className="light-button"
+              disabled={openAgendaCount>0 || unresolvedAttendanceCount>0}
+            >
+              Sitzung beenden
+            </button>
+          </form>
+        </section>
+      )}
+
+      <section className="meeting-management-grid">
+        <article className="panel">
+          <div className="panel-head">
+            <div><span className="eyebrow">Teilnehmer</span><h2>Anwesenheit</h2></div>
+            <span className="count-chip">{presentCount}/{attendees.length}</span>
+          </div>
+
+          <div className="attendee-list">
+            {attendees.length===0 ? (
+              <div className="empty-state">Noch niemand eingeladen.</div>
+            ) : attendees.map((attendee)=>(
+              <div className="attendee-row" key={String(attendee.member_id)}>
+                <div className="member-avatar">
+                  {String(attendee.first_name).slice(0,1)}{String(attendee.last_name).slice(0,1)}
+                </div>
+                <div>
+                  <strong>{String(attendee.first_name)} {String(attendee.last_name)}</strong>
+                  <span>{attendanceLabels[String(attendee.attendance)] ?? String(attendee.attendance)}</span>
+                </div>
+
+                {canWrite && ["planned","running"].includes(String(meeting.status)) && (
+                  <form action={updateAttendanceAction}>
+                    <input type="hidden" name="meetingId" value={id} />
+                    <input type="hidden" name="memberId" value={String(attendee.member_id)} />
+                    <select name="attendance" defaultValue={String(attendee.attendance)}>
+                      <option value="invited">Eingeladen</option>
+                      <option value="present">Anwesend</option>
+                      <option value="absent">Abwesend</option>
+                      <option value="excused">Entschuldigt</option>
+                    </select>
+                    <button className="mini-button">Speichern</button>
+                  </form>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {canWrite && ["planned","running"].includes(String(meeting.status)) && availableMembers.length>0 && (
+            <form action={addAttendeeAction} className="form-stack attendee-add-form">
+              <input type="hidden" name="meetingId" value={id} />
+              <label>Teilnehmer hinzufügen
+                <select name="memberId" defaultValue="" required>
+                  <option value="" disabled>Mitglied auswählen</option>
+                  {availableMembers.map((member)=>(
+                    <option key={String(member.id)} value={String(member.id)}>
+                      {String(member.first_name)} {String(member.last_name)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button className="ghost-button" type="submit">Hinzufügen</button>
+            </form>
+          )}
+        </article>
+
+        {canWrite && ["planned","running"].includes(String(meeting.status)) && (
+          <article className="panel">
+            <div className="panel-head">
+              <div><span className="eyebrow">Tagesordnung</span><h2>TOP hinzufügen</h2></div>
             </div>
-
-            {canWrite && ["planned","running"].includes(String(meeting.status)) && availableMembers.length > 0 && (
-              <form action={addAttendeeAction} className="form-stack attendee-add-form">
-                <input type="hidden" name="meetingId" value={id} />
-                <label>Teilnehmer hinzufügen
-                  <select name="memberId" defaultValue="" required>
-                    <option value="" disabled>Mitglied auswählen</option>
-                    {availableMembers.map((member) => (
-                      <option key={String(member.id)} value={String(member.id)}>
-                        {String(member.first_name)} {String(member.last_name)}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <button className="ghost-button" type="submit">Hinzufügen</button>
-              </form>
-            )}
+            <form action={addAgendaItemAction} className="form-stack">
+              <input type="hidden" name="meetingId" value={id} />
+              <label>Titel<input name="title" required /></label>
+              <label>Beschreibung<textarea name="description" rows={3} /></label>
+              <button className="primary-button" type="submit">TOP hinzufügen</button>
+            </form>
           </article>
+        )}
 
-          {canWrite && meetingEditable && (
-            <article className="panel">
-              <div className="panel-head"><div><span className="eyebrow">Sitzung</span><h2>Details bearbeiten</h2></div></div>
-              <form action={updateMeetingDetailsAction} className="form-stack">
-                <input type="hidden" name="meetingId" value={id} />
-                <label>Titel<input name="title" defaultValue={String(meeting.title)} required /></label>
-                <label>Start<input name="startsAt" type="datetime-local" defaultValue={dateTimeLocal(meeting.starts_at)} required /></label>
-                <label>Ort<input name="location" defaultValue={meeting.location ? String(meeting.location) : ""} /></label>
-                <label>Vorbereitung / Notiz<textarea name="notes" rows={3} defaultValue={meeting.notes ? String(meeting.notes) : ""} /></label>
-                <button className="mini-button">Sitzungsdaten speichern</button>
-              </form>
-            </article>
-          )}
+        {canWrite && meetingEditable && (
+          <article className="panel">
+            <div className="panel-head">
+              <div><span className="eyebrow">Sitzung</span><h2>Details bearbeiten</h2></div>
+            </div>
+            <form action={updateMeetingDetailsAction} className="form-stack">
+              <input type="hidden" name="meetingId" value={id} />
+              <label>Titel<input name="title" defaultValue={String(meeting.title)} required /></label>
+              <label>Start<input name="startsAt" type="datetime-local" defaultValue={dateTimeLocal(meeting.starts_at)} required /></label>
+              <label>Ort<input name="location" defaultValue={meeting.location ? String(meeting.location) : ""} /></label>
+              <label>Vorbereitung / Notiz<textarea name="notes" rows={3} defaultValue={meeting.notes ? String(meeting.notes) : ""} /></label>
+              <button className="mini-button">Sitzungsdaten speichern</button>
+            </form>
+          </article>
+        )}
 
-          {meeting.notes && !meetingEditable && (
-            <article className="panel">
-              <div className="panel-head"><div><span className="eyebrow">Vorbereitung</span><h2>Notiz</h2></div></div>
-              <p>{String(meeting.notes)}</p>
-            </article>
-          )}
-        </aside>
+        {meeting.notes && !meetingEditable && (
+          <article className="panel">
+            <div className="panel-head">
+              <div><span className="eyebrow">Vorbereitung</span><h2>Sitzungsnotiz</h2></div>
+            </div>
+            <p>{String(meeting.notes)}</p>
+          </article>
+        )}
+
+        {canWrite && ["planned","cancelled"].includes(String(meeting.status)) && (
+          <article className="panel meeting-danger-panel">
+            <div className="panel-head">
+              <div><span className="eyebrow">Verwaltung</span><h2>Sitzung entfernen</h2></div>
+            </div>
+            <p>Nur geplante oder abgesagte Sitzungen ohne Beschlüsse und Dokumente können in den Papierkorb verschoben werden.</p>
+            <form action={moveToTrashAction}>
+              <input type="hidden" name="type" value="meeting" />
+              <input type="hidden" name="id" value={id} />
+              <ConfirmSubmitButton
+                message={"Sitzung „"+String(meeting.title)+"“ in den Papierkorb verschieben?"}
+              >
+                Sitzung löschen
+              </ConfirmSubmitButton>
+            </form>
+          </article>
+        )}
       </section>
     </div>
   );
