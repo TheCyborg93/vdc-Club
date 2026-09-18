@@ -139,7 +139,7 @@ export function AppShell({
       <aside className={`sidebar ${open ? "is-open" : ""}`}>
         <Link href="/" className="brand" onClick={()=>setOpen(false)} aria-label="VDC Dashboard">
           <div className="brand-logo">
-            <img src="/vdc-logo.png" alt="" />
+            <img src="/vdc-logo.svg" alt="" />
           </div>
           <div className="brand-copy">
             <strong>VDC</strong>
