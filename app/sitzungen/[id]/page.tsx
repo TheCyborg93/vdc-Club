@@ -142,7 +142,10 @@ export default async function MeetingDetailPage({
           <p>{formatDateTime(meeting.starts_at)} · {meeting.location ? String(meeting.location) : "Ort offen"}</p>
         </div>
         <div className="meeting-hero-side">
-          <b className={`status-badge status-${meeting.status}`}>{String(meeting.status)}</b>
+          <div className="meeting-hero-links">
+            <Link href={`/sitzungen/${id}/protokoll`} className="ghost-button">Protokoll</Link>
+            <b className={`status-badge status-${meeting.status}`}>{String(meeting.status)}</b>
+          </div>
           {canWrite && (
             <div className="meeting-status-actions">
               {meeting.status !== "running" && meeting.status !== "completed" && (
