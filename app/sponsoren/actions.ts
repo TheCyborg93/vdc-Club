@@ -66,6 +66,7 @@ export async function updateSponsorStatusAction(formData: FormData) {
     UPDATE sponsors
     SET status = ${status}
     WHERE id = ${id}::uuid
+      AND deleted_at IS NULL
   `;
 
   revalidatePath("/sponsoren");
@@ -74,7 +75,7 @@ export async function updateSponsorStatusAction(formData: FormData) {
 
 
 export async function deleteUnusedSponsorAction(formData: FormData) {
-  const actor=await requirePermission("settings.manage");
+  const actor=await requirePermission("sponsors.write");
   const sql=getDb();
   if (!sql) redirect("/sponsoren?error=database");
 
@@ -84,9 +85,13 @@ export async function deleteUnusedSponsorAction(formData: FormData) {
   const rows=await sql`
     SELECT
       s.id::text,s.name,s.status,
-      EXISTS(SELECT 1 FROM documents d WHERE d.sponsor_id=s.id) AS has_documents
+      EXISTS(
+        SELECT 1 FROM documents d
+        WHERE d.sponsor_id=s.id AND d.deleted_at IS NULL
+      ) AS has_documents
     FROM sponsors s
     WHERE s.id=${id}::uuid
+      AND s.deleted_at IS NULL
     LIMIT 1
   `;
   const sponsor=rows[0];
@@ -99,11 +104,19 @@ export async function deleteUnusedSponsorAction(formData: FormData) {
     redirect("/sponsoren?error=sponsor_delete");
   }
 
-  await sql`DELETE FROM sponsors WHERE id=${id}::uuid`;
-  await writeAudit(actor.id,"sponsor.deleted_unused","sponsor",id,{name:String(sponsor.name)});
+  await sql`
+    UPDATE sponsors
+    SET
+      deleted_at=now(),
+      deleted_by=${actor.id}::uuid,
+      delete_reason='Über Sponsorenverwaltung gelöscht.'
+    WHERE id=${id}::uuid
+  `;
+
+  await writeAudit(actor.id,"trash.moved","sponsor",id,{name:String(sponsor.name)});
 
   revalidatePath("/sponsoren");
-  revalidatePath("/archiv");
+  revalidatePath("/admin/papierkorb");
   revalidatePath("/");
   redirect("/sponsoren?deleted=1");
 }
