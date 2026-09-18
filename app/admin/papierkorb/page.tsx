@@ -200,6 +200,7 @@ export default async function TrashPage({
                     <ConfirmSubmitButton
                       message={"„"+item.title+"“ wirklich ENDGÜLTIG löschen? Diese Aktion kann nicht rückgängig gemacht werden."}
                       className="mini-button danger-button"
+                      requireText="LÖSCHEN"
                     >
                       Endgültig löschen
                     </ConfirmSubmitButton>
