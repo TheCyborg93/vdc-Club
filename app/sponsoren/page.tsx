@@ -2,8 +2,10 @@ import { getDb } from "@/lib/db";
 import { hasPermission, requirePermission } from "@/lib/permissions";
 import {
   createSponsorAction,
+  deleteUnusedSponsorAction,
   updateSponsorStatusAction,
 } from "@/app/sponsoren/actions";
+import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 
 export const dynamic = "force-dynamic";
 
@@ -23,12 +25,13 @@ function formatDate(value: unknown) {
 export default async function SponsorsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; created?: string }>;
+  searchParams: Promise<{ error?: string; created?: string; deleted?: string }>;
 }) {
   const actor = await requirePermission("sponsors.read");
   const sql = getDb();
   const params = await searchParams;
   const canWrite = hasPermission(actor.roles, "sponsors.write");
+  const isAdmin = actor.roles.includes("admin");
 
   const [sponsors, counts] = sql
     ? await Promise.all([
@@ -68,8 +71,15 @@ export default async function SponsorsPage({
         </div>
       </section>
 
-      {params.error && <div className="form-error">Die Sponsorendaten konnten nicht gespeichert werden.</div>}
+      {params.error && (
+        <div className="form-error">
+          {params.error==="sponsor_delete"
+            ? "Dieser Sponsor kann nicht endgültig gelöscht werden. Nur Kontakte/Inaktive ohne verknüpfte Dokumente sind löschbar."
+            : "Die Sponsorendaten konnten nicht gespeichert werden."}
+        </div>
+      )}
       {params.created && <div className="form-success">Sponsor wurde angelegt.</div>}
+      {params.deleted && <div className="form-success">Unbenutzter Sponsor wurde endgültig gelöscht.</div>}
 
       <section className="stat-grid">
         <article className="stat-card"><span>Sponsoren</span><strong>{Number(c.total ?? 0)}</strong><small>gesamt</small></article>
@@ -113,6 +123,17 @@ export default async function SponsorsPage({
                     </select>
                     <button className="mini-button">Status speichern</button>
                   </form>
+                  {isAdmin && ["lead","inactive"].includes(String(s.status)) && (
+                    <form action={deleteUnusedSponsorAction}>
+                      <input type="hidden" name="id" value={String(s.id)} />
+                      <ConfirmSubmitButton
+                        message={"Sponsor „"+String(s.name)+"“ endgültig löschen? Das funktioniert nur ohne verknüpfte Dokumente."}
+                        requireText="LÖSCHEN"
+                      >
+                        Endgültig löschen
+                      </ConfirmSubmitButton>
+                    </form>
+                  )}
                 )}
               </article>
             ))}
