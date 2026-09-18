@@ -68,7 +68,12 @@ export async function GET(
 
     const disposition=forceDownload || !inlineSafe ? "attachment" : "inline";
 
-    return new Response(bytes,{
+    const body=bytes.buffer.slice(
+      bytes.byteOffset,
+      bytes.byteOffset+bytes.byteLength,
+    ) as ArrayBuffer;
+
+    return new Response(body,{
       headers:{
         "Content-Type":mime,
         "Content-Length":String(bytes.byteLength),
