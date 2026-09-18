@@ -116,3 +116,76 @@ export async function updateTaskStatusAction(formData: FormData) {
   revalidatePath("/");
   redirect("/aufgaben");
 }
+
+
+export async function updateTaskStatusInlineAction(formData: FormData) {
+  const actor=await requirePermission("tasks.write");
+  const sql=getDb();
+  if (!sql) return;
+
+  const id=value(formData,"id");
+  const statusRaw=value(formData,"status");
+  const status=allowedStatuses.has(statusRaw) ? statusRaw : "open";
+  if (!id) return;
+
+  const before=await sql`
+    SELECT id::text,title,status,source_type,source_id::text
+    FROM tasks
+    WHERE id=${id}::uuid
+      AND deleted_at IS NULL
+    LIMIT 1
+  `;
+  const task=before[0];
+  if (!task) return;
+
+  await sql`
+    UPDATE tasks
+    SET
+      status=${status},
+      completed_at=CASE
+        WHEN ${status}='done' THEN COALESCE(completed_at,now())
+        ELSE NULL
+      END
+    WHERE id=${id}::uuid
+      AND deleted_at IS NULL
+  `;
+
+  if (task.source_type==="resolution" && task.source_id) {
+    if (status==="done") {
+      await sql`
+        UPDATE resolutions
+        SET status='implemented',implemented_at=COALESCE(implemented_at,now())
+        WHERE id=${String(task.source_id)}::uuid
+          AND status<>'withdrawn'
+      `;
+    } else if (["in_progress","blocked"].includes(status)) {
+      await sql`
+        UPDATE resolutions
+        SET status='in_progress',implemented_at=NULL
+        WHERE id=${String(task.source_id)}::uuid
+          AND status<>'withdrawn'
+      `;
+    } else if (status==="open") {
+      await sql`
+        UPDATE resolutions
+        SET status='open',implemented_at=NULL
+        WHERE id=${String(task.source_id)}::uuid
+          AND status<>'withdrawn'
+      `;
+    }
+    revalidatePath("/beschluesse");
+  }
+
+  await writeAudit(actor.id,"task.status_changed","task",id,{
+    title:String(task.title ?? ""),
+    before:String(task.status ?? ""),
+    after:status,
+    sourceType:String(task.source_type ?? ""),
+    sourceId:task.source_id ? String(task.source_id) : null,
+    source:"dashboard",
+  });
+
+  revalidatePath("/aufgaben");
+  revalidatePath("/");
+  revalidatePath("/hinweise");
+}
