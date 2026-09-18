@@ -41,16 +41,21 @@ export async function saveTrainingAttendanceAction(formData: FormData) {
     redirect(`/training/${sessionId}?error=session`);
   }
 
-  if (new Date(String(session.scheduled_at)).getTime() > Date.now()) {
+  const scheduledAt=new Date(String(session.scheduled_at));
+  if (Number.isNaN(scheduledAt.getTime())) {
+    redirect(`/training/${sessionId}?error=session`);
+  }
+  if (scheduledAt.getTime() > Date.now()) {
     redirect(`/training/${sessionId}?error=future`);
   }
+  const scheduledAtIso=scheduledAt.toISOString();
 
   const members = await sql`
     SELECT id::text
     FROM members
     WHERE status IN ('active','passive')
-      AND (join_date IS NULL OR join_date <= (${String(session.scheduled_at)}::timestamptz AT TIME ZONE 'Europe/Berlin')::date)
-      AND (leave_date IS NULL OR leave_date >= (${String(session.scheduled_at)}::timestamptz AT TIME ZONE 'Europe/Berlin')::date)
+      AND (join_date IS NULL OR join_date <= (${scheduledAtIso}::timestamptz AT TIME ZONE 'Europe/Berlin')::date)
+      AND (leave_date IS NULL OR leave_date >= (${scheduledAtIso}::timestamptz AT TIME ZONE 'Europe/Berlin')::date)
     ORDER BY last_name,first_name
   `;
 
