@@ -36,6 +36,7 @@ export default async function MinutesPage({
       SELECT id::text, title, starts_at, ended_at, location, status, notes
       FROM meetings
       WHERE id = ${id}::uuid
+        AND deleted_at IS NULL
       LIMIT 1
     `,
     sql`
@@ -73,6 +74,7 @@ export default async function MinutesPage({
         ON t.source_type = 'resolution'
        AND t.source_id = r.id
        AND t.status <> 'cancelled'
+       AND t.deleted_at IS NULL
       LEFT JOIN members owner ON owner.id = t.owner_member_id
       WHERE ai.meeting_id = ${id}::uuid
       ORDER BY ai.position
