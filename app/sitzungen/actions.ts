@@ -75,6 +75,11 @@ export async function addAgendaItemAction(formData: FormData) {
       'open'
     FROM agenda_items
     WHERE meeting_id = ${meetingId}::uuid
+      AND EXISTS (
+        SELECT 1 FROM meetings m
+        WHERE m.id=${meetingId}::uuid
+          AND m.deleted_at IS NULL
+      )
   `;
 
   revalidatePath(`/sitzungen/${meetingId}`);
@@ -96,6 +101,11 @@ export async function updateAgendaStatusAction(formData: FormData) {
     SET status = ${status}
     WHERE id = ${agendaItemId}::uuid
       AND meeting_id = ${meetingId}::uuid
+      AND EXISTS (
+        SELECT 1 FROM meetings m
+        WHERE m.id=${meetingId}::uuid
+          AND m.deleted_at IS NULL
+      )
   `;
 
   revalidatePath(`/sitzungen/${meetingId}`);
@@ -113,7 +123,12 @@ export async function addAttendeeAction(formData: FormData) {
 
   await sql`
     INSERT INTO meeting_attendees (meeting_id, member_id, attendance)
-    VALUES (${meetingId}::uuid, ${memberId}::uuid, 'invited')
+    SELECT ${meetingId}::uuid, ${memberId}::uuid, 'invited'
+    WHERE EXISTS (
+      SELECT 1 FROM meetings m
+      WHERE m.id=${meetingId}::uuid
+        AND m.deleted_at IS NULL
+    )
     ON CONFLICT (meeting_id, member_id) DO NOTHING
   `;
 
@@ -138,6 +153,11 @@ export async function updateAttendanceAction(formData: FormData) {
     SET attendance = ${attendance}
     WHERE meeting_id = ${meetingId}::uuid
       AND member_id = ${memberId}::uuid
+      AND EXISTS (
+        SELECT 1 FROM meetings m
+        WHERE m.id=${meetingId}::uuid
+          AND m.deleted_at IS NULL
+      )
   `;
 
   revalidatePath(`/sitzungen/${meetingId}`);
@@ -159,6 +179,7 @@ export async function updateMeetingStatusAction(formData: FormData) {
     SELECT id::text,title,status,starts_at
     FROM meetings
     WHERE id=${meetingId}::uuid
+      AND deleted_at IS NULL
     LIMIT 1
   `;
 
@@ -172,6 +193,7 @@ export async function updateMeetingStatusAction(formData: FormData) {
         ELSE ended_at
       END
     WHERE id=${meetingId}::uuid
+      AND deleted_at IS NULL
   `;
 
   if (status==="completed" && before[0]) {
@@ -191,11 +213,13 @@ export async function updateMeetingStatusAction(formData: FormData) {
         'Automatisch beim Beenden der Sitzung registriert.'
       FROM meetings m
       WHERE m.id=${meetingId}::uuid
+        AND m.deleted_at IS NULL
         AND NOT EXISTS (
           SELECT 1
           FROM documents d
           WHERE d.meeting_id=m.id
             AND d.category='Protokoll'
+            AND d.deleted_at IS NULL
         )
     `;
   }
@@ -269,6 +293,11 @@ export async function createResolutionFromAgendaAction(formData: FormData) {
         now(),
         year::text || '-' || lpad(last_number::text, 3, '0')
       FROM counter
+      WHERE EXISTS (
+        SELECT 1 FROM meetings m
+        WHERE m.id=${meetingId}::uuid
+          AND m.deleted_at IS NULL
+      )
       RETURNING id, title
     ),
     new_task AS (
@@ -294,6 +323,11 @@ export async function createResolutionFromAgendaAction(formData: FormData) {
     SET status = 'done'
     WHERE id = ${agendaItemId}::uuid
       AND meeting_id = ${meetingId}::uuid
+      AND EXISTS (
+        SELECT 1 FROM meetings m
+        WHERE m.id=${meetingId}::uuid
+          AND m.deleted_at IS NULL
+      )
   `;
 
   revalidatePath(`/sitzungen/${meetingId}`);
