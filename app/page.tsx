@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getDashboardData } from "@/lib/dashboard-data";
+import { requireUser } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -36,15 +37,18 @@ function formatSync(value: string | null) {
   }).format(date);
 }
 
-const sourceLabels: Record<string,string> = {
-  vdc_tc: "TC",
-  vdc_turnier: "Turnier",
-  vdc_training: "Training",
-  club: "Club",
+const eventTypeLabels: Record<string,string> = {
+  league: "Ligaspiel",
+  training: "Training",
+  tournament: "Turnier",
+  board: "Vorstand",
+  club: "Verein",
 };
 
 export default async function DashboardPage() {
-  const data = await getDashboardData();
+  const user = await requireUser();
+  const isAdmin = user.roles.includes("admin");
+  const data = await getDashboardData({ includeSystem: isAdmin });
   const now = new Date();
   const today = new Intl.DateTimeFormat("de-DE", {
     weekday: "long",
@@ -72,7 +76,7 @@ export default async function DashboardPage() {
         <div className="hero-badge">
           <span>VDC</span>
           <strong>Club Control</strong>
-          <small>{data.connectedIntegrations}/3 Fachsysteme verbunden</small>
+          <small>{isAdmin ? `${data.connectedIntegrations}/3 Fachsysteme verbunden` : "Saison 2026/27"}</small>
         </div>
       </section>
 
@@ -86,18 +90,20 @@ export default async function DashboardPage() {
         ))}
       </section>
 
-      <section className="source-health-strip">
-        {data.integrations.map((integration) => (
-          <article key={integration.key}>
-            <div>
-              <span className={`sync-run-dot sync-run-${integration.status === "connected" ? "success" : integration.status === "error" ? "error" : "partial"}`} />
-              <strong>{integration.name}</strong>
-            </div>
-            <b>{integration.status === "connected" ? "Verbunden" : integration.status}</b>
-            <small>Sync {formatSync(integration.lastSyncAt)}</small>
-          </article>
-        ))}
-      </section>
+      {isAdmin && (
+        <section className="source-health-strip">
+          {data.integrations.map((integration) => (
+            <article key={integration.key}>
+              <div>
+                <span className={`sync-run-dot sync-run-${integration.status === "connected" ? "success" : integration.status === "error" ? "error" : "partial"}`} />
+                <strong>{integration.name}</strong>
+              </div>
+              <b>{integration.status === "connected" ? "Verbunden" : integration.status}</b>
+              <small>Sync {formatSync(integration.lastSyncAt)}</small>
+            </article>
+          ))}
+        </section>
+      )}
 
       <section className="attention-panel">
         <div className="attention-panel-head">
@@ -169,7 +175,7 @@ export default async function DashboardPage() {
                     <strong>{event.title}</strong>
                     <small>
                       {event.team ? `${event.team} · ` : ""}
-                      {sourceLabels[event.source] ?? event.source} · {event.location ?? "Ort offen"} · {d.time}
+                      {eventTypeLabels[event.eventType] ?? "Vereinstermin"} · {event.location ?? "Ort offen"} · {d.time}
                     </small>
                   </p>
                 </div>
@@ -191,10 +197,10 @@ export default async function DashboardPage() {
         </article>
 
         <article className="panel">
-          <div className="panel-head"><div><span className="eyebrow">Verein</span><h2>Datenbasis</h2></div></div>
-          <div className="team-card"><div><strong>{data.members} Mitglieder</strong><span>zentrale Club-Stammdaten</span></div><b>LIVE</b></div>
-          <div className="team-card"><div><strong>{data.teams} Mannschaften</strong><span>mit TC-Spielplan verbunden</span></div><b>LIVE</b></div>
-          <div className="team-card"><div><strong>{data.connectedIntegrations}/3 Integrationen</strong><span>TC, Turnier und Training</span></div><b>SYNC</b></div>
+          <div className="panel-head"><div><span className="eyebrow">Verein</span><h2>Auf einen Blick</h2></div></div>
+          <div className="team-card"><div><strong>{data.members} Mitglieder</strong><span>aktiver Vereinsbestand</span></div><b>VDC</b></div>
+          <div className="team-card"><div><strong>{data.teams} Mannschaften</strong><span>im aktuellen Spielbetrieb</span></div><b>SPORT</b></div>
+          <div className="team-card"><div><strong>{data.upcomingEvents} Termine</strong><span>in den nächsten 14 Tagen</span></div><b>PLAN</b></div>
         </article>
 
         <article className="panel panel-accent">
