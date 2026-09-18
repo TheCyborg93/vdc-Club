@@ -3595,3 +3595,76 @@ body{
     height:36px;
   }
 }
+
+
+/* ---- Formal board meeting flow --------------------------- */
+.meeting-close-hint{
+  align-self:center;
+  padding:6px 8px;
+  border:1px solid rgba(222,185,109,.18);
+  border-radius:999px;
+  background:rgba(222,185,109,.06);
+  color:#c6aa6d;
+  font-size:7px;
+  font-weight:850;
+}
+.meeting-status-actions button:disabled{
+  cursor:not-allowed;
+  opacity:.42;
+}
+.agenda-result-form{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) auto;
+  gap:7px;
+  align-items:end;
+  margin:9px 0;
+  padding:9px;
+  border:1px solid rgba(255,255,255,.07);
+  border-radius:9px;
+  background:#17171a;
+}
+.agenda-result-form label{
+  display:grid;
+  gap:4px;
+  color:#777378;
+  font-size:7px;
+  font-weight:850;
+}
+.agenda-result-form textarea{
+  width:100%;
+  min-height:58px;
+  resize:vertical;
+  padding:8px 9px;
+  border:1px solid rgba(255,255,255,.09);
+  border-radius:8px;
+  background:#121215;
+  color:#e8e3dd;
+  font-size:9px;
+  line-height:1.45;
+}
+.agenda-result-note{
+  margin:9px 0;
+  padding:9px 10px;
+  border-left:2px solid rgba(196,51,30,.25);
+  border-radius:0 8px 8px 0;
+  background:rgba(196,51,30,.035);
+}
+.agenda-result-note>span{
+  display:block;
+  color:#8e878a;
+  font-size:7px;
+  font-weight:900;
+  text-transform:uppercase;
+  letter-spacing:.08em;
+}
+.agenda-result-note>p{
+  margin:5px 0 0!important;
+  color:#aaa3a1!important;
+  font-size:8px!important;
+  line-height:1.5;
+}
+@media(max-width:620px){
+  .agenda-result-form{
+    grid-template-columns:1fr;
+  }
+}
