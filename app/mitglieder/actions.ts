@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { getDb } from "@/lib/db";
 import { hashPassword } from "@/lib/auth";
 import { requirePermission } from "@/lib/permissions";
+import { writeAudit } from "@/lib/audit";
 
 const allowedRoles = new Set([
   "admin", "board", "chair", "vice_chair", "treasurer",
@@ -214,7 +215,16 @@ export async function createMemberAccountAction(formData: FormData) {
     `;
   }
 
+  await writeAudit(
+    (await requirePermission("settings.manage")).id,
+    "member.account_created",
+    "app_user",
+    userId,
+    { memberId, roles: selectedRoles },
+  );
+
   revalidatePath(`/mitglieder/${memberId}`);
+  revalidatePath("/admin/benutzer");
   redirect(`/mitglieder/${memberId}?account=1`);
 }
 
@@ -230,8 +240,29 @@ export async function updateMemberRolesAction(formData: FormData) {
     .map(String)
     .filter((role) => allowedRoles.has(role));
 
+  const beforeRows = await sql`
+    SELECT COALESCE(array_agg(role_key),ARRAY[]::text[]) AS roles
+    FROM user_roles
+    WHERE user_id=${userId}::uuid
+  `;
+  const before = Array.isArray(beforeRows[0]?.roles) ? beforeRows[0].roles.map(String) : [];
   const roles = new Set(selectedRoles);
+
   if (userId === actor.id) roles.add("admin");
+
+  if (before.includes("admin") && !roles.has("admin")) {
+    const otherAdmins = await sql`
+      SELECT count(DISTINCT u.id)::int AS count
+      FROM app_users u
+      JOIN user_roles ur ON ur.user_id=u.id
+      WHERE ur.role_key='admin'
+        AND u.status='active'
+        AND u.id<>${userId}::uuid
+    `;
+    if (Number(otherAdmins[0]?.count ?? 0) === 0) {
+      redirect(`/mitglieder/${memberId}?error=last_admin`);
+    }
+  }
 
   await sql`DELETE FROM user_roles WHERE user_id = ${userId}::uuid`;
 
@@ -243,6 +274,13 @@ export async function updateMemberRolesAction(formData: FormData) {
     `;
   }
 
+  await writeAudit(actor.id,"member.roles_changed","app_user",userId,{
+    memberId,
+    before,
+    after:[...roles],
+  });
+
   revalidatePath(`/mitglieder/${memberId}`);
+  revalidatePath("/admin/benutzer");
   redirect(`/mitglieder/${memberId}?roles=1`);
 }
