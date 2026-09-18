@@ -1,23 +1,46 @@
-const stats = [
-  { label: "Mitglieder", value: "38", note: "+3 in dieser Saison" },
-  { label: "Mannschaften", value: "2", note: "beide aktiv" },
-  { label: "Offene Aufgaben", value: "7", note: "2 mit hoher Priorität" },
-  { label: "Nächste Termine", value: "4", note: "in den nächsten 14 Tagen" }
-];
+import { getDashboardData } from "@/lib/dashboard-data";
 
-const tasks = [
-  ["Mannschaftsmeldung prüfen", "Sport", "28.09.", "Hoch"],
-  ["Angebot neue Boards", "Material", "03.10.", "Mittel"],
-  ["Vereinsmeisterschaft planen", "Turnier", "12.10.", "Mittel"]
-];
+export const dynamic = "force-dynamic";
 
-export default function DashboardPage() {
+function formatDate(value: string | null) {
+  if (!value) return "Ohne Frist";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat("de-DE", { day: "2-digit", month: "2-digit" }).format(date);
+}
+
+function formatEventDate(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return { day: "--", month: "---", time: "" };
+  const day = new Intl.DateTimeFormat("de-DE", { day: "2-digit" }).format(date);
+  const month = new Intl.DateTimeFormat("de-DE", { month: "short" }).format(date).replace(".", "").toUpperCase();
+  const time = new Intl.DateTimeFormat("de-DE", { hour: "2-digit", minute: "2-digit" }).format(date);
+  return { day, month, time };
+}
+
+export default async function DashboardPage() {
+  const data = await getDashboardData();
+  const now = new Date();
+  const today = new Intl.DateTimeFormat("de-DE", {
+    weekday: "long",
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+  }).format(now);
+
+  const stats = [
+    { label: "Mitglieder", value: String(data.members), note: "aktive Mitglieder" },
+    { label: "Mannschaften", value: String(data.teams), note: "aktive Teams" },
+    { label: "Offene Aufgaben", value: String(data.openTasks), note: "noch zu erledigen" },
+    { label: "Nächste Termine", value: String(data.upcomingEvents), note: "in den nächsten 14 Tagen" },
+  ];
+
   return (
     <div className="page-stack">
       <section className="hero">
         <div>
-          <span className="eyebrow">Freitag · 18. September 2026</span>
-          <h1>Guten Morgen, Vorstand.</h1>
+          <span className="eyebrow">{today}</span>
+          <h1>Vereinszentrale</h1>
           <p>Alles Wichtige aus Verein, Mannschaften, Organisation und Finanzen auf einen Blick.</p>
         </div>
         <div className="hero-badge">
@@ -44,11 +67,13 @@ export default function DashboardPage() {
             <button className="ghost-button">Alle anzeigen</button>
           </div>
           <div className="table-list">
-            {tasks.map(([name, area, date, priority]) => (
-              <div className="table-row" key={name}>
-                <div><strong>{name}</strong><span>{area}</span></div>
-                <span>{date}</span>
-                <span className={`priority priority-${priority.toLowerCase()}`}>{priority}</span>
+            {data.tasks.length === 0 ? (
+              <div className="empty-state">Noch keine offenen Aufgaben vorhanden.</div>
+            ) : data.tasks.map((task) => (
+              <div className="table-row" key={task.title}>
+                <div><strong>{task.title}</strong><span>{task.category}</span></div>
+                <span>{formatDate(task.dueDate)}</span>
+                <span className={`priority priority-${task.priority.toLowerCase()}`}>{task.priority}</span>
               </div>
             ))}
           </div>
@@ -57,22 +82,30 @@ export default function DashboardPage() {
         <article className="panel">
           <div className="panel-head"><div><span className="eyebrow">Kalender</span><h2>Nächste Termine</h2></div></div>
           <div className="timeline">
-            <div><span>20 SEP</span><p><strong>Ligaspiel 1. Mannschaft</strong><small>Auswärtsspiel · 14:00</small></p></div>
-            <div><span>24 SEP</span><p><strong>Training</strong><small>Vereinsheim · 19:00</small></p></div>
-            <div><span>02 OKT</span><p><strong>Vorstandssitzung</strong><small>Besprechungsraum · 19:30</small></p></div>
+            {data.events.length === 0 ? (
+              <div className="empty-state">Noch keine kommenden Termine vorhanden.</div>
+            ) : data.events.map((event) => {
+              const d = formatEventDate(event.startsAt);
+              return (
+                <div key={event.title + event.startsAt}>
+                  <span>{d.day} {d.month}</span>
+                  <p><strong>{event.title}</strong><small>{event.location ?? "Ort offen"} · {d.time}</small></p>
+                </div>
+              );
+            })}
           </div>
         </article>
 
         <article className="panel">
-          <div className="panel-head"><div><span className="eyebrow">Teams</span><h2>Mannschaften</h2></div></div>
-          <div className="team-card"><div><strong>1. Mannschaft</strong><span>Münsterland Dartliga · 4A</span></div><b>Aktiv</b></div>
-          <div className="team-card"><div><strong>2. Mannschaft</strong><span>Vereinsbetrieb</span></div><b>Aktiv</b></div>
+          <div className="panel-head"><div><span className="eyebrow">Verein</span><h2>Datenbasis</h2></div></div>
+          <div className="team-card"><div><strong>{data.members} Mitglieder</strong><span>zentral verwaltet</span></div><b>LIVE</b></div>
+          <div className="team-card"><div><strong>{data.teams} Mannschaften</strong><span>bereit für VDC-TC-Sync</span></div><b>LIVE</b></div>
         </article>
 
         <article className="panel panel-accent">
           <span className="eyebrow">Sitzungsmodus</span>
           <h2>Vorstandssitzung vorbereiten</h2>
-          <p>Tagesordnung, Beschlüsse und Aufgaben werden später direkt miteinander verknüpft.</p>
+          <p>Tagesordnung, Beschlüsse und Aufgaben werden direkt miteinander verknüpft.</p>
           <button className="light-button">Sitzung anlegen</button>
         </article>
       </section>
