@@ -27,8 +27,8 @@ export default async function LoginPage({
     <main className="auth-page">
       <section className="auth-card">
         <div className="brand auth-brand">
-          <div className="brand-mark">VDC</div>
-          <div><strong>VDC Club</strong><span>Vorstandsportal</span></div>
+          <div className="brand-mark" aria-hidden="true"><span>VDC</span><i /></div>
+          <div className="brand-copy"><strong>Vestischer Dart Club</strong><span>e.V. · Vorstandsportal</span></div>
         </div>
         <div className="auth-copy">
           <span className="eyebrow">Anmeldung</span>
