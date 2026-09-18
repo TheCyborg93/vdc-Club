@@ -79,35 +79,83 @@ export async function getNotifications(
     `);
   }
 
+  if (hasPermission(user.roles,"meetings.write")) {
+    rows.push(...await sql`
+      SELECT
+        'meeting-running:' || m.id::text || ':' || x.open_agenda::text || ':' || x.invited::text AS key,
+        'Sitzung abschließen: ' || m.title AS title,
+        CASE
+          WHEN x.open_agenda>0 AND x.invited>0
+            THEN x.open_agenda::text || ' offene TOPs · ' || x.invited::text || ' Anwesenheiten ungeklärt'
+          WHEN x.open_agenda>0
+            THEN x.open_agenda::text || ' offene oder aktive TOPs'
+          WHEN x.invited>0
+            THEN x.invited::text || ' Anwesenheiten ungeklärt'
+          ELSE 'Sitzung kann beendet werden'
+        END AS detail,
+        '/sitzungen/' || m.id::text AS href,
+        CASE
+          WHEN m.starts_at<now()-interval '6 hours' THEN 'warning'
+          ELSE 'info'
+        END AS severity,
+        m.starts_at AS sort_at
+      FROM meetings m
+      CROSS JOIN LATERAL (
+        SELECT
+          (
+            SELECT count(*)::int
+            FROM agenda_items ai
+            WHERE ai.meeting_id=m.id
+              AND ai.status IN ('open','active')
+          ) AS open_agenda,
+          (
+            SELECT count(*)::int
+            FROM meeting_attendees ma
+            WHERE ma.meeting_id=m.id
+              AND ma.attendance='invited'
+          ) AS invited
+      ) x
+      WHERE m.status='running'
+        AND m.deleted_at IS NULL
+    `);
+  }
+
   if (hasPermission(user.roles,"documents.read")) {
     rows.push(...await sql`
       SELECT
-        'document:' || id::text AS key,
-        'Dokument prüfen: ' || title AS title,
+        'document:' || id::text || ':' || status || ':' ||
+          COALESCE(review_on::text,valid_until::text,'review') AS key,
         CASE
+          WHEN category='Protokoll' AND status='review'
+            THEN 'Protokoll prüfen: ' || title
+          ELSE 'Dokument prüfen: ' || title
+        END AS title,
+        CASE
+          WHEN status='review'
+            THEN 'Zur Prüfung markiert'
           WHEN valid_until IS NOT NULL AND valid_until<CURRENT_DATE
             THEN 'Gültigkeit abgelaufen am ' || to_char(valid_until,'DD.MM.YYYY')
           WHEN review_on IS NOT NULL AND review_on<=CURRENT_DATE
             THEN 'Prüftermin erreicht: ' || to_char(review_on,'DD.MM.YYYY')
           WHEN valid_until IS NOT NULL
             THEN 'Gültig bis ' || to_char(valid_until,'DD.MM.YYYY')
-          ELSE 'Prüfen am ' || to_char(review_on,'DD.MM.YYYY')
+          ELSE 'Prüfung erforderlich'
         END AS detail,
-        '/dokumente' AS href,
+        '/dokumente/' || id::text AS href,
         CASE
           WHEN (valid_until IS NOT NULL AND valid_until<CURRENT_DATE)
             OR (review_on IS NOT NULL AND review_on<CURRENT_DATE)
           THEN 'critical'
           ELSE 'warning'
         END AS severity,
-        COALESCE(review_on,valid_until,CURRENT_DATE)::timestamp AS sort_at
+        COALESCE(review_on::timestamp,valid_until::timestamp,updated_at) AS sort_at
       FROM documents
       WHERE status IN ('active','review')
         AND deleted_at IS NULL
         AND (
-          (review_on IS NOT NULL AND review_on<=CURRENT_DATE+interval '30 days')
-          OR
-          (valid_until IS NOT NULL AND valid_until<=CURRENT_DATE+interval '30 days')
+          status='review'
+          OR (review_on IS NOT NULL AND review_on<=CURRENT_DATE+interval '30 days')
+          OR (valid_until IS NOT NULL AND valid_until<=CURRENT_DATE+interval '30 days')
         )
     `);
   }
@@ -123,7 +171,11 @@ export async function getNotifications(
           WHEN t.id IS NULL THEN 'Noch keine Folgeaufgabe hinterlegt'
           ELSE 'Umsetzung läuft'
         END AS detail,
-        '/beschluesse' AS href,
+        CASE
+          WHEN r.resolution_number IS NOT NULL
+            THEN '/beschluesse?q=' || r.resolution_number
+          ELSE '/beschluesse'
+        END AS href,
         CASE
           WHEN t.due_date<CURRENT_DATE THEN 'critical'
           WHEN t.id IS NULL AND r.decided_at<now()-interval '14 days' THEN 'warning'
