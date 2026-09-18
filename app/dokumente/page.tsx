@@ -72,7 +72,7 @@ export default async function DocumentsPage({
           SELECT
             d.id::text,d.title,d.category,d.storage_type,d.storage_ref,d.status,
             d.document_date,d.valid_until,d.review_on,d.notes,d.created_at,
-            d.original_filename,d.file_size_bytes,d.mime_type,d.uploaded_at,
+            d.original_filename,d.file_size_bytes,d.mime_type,d.uploaded_at,d.current_version_number,
             m.first_name,m.last_name,
             mt.id::text AS meeting_id,mt.title AS meeting_title,
             r.resolution_number,r.title AS resolution_title,
@@ -187,9 +187,12 @@ export default async function DocumentsPage({
                     <Link href={"/dokumente/"+String(doc.id)} className="document-title-link">
                       <strong>{String(doc.title)}</strong>
                     </Link>
-                    <span className={`document-status document-${doc.status}`}>
-                      {statusLabels[String(doc.status)] ?? String(doc.status)}
-                    </span>
+                    <div className="document-title-meta">
+                      <span className="document-version-chip">v{Number(doc.current_version_number ?? 1)}</span>
+                      <span className={`document-status document-${doc.status}`}>
+                        {statusLabels[String(doc.status)] ?? String(doc.status)}
+                      </span>
+                    </div>
                   </div>
                   <span>
                     {String(doc.category)}
