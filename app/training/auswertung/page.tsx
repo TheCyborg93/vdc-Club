@@ -61,6 +61,7 @@ export default async function TrainingReportPage({
     ? await sql`
         SELECT id::text,label,starts_on,ends_on,is_active,notes
         FROM training_seasons
+        WHERE deleted_at IS NULL
         ORDER BY is_active DESC,starts_on DESC
       `
     : [];
@@ -148,6 +149,7 @@ export default async function TrainingReportPage({
             FROM teams t
             JOIN team_members tm ON tm.team_id=t.id AND tm.is_active=true
             WHERE t.status='active'
+              AND t.deleted_at IS NULL
               AND (${teamSeasonFilter}::text IS NULL OR t.season=${teamSeasonFilter})
             GROUP BY t.id
           ),
@@ -243,6 +245,7 @@ export default async function TrainingReportPage({
             ON a.session_id=s.id
            AND a.member_id=tm.member_id
           WHERE t.status='active'
+            AND t.deleted_at IS NULL
             AND (${teamSeasonFilter}::text IS NULL OR t.season=${teamSeasonFilter})
           GROUP BY
             t.id,t.short_name,t.name,
@@ -275,6 +278,7 @@ export default async function TrainingReportPage({
           LEFT JOIN teams t
             ON t.id=tm.team_id
            AND t.status='active'
+           AND t.deleted_at IS NULL
            AND (${teamSeasonFilter}::text IS NULL OR t.season=${teamSeasonFilter})
           LEFT JOIN training_attendance a ON a.member_id=m.id
           LEFT JOIN training_sessions s
