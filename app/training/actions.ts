@@ -376,6 +376,7 @@ export async function deleteTrainingPauseAction(formData: FormData) {
     SELECT id::text,starts_on,ends_on,reason
     FROM training_blackouts
     WHERE id=${pauseId}::uuid
+      AND deleted_at IS NULL
     LIMIT 1
   `;
   const pause=pauseRows[0];
@@ -398,19 +399,29 @@ export async function deleteTrainingPauseAction(formData: FormData) {
     FROM training_sessions s
     WHERE s.event_id=e.id
       AND s.deleted_at IS NULL
+      AND e.deleted_at IS NULL
       AND s.source='schedule'
       AND (s.scheduled_at AT TIME ZONE 'Europe/Berlin')::date
           BETWEEN ${String(pause.starts_on)}::date AND ${String(pause.ends_on)}::date
   `;
 
-  await sql`DELETE FROM training_blackouts WHERE id=${pauseId}::uuid`;
+  await sql`
+    UPDATE training_blackouts
+    SET
+      deleted_at=now(),
+      deleted_by=${actor.id}::uuid,
+      delete_reason='Trainingspause aufgehoben.'
+    WHERE id=${pauseId}::uuid
+  `;
+
   await ensureTrainingSchedule(365);
 
-  await writeAudit(actor.id,"training.pause_deleted","training_pause",pauseId,{
+  await writeAudit(actor.id,"trash.moved","training_pause",pauseId,{
     startsOn:String(pause.starts_on),
     endsOn:String(pause.ends_on),
   });
 
   revalidateTraining();
+  revalidatePath("/admin/papierkorb");
   redirect("/training?pause_removed=1");
 }
