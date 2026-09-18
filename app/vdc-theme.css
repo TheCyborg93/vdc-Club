@@ -3822,3 +3822,122 @@ body{
     grid-template-columns:1fr;
   }
 }
+
+
+/* ---- Final interaction & mobile polish ------------------- */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+summary:focus-visible{
+  outline:2px solid rgba(226,74,39,.82);
+  outline-offset:2px;
+}
+
+button,
+a,
+summary{
+  -webkit-tap-highlight-color:transparent;
+}
+
+@media(max-width:720px){
+  .form-stack input,
+  .form-stack select,
+  .form-stack textarea,
+  .task-create-form input,
+  .task-create-form select,
+  .task-create-form textarea,
+  .global-search-form input,
+  .document-filter-form input,
+  .document-filter-form select,
+  .resolution-filter-form input,
+  .resolution-filter-form select,
+  .topbar-search input,
+  .attendee-row select,
+  .document-actions select,
+  .sponsor-status-form select{
+    font-size:16px!important;
+  }
+
+  .primary-button,
+  .light-button,
+  .ghost-button,
+  .mini-button,
+  .danger-button{
+    min-height:42px;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    padding:9px 12px;
+  }
+
+  .page-heading{
+    align-items:flex-start;
+  }
+
+  .page-heading h1,
+  .meeting-hero h1{
+    line-height:1.05;
+  }
+
+  .document-actions,
+  .resolution-actions,
+  .meeting-status-actions,
+  .archive-row-actions{
+    gap:7px;
+  }
+
+  .document-actions form,
+  .resolution-actions form,
+  .meeting-status-actions form{
+    max-width:100%;
+  }
+
+  .document-actions .mini-button,
+  .resolution-actions .mini-button{
+    white-space:normal;
+  }
+
+  .panel{
+    overflow-wrap:anywhere;
+  }
+
+  .table-row,
+  .member-row,
+  .finance-row,
+  .document-row{
+    min-width:0;
+  }
+}
+
+@media(max-width:480px){
+  .page-content{
+    padding-left:10px;
+    padding-right:10px;
+  }
+
+  .panel,
+  .stat-card{
+    border-radius:11px;
+  }
+
+  .page-heading{
+    display:grid;
+    gap:10px;
+  }
+
+  .page-heading>div,
+  .meeting-hero>div{
+    min-width:0;
+  }
+
+  .meeting-hero{
+    display:grid;
+    gap:12px;
+  }
+
+  .meeting-hero-side{
+    align-items:flex-start;
+  }
+}
