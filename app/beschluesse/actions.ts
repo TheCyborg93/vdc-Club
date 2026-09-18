@@ -23,12 +23,18 @@ export async function updateResolutionStatusAction(formData: FormData) {
 
   if (!id) redirect("/beschluesse?error=missing");
 
-  const before=await sql`
+  const beforeRows=await sql`
     SELECT id::text,title,status
     FROM resolutions
     WHERE id=${id}::uuid
     LIMIT 1
   `;
+  const before=beforeRows[0];
+  if (!before) redirect("/beschluesse?error=missing");
+
+  if (before.status==="withdrawn" && status!=="withdrawn") {
+    redirect("/beschluesse?error=withdrawn");
+  }
 
   await sql`
     UPDATE resolutions
@@ -47,21 +53,79 @@ export async function updateResolutionStatusAction(formData: FormData) {
       SET status='done',completed_at=COALESCE(completed_at,now())
       WHERE source_type='resolution'
         AND source_id=${id}::uuid
+        AND deleted_at IS NULL
+        AND status<>'cancelled'
+    `;
+  } else if (status==="withdrawn") {
+    await sql`
+      UPDATE tasks
+      SET status='cancelled',completed_at=NULL
+      WHERE source_type='resolution'
+        AND source_id=${id}::uuid
+        AND deleted_at IS NULL
+        AND status<>'done'
+    `;
+  } else if (status==="in_progress") {
+    await sql`
+      UPDATE tasks
+      SET status='in_progress',completed_at=NULL
+      WHERE source_type='resolution'
+        AND source_id=${id}::uuid
+        AND deleted_at IS NULL
+        AND status NOT IN ('done','cancelled')
+    `;
+  } else if (status==="open") {
+    await sql`
+      UPDATE tasks
+      SET status='open',completed_at=NULL
+      WHERE source_type='resolution'
+        AND source_id=${id}::uuid
+        AND deleted_at IS NULL
         AND status NOT IN ('done','cancelled')
     `;
   }
 
   await writeAudit(actor.id,"resolution.status_changed","resolution",id,{
-    title:String(before[0]?.title ?? ""),
-    before:String(before[0]?.status ?? ""),
+    title:String(before.title ?? ""),
+    before:String(before.status ?? ""),
     after:status,
   });
 
   revalidatePath("/beschluesse");
   revalidatePath("/aufgaben");
+  revalidatePath("/hinweise");
   revalidatePath("/");
-  redirect("/beschluesse");
+  redirect("/beschluesse?saved=1");
 }
+
+export async function updateResolutionImplementationAction(formData: FormData) {
+  const actor=await requirePermission("resolutions.write");
+  const sql=getDb();
+  if (!sql) redirect("/beschluesse?error=database");
+
+  const id=value(formData,"id");
+  const implementationNotes=value(formData,"implementationNotes");
+  if (!id) redirect("/beschluesse?error=missing");
+
+  const rows=await sql`
+    UPDATE resolutions
+    SET implementation_notes=${implementationNotes || null}
+    WHERE id=${id}::uuid
+    RETURNING title
+  `;
+
+  if (!rows.length) redirect("/beschluesse?error=missing");
+
+  await writeAudit(actor.id,"resolution.implementation_updated","resolution",id,{
+    title:String(rows[0].title),
+    hasNotes:Boolean(implementationNotes),
+  });
+
+  revalidatePath("/beschluesse");
+  revalidatePath("/hinweise");
+  redirect("/beschluesse?saved=1");
+}
+
 
 export async function createResolutionTaskAction(formData: FormData) {
   const actor=await requirePermission("tasks.write");
