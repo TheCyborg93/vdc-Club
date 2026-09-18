@@ -284,3 +284,58 @@ export async function updateMemberRolesAction(formData: FormData) {
   revalidatePath("/admin/benutzer");
   redirect(`/mitglieder/${memberId}?roles=1`);
 }
+
+
+export async function deleteUnusedMemberAction(formData: FormData) {
+  const actor=await requirePermission("settings.manage");
+  const sql=getDb();
+  if (!sql) redirect("/mitglieder?error=database");
+
+  const id=value(formData,"id");
+  if (!id) redirect("/mitglieder?error=missing");
+
+  const rows=await sql`
+    SELECT
+      m.id::text,m.first_name,m.last_name,
+      EXISTS(SELECT 1 FROM app_users u WHERE u.member_id=m.id) AS has_user,
+      EXISTS(SELECT 1 FROM board_positions b WHERE b.member_id=m.id) AS has_board,
+      EXISTS(SELECT 1 FROM documents d WHERE d.member_id=m.id) AS has_documents,
+      EXISTS(SELECT 1 FROM finance_entries f WHERE f.member_id=m.id) AS has_finance,
+      EXISTS(SELECT 1 FROM meeting_attendees ma WHERE ma.member_id=m.id) AS has_meetings,
+      EXISTS(SELECT 1 FROM membership_fees mf WHERE mf.member_id=m.id) AS has_fees,
+      EXISTS(SELECT 1 FROM tasks t WHERE t.owner_member_id=m.id) AS has_tasks,
+      EXISTS(SELECT 1 FROM team_members tm WHERE tm.member_id=m.id) AS has_teams,
+      EXISTS(SELECT 1 FROM training_attendance ta WHERE ta.member_id=m.id) AS has_training,
+      EXISTS(SELECT 1 FROM integration_entity_links l WHERE l.local_id=m.id) AS has_integration
+    FROM members m
+    WHERE m.id=${id}::uuid
+    LIMIT 1
+  `;
+  const member=rows[0];
+
+  if (
+    !member ||
+    member.has_user ||
+    member.has_board ||
+    member.has_documents ||
+    member.has_finance ||
+    member.has_meetings ||
+    member.has_fees ||
+    member.has_tasks ||
+    member.has_teams ||
+    member.has_training ||
+    member.has_integration
+  ) {
+    redirect(`/mitglieder/${id}?error=member_delete`);
+  }
+
+  await sql`DELETE FROM members WHERE id=${id}::uuid`;
+  await writeAudit(actor.id,"member.deleted_unused","member",id,{
+    name:String(member.first_name)+" "+String(member.last_name),
+  });
+
+  revalidatePath("/mitglieder");
+  revalidatePath("/verein");
+  revalidatePath("/");
+  redirect("/mitglieder?deleted=1");
+}
