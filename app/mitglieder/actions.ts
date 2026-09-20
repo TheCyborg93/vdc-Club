@@ -249,8 +249,6 @@ export async function updateMemberRolesAction(formData: FormData) {
   const before = Array.isArray(beforeRows[0]?.roles) ? beforeRows[0].roles.map(String) : [];
   const roles = new Set(selectedRoles);
 
-  if (userId === actor.id) roles.add("admin");
-
   if (before.includes("admin") && !roles.has("admin")) {
     const otherAdmins = await sql`
       SELECT count(DISTINCT u.id)::int AS count
