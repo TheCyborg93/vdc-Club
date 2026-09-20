@@ -19,7 +19,7 @@ export const rolePermissions: Record<string, Permission[] | ["*"]> = {
   board: [
     "members.read", "teams.read", "tasks.read", "tasks.write",
     "calendar.read", "training.read", "meetings.read", "resolutions.read",
-    "sponsors.read", "documents.read", "statistics.read", "surveys.read", "surveys.write", "chronicle.read",
+    "sponsors.read", "documents.read", "statistics.read", "surveys.read", "surveys.write", "chronicle.read", "chronicle.write",
   ],
   chair: [
     "members.read", "members.write", "teams.read", "teams.write",
