@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createSurveyAction } from "@/app/umfragen/actions";
 
 type QuestionType = "single" | "multiple" | "text";
@@ -26,6 +26,12 @@ function makeQuestion(type: QuestionType = "single"): Question {
 
 export function SurveyBuilder() {
   const [questions, setQuestions] = useState<Question[]>([makeQuestion()]);
+  const [timezoneOffset, setTimezoneOffset] = useState(0);
+
+  useEffect(() => {
+    setTimezoneOffset(new Date().getTimezoneOffset());
+  }, []);
+
   const payload = useMemo(() => JSON.stringify(questions), [questions]);
 
   function patchQuestion(id: string, patch: Partial<Question>) {
@@ -98,6 +104,7 @@ export function SurveyBuilder() {
   return (
     <form action={createSurveyAction} className="survey-builder">
       <input type="hidden" name="questionsJson" value={payload} />
+      <input type="hidden" name="timezoneOffset" value={timezoneOffset} />
 
       <section className="panel">
         <div className="panel-head">
