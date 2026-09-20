@@ -37,7 +37,7 @@ export const officialRoleDefinitions = [
   {
     key: "board",
     label: "Vorstand",
-    description: "Allgemeine Vorstandsarbeit und vereinsinterne Organisation.",
+    description: "Vollzugriff auf die Vereinsverwaltung einschließlich Mitglieder, Rollen, Finanzen und Organisation.",
   },
   {
     key: "admin",
