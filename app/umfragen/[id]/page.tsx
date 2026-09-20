@@ -3,10 +3,12 @@ import { notFound } from "next/navigation";
 import { getDb } from "@/lib/db";
 import { hasPermission, requirePermission } from "@/lib/permissions";
 import {
+  deleteSurveyAction,
   duplicateSurveyAction,
   updateSurveyStatusAction,
 } from "@/app/umfragen/actions";
 import { SurveyShare } from "@/components/survey-share";
+import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 
 export const dynamic = "force-dynamic";
 
@@ -33,7 +35,13 @@ export default async function SurveyDetailPage({
   searchParams,
 }: {
   params: Promise<{id:string}>;
-  searchParams: Promise<{created?:string;updated?:string;status?:string;duplicated?:string;error?:string}>;
+  searchParams: Promise<{
+    created?:string;
+    updated?:string;
+    status?:string;
+    duplicated?:string;
+    error?:string;
+  }>;
 }) {
   const user = await requirePermission("surveys.read");
   const sql = getDb();
@@ -42,7 +50,17 @@ export default async function SurveyDetailPage({
   const { id } = await params;
   const query = await searchParams;
 
-  const [surveyRows, questionRows, optionRows, responseRows, choiceRows, textRows] = await Promise.all([
+  const [
+    surveyRows,
+    questionRows,
+    optionRows,
+    responseRows,
+    choiceRows,
+    textRows,
+    identityFieldRows,
+    identityValueRows,
+    responseListRows,
+  ] = await Promise.all([
     sql`
       SELECT s.*,u.display_name AS creator_name
       FROM surveys s
@@ -88,6 +106,28 @@ export default async function SurveyDetailPage({
       ORDER BY r.submitted_at DESC
       LIMIT 200
     `,
+    sql`
+      SELECT id::text,position,label,field_type,required
+      FROM survey_identity_fields
+      WHERE survey_id=${id}::uuid
+      ORDER BY position
+    `,
+    sql`
+      SELECT
+        v.response_id::text,
+        v.field_id::text,
+        v.value
+      FROM survey_response_identity_values v
+      JOIN survey_responses r ON r.id=v.response_id
+      WHERE r.survey_id=${id}::uuid
+    `,
+    sql`
+      SELECT id::text,submitted_at
+      FROM survey_responses
+      WHERE survey_id=${id}::uuid
+      ORDER BY submitted_at DESC
+      LIMIT 250
+    `,
   ]);
 
   const survey = surveyRows[0];
@@ -95,18 +135,31 @@ export default async function SurveyDetailPage({
 
   const canWrite = hasPermission(user.roles, "surveys.write");
   const responseCount = Number(responseRows[0]?.count ?? 0);
+  const isAnonymous = Boolean(survey.is_anonymous);
+
   const counts = new Map(choiceRows.map((row) => [String(row.option_id), Number(row.count)]));
+
   const optionsByQuestion = new Map<string, typeof optionRows>();
   for (const option of optionRows) {
     const key = String(option.question_id);
     if (!optionsByQuestion.has(key)) optionsByQuestion.set(key, []);
     optionsByQuestion.get(key)!.push(option);
   }
+
   const textByQuestion = new Map<string, typeof textRows>();
   for (const answer of textRows) {
     const key = String(answer.question_id);
     if (!textByQuestion.has(key)) textByQuestion.set(key, []);
     textByQuestion.get(key)!.push(answer);
+  }
+
+  const identityByResponse = new Map<string, Map<string,string>>();
+  for (const row of identityValueRows) {
+    const responseId = String(row.response_id);
+    if (!identityByResponse.has(responseId)) {
+      identityByResponse.set(responseId, new Map());
+    }
+    identityByResponse.get(responseId)!.set(String(row.field_id), String(row.value));
   }
 
   const deadline = formatDate(survey.ends_at);
@@ -133,10 +186,26 @@ export default async function SurveyDetailPage({
       )}
 
       <section className="stat-grid">
-        <article className="stat-card"><span>Antworten</span><strong>{responseCount}</strong><small>anonym</small></article>
-        <article className="stat-card"><span>Fragen</span><strong>{questionRows.length}</strong><small>in dieser Umfrage</small></article>
-        <article className="stat-card"><span>Zielgruppe</span><strong>{String(survey.target_group)}</strong><small>vorgesehen</small></article>
-        <article className="stat-card"><span>Frist</span><strong>{deadline ?? "Offen"}</strong><small>{deadline ? "Teilnahme bis" : "ohne Enddatum"}</small></article>
+        <article className="stat-card">
+          <span>Antworten</span>
+          <strong>{responseCount}</strong>
+          <small>{isAnonymous ? "anonym" : "mit Teilnehmerangaben"}</small>
+        </article>
+        <article className="stat-card">
+          <span>Fragen</span>
+          <strong>{questionRows.length}</strong>
+          <small>in dieser Umfrage</small>
+        </article>
+        <article className="stat-card">
+          <span>Modus</span>
+          <strong>{isAnonymous ? "Anonym" : "Nicht anonym"}</strong>
+          <small>{isAnonymous ? "keine Teilnehmerdaten" : `${identityFieldRows.length} Teilnehmerfelder`}</small>
+        </article>
+        <article className="stat-card">
+          <span>Frist</span>
+          <strong>{deadline ?? "Offen"}</strong>
+          <small>{deadline ? "automatisches Ende" : "manuell beendbar"}</small>
+        </article>
       </section>
 
       <section className="survey-detail-grid">
@@ -151,6 +220,7 @@ export default async function SurveyDetailPage({
             targetGroup={String(survey.target_group ?? "Alle")}
             deadline={deadline}
             publicPath={`/u/${survey.public_token}`}
+            isAnonymous={isAnonymous}
           />
         </article>
 
@@ -158,17 +228,21 @@ export default async function SurveyDetailPage({
           <div className="panel-head">
             <div><span className="eyebrow">Steuerung</span><h2>Status & Aktionen</h2></div>
           </div>
+
           <div className="survey-control-list">
             <div><span>Status</span><strong>{statusLabels[String(survey.status)] ?? String(survey.status)}</strong></div>
+            <div><span>Teilnahme</span><strong>{isAnonymous ? "Anonym" : "Nicht anonym"}</strong></div>
             <div><span>Ergebnisse öffentlich</span><strong>{survey.results_visibility === "after_submit" ? "Nach Abgabe" : "Nein"}</strong></div>
             <div><span>Mehrfachteilnahme</span><strong>{survey.one_response_per_browser ? "Pro Browser begrenzt" : "Erlaubt"}</strong></div>
             <div><span>Erstellt von</span><strong>{survey.creator_name ? String(survey.creator_name) : "System"}</strong></div>
           </div>
+
           {canWrite && (
             <div className="survey-control-actions">
               {survey.status === "draft" && (
                 <Link href={`/umfragen/${id}/bearbeiten`} className="ghost-button">Bearbeiten</Link>
               )}
+
               {survey.status === "draft" && (
                 <form action={updateSurveyStatusAction}>
                   <input type="hidden" name="id" value={id} />
@@ -176,13 +250,28 @@ export default async function SurveyDetailPage({
                   <button className="primary-button">Veröffentlichen</button>
                 </form>
               )}
+
               {survey.status === "active" && (
                 <form action={updateSurveyStatusAction}>
                   <input type="hidden" name="id" value={id} />
                   <input type="hidden" name="status" value="closed" />
-                  <button className="ghost-button">Umfrage beenden</button>
+                  <ConfirmSubmitButton
+                    className="mini-button danger-button"
+                    message="Umfrage jetzt manuell beenden? Danach sind über den öffentlichen Link keine weiteren Antworten möglich."
+                  >
+                    Jetzt beenden
+                  </ConfirmSubmitButton>
                 </form>
               )}
+
+              {survey.status === "closed" && (
+                <form action={updateSurveyStatusAction}>
+                  <input type="hidden" name="id" value={id} />
+                  <input type="hidden" name="status" value="active" />
+                  <button className="ghost-button">Wieder öffnen</button>
+                </form>
+              )}
+
               {survey.status !== "archived" && (
                 <form action={updateSurveyStatusAction}>
                   <input type="hidden" name="id" value={id} />
@@ -190,6 +279,7 @@ export default async function SurveyDetailPage({
                   <button className="ghost-button">Archivieren</button>
                 </form>
               )}
+
               <form action={duplicateSurveyAction}>
                 <input type="hidden" name="id" value={id} />
                 <button className="ghost-button">Duplizieren</button>
@@ -198,6 +288,44 @@ export default async function SurveyDetailPage({
           )}
         </article>
       </section>
+
+      {!isAnonymous && (
+        <article className="panel">
+          <div className="panel-head">
+            <div>
+              <span className="eyebrow">Teilnehmerangaben</span>
+              <h2>Erfasste Personen</h2>
+            </div>
+            <span className="count-chip">{responseCount}</span>
+          </div>
+
+          {responseListRows.length === 0 ? (
+            <div className="empty-state">Noch keine Teilnehmerangaben vorhanden.</div>
+          ) : (
+            <div className="survey-participant-list">
+              {responseListRows.map((response, index) => {
+                const values = identityByResponse.get(String(response.id)) ?? new Map<string,string>();
+                return (
+                  <article className="survey-participant-card" key={String(response.id)}>
+                    <div className="survey-participant-head">
+                      <strong>Teilnahme {responseCount - index}</strong>
+                      <span>{formatDate(response.submitted_at)}</span>
+                    </div>
+                    <div className="survey-participant-fields">
+                      {identityFieldRows.map((field) => (
+                        <div key={String(field.id)}>
+                          <span>{String(field.label)}</span>
+                          <strong>{values.get(String(field.id)) || "–"}</strong>
+                        </div>
+                      ))}
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          )}
+        </article>
+      )}
 
       <article className="panel">
         <div className="panel-head">
@@ -251,9 +379,32 @@ export default async function SurveyDetailPage({
       </article>
 
       <div className="survey-anonymous-note">
-        <strong>Anonyme Erhebung</strong>
-        <span>VDC Club speichert bei Antworten weder Namen noch Mitglied, Benutzerkonto, E-Mail-Adresse oder IP-Adresse.</span>
+        <strong>{isAnonymous ? "Anonyme Erhebung" : "Nicht anonyme Erhebung"}</strong>
+        <span>
+          {isAnonymous
+            ? "Es werden keine persönlichen Teilnehmerangaben mit der Antwort gespeichert."
+            : "Die selbst definierten Teilnehmerfelder werden zusammen mit der jeweiligen Teilnahme gespeichert und sind intern in der Auswertung sichtbar."}
+        </span>
       </div>
+
+      {canWrite && (
+        <article className="panel destructive-zone">
+          <span className="eyebrow">Gefahrenbereich</span>
+          <h2>Umfrage endgültig löschen</h2>
+          <p>
+            Beim Löschen werden die Umfrage, alle Fragen, Antworten, Teilnehmerangaben und Auswertungsdaten endgültig entfernt.
+          </p>
+          <form action={deleteSurveyAction}>
+            <input type="hidden" name="id" value={id} />
+            <ConfirmSubmitButton
+              message={`Umfrage „${String(survey.title)}“ endgültig löschen? Alle Antworten und Auswertungen werden ebenfalls gelöscht.`}
+              requireText="LÖSCHEN"
+            >
+              Umfrage endgültig löschen
+            </ConfirmSubmitButton>
+          </form>
+        </article>
+      )}
     </div>
   );
 }
