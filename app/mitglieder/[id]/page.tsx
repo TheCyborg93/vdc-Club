@@ -9,18 +9,7 @@ import {
   updateMemberRolesAction,
 } from "@/app/mitglieder/actions";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
-
-const roleLabels: Record<string, string> = {
-  admin: "Administrator",
-  board: "Vorstand",
-  chair: "1. Vorsitz",
-  vice_chair: "2. Vorsitz",
-  treasurer: "Kassierer",
-  secretary: "Schriftführer",
-  sport_director: "Sportwart",
-  team_captain: "Team Captain",
-  tournament_director: "Turnierleitung",
-};
+import { officialRoleKeys, roleLabel, rolePriority } from "@/lib/roles";
 
 const statusLabels: Record<string,string> = {
   active:"Aktiv",
@@ -178,6 +167,9 @@ export default async function MemberDetailPage({
   const assignedRoles = new Set(
     appUser && Array.isArray(appUser.roles) ? appUser.roles.map(String) : []
   );
+  const visibleRoleRows = roleRows
+    .filter((role) => officialRoleKeys.includes(String(role.key) as (typeof officialRoleKeys)[number]))
+    .sort((a, b) => rolePriority(String(a.key)) - rolePriority(String(b.key)));
 
   const currentFee = feeRows.find((fee) => Number(fee.fiscal_year) === new Date().getFullYear()) ?? null;
   const canWrite = hasPermission(actor.roles, "members.write");
@@ -283,7 +275,9 @@ export default async function MemberDetailPage({
                 <div><span>Letzte Anmeldung</span><strong>{appUser.last_login_at ? new Date(String(appUser.last_login_at)).toLocaleString("de-DE") : "Noch nie"}</strong></div>
               </div>
               <div className="role-chips">
-                {[...assignedRoles].map((role) => <span key={role}>{roleLabels[role] ?? role}</span>)}
+                {[...assignedRoles]
+                  .sort((a, b) => rolePriority(a) - rolePriority(b))
+                  .map((role) => <span key={role}>{roleLabel(role)}</span>)}
                 {assignedRoles.size === 0 && <span>Keine Rolle</span>}
               </div>
 
@@ -292,7 +286,7 @@ export default async function MemberDetailPage({
                   <input type="hidden" name="memberId" value={id} />
                   <input type="hidden" name="userId" value={String(appUser.id)} />
                   <div className="checkbox-grid">
-                    {roleRows.map((role) => (
+                    {visibleRoleRows.map((role) => (
                       <label className="checkbox-row" key={String(role.key)}>
                         <input
                           type="checkbox"
@@ -321,7 +315,7 @@ export default async function MemberDetailPage({
                     <input name="password" type="password" minLength={12} required />
                   </label>
                   <div className="checkbox-grid">
-                    {roleRows.map((role) => (
+                    {visibleRoleRows.map((role) => (
                       <label className="checkbox-row" key={String(role.key)}>
                         <input type="checkbox" name="roles" value={String(role.key)} />
                         <span>{String(role.name)}</span>
