@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import { headers } from "next/headers";
+import { after } from "next/server";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { getCurrentUser } from "@/lib/auth";
@@ -54,7 +55,9 @@ export default async function RootLayout({
   if (!isPublic && !user) redirect("/login");
 
   if (!isPublic && user) {
-    await ensureIntegrationsFresh(2).catch(()=>null);
+    after(async () => {
+      await ensureIntegrationsFresh(2).catch(()=>null);
+    });
   }
 
   const notifications = !isPublic && user
