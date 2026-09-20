@@ -42,6 +42,7 @@ export default async function MembersPage({
             m.member_number,
             m.first_name,
             m.last_name,
+            m.nickname,
             m.email,
             m.status,
             m.membership_type,
@@ -115,7 +116,10 @@ export default async function MembersPage({
                   {String(member.first_name).slice(0,1)}{String(member.last_name).slice(0,1)}
                 </div>
                 <div className="member-main">
-                  <strong>{String(member.first_name)} {String(member.last_name)}</strong>
+                  <strong>
+                    {String(member.first_name)} {String(member.last_name)}
+                    {member.nickname ? ` „${String(member.nickname)}“` : ""}
+                  </strong>
                   <span>
                     {member.member_number ? `#${member.member_number} · ` : ""}
                     {membershipTypeLabels[String(member.membership_type ?? "regular")] ?? "Mitglied"}
@@ -146,6 +150,7 @@ export default async function MembersPage({
                 <label>Vorname<input name="firstName" required /></label>
                 <label>Nachname<input name="lastName" required /></label>
               </div>
+              <label>Spitzname<input name="nickname" placeholder="Optional, z. B. Cyborg" /></label>
               <label>E-Mail<input name="email" type="email" /></label>
               <div className="form-grid">
                 <label>Mitgliedsnummer<input name="memberNumber" /></label>
