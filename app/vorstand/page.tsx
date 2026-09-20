@@ -10,6 +10,26 @@ import {
 
 export const dynamic = "force-dynamic";
 
+type BoardUserRow = {
+  id: string;
+  memberId: string | null;
+  userStatus: string;
+  displayName: string;
+  firstName: string;
+  lastName: string;
+  memberStatus: string;
+  roles: string[];
+};
+
+type BoardHistoryRow = {
+  id: string;
+  title: string;
+  startDate: unknown;
+  endDate: unknown;
+  firstName: string;
+  lastName: string;
+};
+
 function formatDate(value: unknown) {
   if (!value) return "–";
   const date = new Date(String(value));
@@ -22,50 +42,71 @@ export default async function BoardPage() {
   const actor = await requirePermission("members.read");
   const sql = getDb();
 
-  const [userRows, history] = sql
-    ? await Promise.all([
-        sql`
-          SELECT
-            u.id::text,
-            u.member_id::text,
-            u.status AS user_status,
-            u.display_name,
-            m.first_name,
-            m.last_name,
-            m.status AS member_status,
-            COALESCE(
-              array_agg(ur.role_key) FILTER (WHERE ur.role_key IS NOT NULL),
-              ARRAY[]::text[]
-            ) AS roles
-          FROM app_users u
-          JOIN members m ON m.id = u.member_id
-          LEFT JOIN user_roles ur ON ur.user_id = u.id
-          WHERE m.status <> 'inactive'
-          GROUP BY u.id,m.id
-          ORDER BY m.last_name,m.first_name
-        `,
-        sql`
-          SELECT
-            bp.id::text,
-            bp.title,
-            bp.start_date,
-            bp.end_date,
-            m.first_name,
-            m.last_name
-          FROM board_positions bp
-          JOIN members m ON m.id = bp.member_id
-          WHERE bp.is_active = false
-          ORDER BY bp.end_date DESC NULLS LAST
-          LIMIT 8
-        `,
-      ])
-    : [[], []];
+  let userRows: BoardUserRow[] = [];
+  let history: BoardHistoryRow[] = [];
+
+  if (sql) {
+    const [rawUsers, rawHistory] = await Promise.all([
+      sql`
+        SELECT
+          u.id::text,
+          u.member_id::text,
+          u.status AS user_status,
+          u.display_name,
+          m.first_name,
+          m.last_name,
+          m.status AS member_status,
+          COALESCE(
+            array_agg(ur.role_key) FILTER (WHERE ur.role_key IS NOT NULL),
+            ARRAY[]::text[]
+          ) AS roles
+        FROM app_users u
+        JOIN members m ON m.id = u.member_id
+        LEFT JOIN user_roles ur ON ur.user_id = u.id
+        WHERE m.status <> 'inactive'
+        GROUP BY u.id,m.id
+        ORDER BY m.last_name,m.first_name
+      `,
+      sql`
+        SELECT
+          bp.id::text,
+          bp.title,
+          bp.start_date,
+          bp.end_date,
+          m.first_name,
+          m.last_name
+        FROM board_positions bp
+        JOIN members m ON m.id = bp.member_id
+        WHERE bp.is_active = false
+        ORDER BY bp.end_date DESC NULLS LAST
+        LIMIT 8
+      `,
+    ]);
+
+    userRows = rawUsers.map((row) => ({
+      id: String(row.id),
+      memberId: row.member_id ? String(row.member_id) : null,
+      userStatus: String(row.user_status),
+      displayName: String(row.display_name),
+      firstName: String(row.first_name),
+      lastName: String(row.last_name),
+      memberStatus: String(row.member_status),
+      roles: Array.isArray(row.roles) ? row.roles.map(String) : [],
+    }));
+
+    history = rawHistory.map((row) => ({
+      id: String(row.id),
+      title: String(row.title),
+      startDate: row.start_date,
+      endDate: row.end_date,
+      firstName: String(row.first_name),
+      lastName: String(row.last_name),
+    }));
+  }
 
   const people = userRows
     .map((row) => {
-      const roles = sortedOfficialRoles(
-        Array.isArray(row.roles) ? row.roles.map(String) : [],
-      );
+      const roles = sortedOfficialRoles(row.roles);
       return {
         ...row,
         roles,
@@ -77,15 +118,15 @@ export default async function BoardPage() {
     .sort((a, b) => {
       const roleDifference = rolePriority(String(a.primaryRole)) - rolePriority(String(b.primaryRole));
       if (roleDifference !== 0) return roleDifference;
-      return `${String(a.last_name)} ${String(a.first_name)}`.localeCompare(
-        `${String(b.last_name)} ${String(b.first_name)}`,
+      return `${String(a.lastName)} ${String(a.firstName)}`.localeCompare(
+        `${String(b.lastName)} ${String(b.firstName)}`,
         "de",
       );
     });
 
   const canManage = hasPermission(actor.roles, "settings.manage");
   const multipleRoles = people.filter((person) => person.additionalRoles.length > 0).length;
-  const activeAccounts = people.filter((person) => person.user_status === "active").length;
+  const activeAccounts = people.filter((person) => person.userStatus === "active").length;
 
   return (
     <div className="page-stack">
@@ -147,15 +188,15 @@ export default async function BoardPage() {
               <article className="board-person-card" key={String(person.id)}>
                 <div className="board-person-top">
                   <div className="member-avatar board-avatar">
-                    {String(person.first_name).slice(0, 1)}
-                    {String(person.last_name).slice(0, 1)}
+                    {String(person.firstName).slice(0, 1)}
+                    {String(person.lastName).slice(0, 1)}
                   </div>
                   <div className="board-person-name">
                     <span>{person.primaryRole ? roleLabel(String(person.primaryRole)) : "Funktion"}</span>
-                    <strong>{String(person.first_name)} {String(person.last_name)}</strong>
+                    <strong>{String(person.firstName)} {String(person.lastName)}</strong>
                   </div>
-                  <span className={person.user_status === "active" ? "role-chip" : "status-badge status-disabled"}>
-                    {person.user_status === "active" ? "Login aktiv" : "Login deaktiviert"}
+                  <span className={person.userStatus === "active" ? "role-chip" : "status-badge status-disabled"}>
+                    {person.userStatus === "active" ? "Login aktiv" : "Login deaktiviert"}
                   </span>
                 </div>
 
@@ -217,9 +258,9 @@ export default async function BoardPage() {
               <div className="history-row" key={String(position.id)}>
                 <div>
                   <strong>{String(position.title)}</strong>
-                  <span>{String(position.first_name)} {String(position.last_name)}</span>
+                  <span>{String(position.firstName)} {String(position.lastName)}</span>
                 </div>
-                <span>{formatDate(position.start_date)} – {formatDate(position.end_date)}</span>
+                <span>{formatDate(position.startDate)} – {formatDate(position.endDate)}</span>
               </div>
             ))}
           </div>
