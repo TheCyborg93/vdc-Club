@@ -79,6 +79,7 @@ export default async function MemberDetailPage({
         m.member_number,
         m.first_name,
         m.last_name,
+        m.nickname,
         m.email,
         m.phone,
         m.birth_date,
@@ -193,7 +194,10 @@ export default async function MemberDetailPage({
         <div>
           <Link href="/mitglieder" className="back-link">← Mitglieder</Link>
           <span className="eyebrow">Mitgliedsprofil</span>
-          <h1>{String(member.first_name)} {String(member.last_name)}</h1>
+          <h1>
+            {String(member.first_name)} {String(member.last_name)}
+            {member.nickname ? ` „${String(member.nickname)}“` : ""}
+          </h1>
           <p>
             {membershipTypeLabels[String(member.membership_type ?? "regular")] ?? "Mitglied"}
             {member.teams ? ` · ${member.teams}` : " · keine Mannschaft"}
@@ -238,6 +242,14 @@ export default async function MemberDetailPage({
               <label>Vorname<input name="firstName" defaultValue={String(member.first_name)} disabled={!canWrite} required /></label>
               <label>Nachname<input name="lastName" defaultValue={String(member.last_name)} disabled={!canWrite} required /></label>
             </div>
+            <label>Spitzname
+              <input
+                name="nickname"
+                defaultValue={member.nickname ? String(member.nickname) : ""}
+                disabled={!canWrite}
+                placeholder="Optional, z. B. Cyborg"
+              />
+            </label>
             <div className="form-grid">
               <label>E-Mail<input name="email" type="email" defaultValue={member.email ? String(member.email) : ""} disabled={!canWrite} /></label>
               <label>Telefon<input name="phone" defaultValue={member.phone ? String(member.phone) : ""} disabled={!canWrite} /></label>
