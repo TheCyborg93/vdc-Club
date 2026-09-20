@@ -87,6 +87,9 @@ export async function POST(request: Request) {
           starts_at=EXCLUDED.starts_at,
           location=EXCLUDED.location,
           description=EXCLUDED.description,
+          deleted_at=NULL,
+          deleted_by=NULL,
+          delete_reason=NULL,
           updated_at=now()
         RETURNING id::text
       `;
