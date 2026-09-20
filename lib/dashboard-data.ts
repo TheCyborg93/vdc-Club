@@ -59,6 +59,14 @@ export type DashboardDocumentReview = {
   validUntil: string | null;
 };
 
+export type DashboardCelebration = {
+  id: string;
+  kind: "birthday" | "anniversary";
+  name: string;
+  detail: string;
+  years: number | null;
+};
+
 export type DashboardRoleMetric = {
   label: string;
   value: string;
@@ -80,6 +88,7 @@ export type DashboardData = {
   events: DashboardEvent[];
   integrations: DashboardIntegration[];
   alerts: DashboardAlert[];
+  celebrations: DashboardCelebration[];
   training: DashboardTraining | null;
   roleMetrics: DashboardRoleMetric[];
   resolutions: DashboardResolution[];
@@ -99,6 +108,7 @@ const emptyData: DashboardData = {
   events: [],
   integrations: [],
   alerts: [],
+  celebrations: [],
   training: null,
   roleMetrics: [],
   resolutions: [],
@@ -132,6 +142,7 @@ export async function getDashboardData(
       activity,
       tasks,
       events,
+      celebrations,
       businessAlerts,
     ] = await Promise.all([
       sql`SELECT count(*)::int AS count FROM members WHERE status = 'active'`,
@@ -179,6 +190,38 @@ export async function getDashboardData(
           AND e.starts_at >= now()
         ORDER BY e.starts_at ASC
         LIMIT 5
+      `,
+      sql`
+        SELECT
+          m.id::text,
+          'birthday'::text AS kind,
+          m.first_name || ' ' || m.last_name ||
+            CASE WHEN m.nickname IS NOT NULL AND trim(m.nickname)<>'' THEN ' „' || m.nickname || '“' ELSE '' END AS name,
+          'hat heute Geburtstag'::text AS detail,
+          NULL::int AS years
+        FROM members m
+        WHERE m.status IN ('active','passive')
+          AND m.birth_date IS NOT NULL
+          AND EXTRACT(MONTH FROM m.birth_date)=EXTRACT(MONTH FROM CURRENT_DATE)
+          AND EXTRACT(DAY FROM m.birth_date)=EXTRACT(DAY FROM CURRENT_DATE)
+
+        UNION ALL
+
+        SELECT
+          m.id::text,
+          'anniversary'::text AS kind,
+          m.first_name || ' ' || m.last_name ||
+            CASE WHEN m.nickname IS NOT NULL AND trim(m.nickname)<>'' THEN ' „' || m.nickname || '“' ELSE '' END AS name,
+          EXTRACT(YEAR FROM AGE(CURRENT_DATE,m.join_date))::int || ' Jahre im Verein' AS detail,
+          EXTRACT(YEAR FROM AGE(CURRENT_DATE,m.join_date))::int AS years
+        FROM members m
+        WHERE m.status IN ('active','passive')
+          AND m.join_date IS NOT NULL
+          AND EXTRACT(YEAR FROM AGE(CURRENT_DATE,m.join_date))::int > 0
+          AND EXTRACT(MONTH FROM m.join_date)=EXTRACT(MONTH FROM CURRENT_DATE)
+          AND EXTRACT(DAY FROM m.join_date)=EXTRACT(DAY FROM CURRENT_DATE)
+
+        ORDER BY kind,name
       `,
       sql`
         SELECT kind,title,detail,href,severity,sort_date
@@ -677,6 +720,13 @@ export async function getDashboardData(
         severity: ["critical","warning","info"].includes(String(row.severity))
           ? String(row.severity) as DashboardAlert["severity"]
           : "info",
+      })),
+      celebrations: celebrations.map((row)=>({
+        id:String(row.id),
+        kind:String(row.kind)==="anniversary" ? "anniversary" : "birthday",
+        name:String(row.name),
+        detail:String(row.detail),
+        years:row.years==null ? null : Number(row.years),
       })),
       training: trainingRow ? {
         nextAt: trainingRow.next_training ? String(trainingRow.next_training) : null,
