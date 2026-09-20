@@ -78,8 +78,8 @@ export async function POST(request: Request) {
         SELECT
           'vdc_training','player',${externalId},m.id,
           jsonb_build_object(
-            'display_name',${player.displayName ?? null},
-            'source_name',${fullName}
+            'display_name',${player.displayName ?? null}::text,
+            'source_name',${fullName}::text
           ),
           now()
         FROM members m
@@ -208,9 +208,9 @@ export async function POST(request: Request) {
           VALUES (
             'vdc_training','training_day',${externalId},${eventId}::uuid,
             jsonb_build_object(
-              'status',${day.status ?? null},
-              'players',${playerCount},
-              'attendance_provided',${Boolean(attendees)}
+              'status',${day.status ?? null}::text,
+              'players',${playerCount}::int,
+              'attendance_provided',${Boolean(attendees)}::boolean
             ),
             now()
           )
@@ -311,9 +311,9 @@ export async function POST(request: Request) {
       VALUES (
         'vdc_training','inbound','success',
         jsonb_build_object(
-          'training_days',${days.length},
-          'players',${players.length},
-          'attendance_days',${attendanceDays}
+          'training_days',${days.length}::int,
+          'players',${players.length}::int,
+          'attendance_days',${attendanceDays}::int
         )
       )
     `;
