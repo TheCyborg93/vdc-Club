@@ -142,7 +142,7 @@ export async function POST(request: Request) {
           )
           VALUES (
             'vdc_tc', 'team', ${team.externalId}, ${localId}::uuid,
-            jsonb_build_object('league',${team.league ?? null},'season',${team.season ?? null}),
+            jsonb_build_object('league',${team.league ?? null}::text,'season',${team.season ?? null}::text),
             now()
           )
           ON CONFLICT (integration_key,entity_type,external_id)
@@ -202,7 +202,7 @@ export async function POST(request: Request) {
         )
         VALUES (
           'vdc_tc','player',${player.externalId},${memberId}::uuid,
-          jsonb_build_object('team_external_id',${player.teamExternalId ?? null}),
+          jsonb_build_object('team_external_id',${player.teamExternalId ?? null}::text),
           now()
         )
         ON CONFLICT (integration_key,entity_type,external_id)
@@ -295,7 +295,7 @@ export async function POST(request: Request) {
       INSERT INTO integration_sync_runs (integration_key,direction,status,summary)
       VALUES (
         'vdc_tc','inbound','success',
-        jsonb_build_object('teams',${teams.length},'players',${players.length},'matches',${matches.length})
+        jsonb_build_object('teams',${teams.length}::int,'players',${players.length}::int,'matches',${matches.length}::int)
       )
     `;
 
