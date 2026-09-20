@@ -124,6 +124,7 @@ const modules: GuideModule[] = [
       "Jahresbeiträge automatisch erzeugen und in Raten aufteilen",
       "Teilzahlungen erfassen und automatisch als Einnahme buchen",
       "Offene und überfällige Beiträge erkennen",
+      "1. Erinnerung, 2. Erinnerung und Mahnung mit Datum verwalten",
       "Beitragsbefreiungen mit Zeitraum und Begründung hinterlegen",
       "Jahresauswertung mit Soll, Ist, offenen Beträgen und Einzugsquote nutzen",
     ],
