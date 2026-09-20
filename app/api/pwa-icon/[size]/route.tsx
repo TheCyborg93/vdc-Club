@@ -7,7 +7,7 @@ export async function GET(
   { params }: { params: Promise<{ size: string }> },
 ) {
   const { size: rawSize } = await params;
-  const size = rawSize === "192" ? 192 : 512;
+  const size = rawSize === "180" ? 180 : rawSize === "192" ? 192 : 512;
 
   return new ImageResponse(
     (
