@@ -223,7 +223,7 @@ export default async function GuidePage() {
         </div>
         <div className="guide-install-grid">
           <div><strong>Automatisch beim Öffnen</strong><span>Dashboard und Kalender prüfen die Integrationen. Sind Daten älter als zwei Minuten, startet automatisch ein neuer Abgleich.</span></div>
-          <div><strong>Hintergrund-Sync</strong><span>Der Vercel-Cron ruft den zentralen Abgleich alle zehn Minuten auf, sobald CRON_SECRET in Production gesetzt ist.</span></div>
+          <div><strong>Hintergrund-Sync</strong><span>Der Vercel-Cron führt einmal täglich einen zusätzlichen Sicherheitsabgleich aus, sobald CRON_SECRET in Production gesetzt ist. Im laufenden Betrieb prüft die App selbst spätestens alle zwei Minuten beim Seitenaufruf.</span></div>
           <div><strong>Manuell</strong><span>Im Vereinskalender kann der gesamte Abgleich sofort gestartet werden. Unter Admin → Integrationen kann zusätzlich jede Quelle einzeln synchronisiert werden.</span></div>
           <div><strong>Änderungen & Löschungen</strong><span>Neue und verschobene Termine werden aktualisiert. Zukünftige externe Termine, die in der Quelle entfernt wurden, verschwinden automatisch auch aus Club.</span></div>
         </div>
