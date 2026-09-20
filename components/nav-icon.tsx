@@ -51,6 +51,9 @@ export function NavIcon({href}:{href:string}) {
   if (href.startsWith("/beschluesse")) {
     return <Svg><path d="M5 4h14v16H5z"/><path d="M8 8h8M8 12h8M8 16h5"/><path d="m15 15 1.5 1.5L20 13"/></Svg>;
   }
+  if (href.startsWith("/umfragen")) {
+    return <Svg><path d="M5 4h14v16H5z"/><path d="M8 8h2M12 8h4M8 12h2M12 12h4M8 16h2M12 16h4"/><path d="m8 8 .7.7L10 7.4"/></Svg>;
+  }
   if (href.startsWith("/dokumente")) {
     return <Svg><path d="M6 3h8l4 4v14H6z"/><path d="M14 3v5h5M9 12h6M9 16h6"/></Svg>;
   }
