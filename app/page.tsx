@@ -309,6 +309,42 @@ export default async function DashboardPage() {
         </div>
       </section>
 
+      {data.celebrations.length>0 && (
+        <section className="dashboard-celebrations">
+          <div className="section-title-row">
+            <div>
+              <span className="eyebrow">Vereinsleben</span>
+              <h2>Heute feiern wir</h2>
+            </div>
+            <span className="celebration-count">{data.celebrations.length}</span>
+          </div>
+
+          <div className="celebration-grid">
+            {data.celebrations.map((item)=>(
+              <Link
+                href={"/mitglieder/"+item.id}
+                className={"celebration-card celebration-"+item.kind}
+                key={item.kind+item.id}
+              >
+                <span className="celebration-icon">
+                  {item.kind==="birthday" ? "🎂" : "🏅"}
+                </span>
+                <div>
+                  <small>{item.kind==="birthday" ? "Geburtstag" : "Vereinsjubiläum"}</small>
+                  <strong>{item.name}</strong>
+                  <span>
+                    {item.kind==="anniversary" && item.years
+                      ? item.years+" Jahre Mitglied"
+                      : item.detail}
+                  </span>
+                </div>
+                <b>→</b>
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
+
       {quickActions.length>0 && (
         <section className="quick-control-panel">
           <div className="section-title-row">
