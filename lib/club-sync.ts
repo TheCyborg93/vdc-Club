@@ -1,4 +1,5 @@
 import "server-only";
+import { getDb } from "@/lib/db";
 
 type IntegrationKey = "vdc_tc" | "vdc_turnier" | "vdc_training";
 
@@ -228,6 +229,28 @@ export async function syncAllIntegrations() {
     ok: results.every((result) => result.ok),
     results,
   };
+}
+
+export async function ensureIntegrationsFresh(maxAgeMinutes = 5) {
+  const sql = getDb();
+  if (!sql) return { ok:false, skipped:true, reason:"database" };
+
+  const rows = await sql`
+    SELECT
+      integration_key,
+      status,
+      last_sync_at,
+      EXTRACT(EPOCH FROM (now() - COALESCE(last_sync_at,to_timestamp(0)))) / 60 AS age_minutes
+    FROM integration_connections
+    WHERE integration_key IN ('vdc_tc','vdc_turnier','vdc_training')
+      AND status <> 'disabled'
+  `;
+
+  const stale = rows.some((row) => Number(row.age_minutes ?? 999999) >= maxAgeMinutes);
+  if (!stale) return { ok:true, skipped:true, reason:"fresh" };
+
+  const result = await syncAllIntegrations();
+  return { ...result, skipped:false };
 }
 
 export type { IntegrationKey, SyncResult };
