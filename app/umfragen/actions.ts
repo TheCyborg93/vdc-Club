@@ -3,6 +3,7 @@
 import { randomBytes } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { cookies } from "next/headers";
 import { getDb } from "@/lib/db";
 import { requirePermission } from "@/lib/permissions";
 
@@ -84,6 +85,7 @@ export async function createSurveyAction(formData: FormData) {
   const thankYouText = value(formData, "thankYouText") || "Vielen Dank für deine Teilnahme.";
   const endsAt = localDateTimeToIso(value(formData, "endsAt"), value(formData, "timezoneOffset"));
   const publishNow = value(formData, "publishNow") === "1";
+  const oneResponsePerBrowser = value(formData, "oneResponsePerBrowser") === "1";
 
   if (!title || !topic) redirect("/umfragen/neu?error=missing");
 
@@ -99,13 +101,13 @@ export async function createSurveyAction(formData: FormData) {
   const rows = await sql`
     INSERT INTO surveys (
       public_token,title,topic,description,target_group,status,ends_at,
-      results_visibility,thank_you_text,created_by_user_id,published_at
+      results_visibility,thank_you_text,one_response_per_browser,created_by_user_id,published_at
     )
     VALUES (
       ${token},${title},${topic},${description},${targetGroup},
       ${publishNow ? "active" : "draft"},
       ${endsAt}::timestamptz,
-      ${resultsVisibility},${thankYouText},${actor.id}::uuid,
+      ${resultsVisibility},${thankYouText},${oneResponsePerBrowser},${actor.id}::uuid,
       ${publishNow ? new Date().toISOString() : null}::timestamptz
     )
     RETURNING id::text
@@ -136,6 +138,87 @@ export async function createSurveyAction(formData: FormData) {
 
   revalidatePath("/umfragen");
   redirect(`/umfragen/${surveyId}?created=1`);
+}
+
+export async function updateSurveyDraftAction(formData: FormData) {
+  await requirePermission("surveys.write");
+  const sql = getDb();
+  if (!sql) redirect("/umfragen?error=database");
+
+  const id = value(formData, "surveyId");
+  const title = value(formData, "title");
+  const topic = value(formData, "topic");
+  const description = value(formData, "description");
+  const targetGroup = value(formData, "targetGroup") || "Alle";
+  const resultsVisibility = value(formData, "resultsVisibility") === "after_submit" ? "after_submit" : "internal";
+  const thankYouText = value(formData, "thankYouText") || "Vielen Dank für deine Teilnahme.";
+  const endsAt = localDateTimeToIso(value(formData, "endsAt"), value(formData, "timezoneOffset"));
+  const publishNow = value(formData, "publishNow") === "1";
+  const oneResponsePerBrowser = value(formData, "oneResponsePerBrowser") === "1";
+
+  if (!id || !title || !topic) redirect("/umfragen?error=invalid");
+
+  const stateRows = await sql`
+    SELECT status,(SELECT count(*)::int FROM survey_responses r WHERE r.survey_id=s.id) AS responses
+    FROM surveys s
+    WHERE s.id=${id}::uuid
+    LIMIT 1
+  `;
+  const state = stateRows[0];
+  if (!state || state.status !== "draft" || Number(state.responses ?? 0) > 0) {
+    redirect(`/umfragen/${id}?error=not_editable`);
+  }
+
+  let questions;
+  try {
+    questions = normalizeQuestions(value(formData, "questionsJson"));
+  } catch (error) {
+    const code = error instanceof Error ? error.message : "invalid_questions";
+    redirect(`/umfragen/${id}/bearbeiten?error=${encodeURIComponent(code)}`);
+  }
+
+  await sql`
+    UPDATE surveys
+    SET
+      title=${title},
+      topic=${topic},
+      description=${description},
+      target_group=${targetGroup},
+      ends_at=${endsAt}::timestamptz,
+      results_visibility=${resultsVisibility},
+      thank_you_text=${thankYouText},
+      one_response_per_browser=${oneResponsePerBrowser},
+      status=${publishNow ? "active" : "draft"},
+      published_at=CASE WHEN ${publishNow} THEN now() ELSE published_at END
+    WHERE id=${id}::uuid
+  `;
+
+  await sql`DELETE FROM survey_questions WHERE survey_id=${id}::uuid`;
+
+  for (const question of questions) {
+    const questionRows = await sql`
+      INSERT INTO survey_questions (
+        survey_id,position,question_text,question_type,required,max_selections
+      )
+      VALUES (
+        ${id}::uuid,${question.position},${question.text},${question.type},
+        ${question.required},${question.maxSelections}
+      )
+      RETURNING id::text
+    `;
+    const questionId = String(questionRows[0].id);
+
+    for (let optionIndex = 0; optionIndex < question.options.length; optionIndex++) {
+      await sql`
+        INSERT INTO survey_options (question_id,position,label)
+        VALUES (${questionId}::uuid,${optionIndex + 1},${question.options[optionIndex]})
+      `;
+    }
+  }
+
+  revalidatePath("/umfragen");
+  revalidatePath(`/umfragen/${id}`);
+  redirect(`/umfragen/${id}?updated=1`);
 }
 
 export async function updateSurveyStatusAction(formData: FormData) {
@@ -170,7 +253,7 @@ export async function duplicateSurveyAction(formData: FormData) {
   if (!id) redirect("/umfragen?error=invalid");
 
   const sourceRows = await sql`
-    SELECT title,topic,description,target_group,results_visibility,thank_you_text
+    SELECT title,topic,description,target_group,results_visibility,thank_you_text,one_response_per_browser
     FROM surveys WHERE id=${id}::uuid LIMIT 1
   `;
   const source = sourceRows[0];
@@ -179,11 +262,12 @@ export async function duplicateSurveyAction(formData: FormData) {
   const newRows = await sql`
     INSERT INTO surveys (
       public_token,title,topic,description,target_group,status,
-      results_visibility,thank_you_text,created_by_user_id
+      results_visibility,thank_you_text,one_response_per_browser,created_by_user_id
     )
     VALUES (
       ${surveyToken()},${String(source.title) + " – Kopie"},${source.topic},${source.description},
-      ${source.target_group},'draft',${source.results_visibility},${source.thank_you_text},${actor.id}::uuid
+      ${source.target_group},'draft',${source.results_visibility},${source.thank_you_text},
+      ${Boolean(source.one_response_per_browser)},${actor.id}::uuid
     )
     RETURNING id::text
   `;
@@ -228,11 +312,18 @@ export async function submitSurveyResponseAction(formData: FormData) {
   if (!sql || !token) redirect(`/u/${encodeURIComponent(token)}?error=unavailable`);
 
   const surveyRows = await sql`
-    SELECT id::text,status,starts_at,ends_at
+    SELECT id::text,status,starts_at,ends_at,one_response_per_browser
     FROM surveys WHERE public_token=${token} LIMIT 1
   `;
   const survey = surveyRows[0];
   if (!survey || survey.status !== "active") redirect(`/u/${token}?error=closed`);
+
+  if (survey.one_response_per_browser) {
+    const jar = await cookies();
+    if (jar.get(`vdc_survey_done_${token}`)?.value === "1") {
+      redirect(`/u/${token}?done=1&already=1`);
+    }
+  }
 
   const now = Date.now();
   if (survey.starts_at && new Date(String(survey.starts_at)).getTime() > now) redirect(`/u/${token}?error=not_started`);
@@ -308,6 +399,17 @@ export async function submitSurveyResponseAction(formData: FormData) {
         VALUES (${answerId}::uuid,${optionId}::uuid)
       `;
     }
+  }
+
+  if (survey.one_response_per_browser) {
+    const jar = await cookies();
+    jar.set(`vdc_survey_done_${token}`, "1", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: `/u/${token}`,
+      maxAge: 60 * 60 * 24 * 180,
+    });
   }
 
   revalidatePath(`/u/${token}`);
