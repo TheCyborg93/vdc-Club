@@ -28,6 +28,7 @@ type MatchPayload = {
   eventType?: "league" | "tournament";
   teamExternalId: string;
   description?: string | null;
+  location?: string | null;
 };
 
 type SyncPayload = {
@@ -245,12 +246,13 @@ export async function POST(request: Request) {
 
       const eventRows = await sql`
         INSERT INTO club_events (
-          title,event_type,starts_at,source,external_id,team_id,description
+          title,event_type,starts_at,location,source,external_id,team_id,description
         )
         VALUES (
           ${match.title},
           ${match.eventType === "tournament" ? "tournament" : "league"},
           ${match.startsAt}::timestamptz,
+          ${match.location ?? null},
           'vdc_tc',
           ${match.externalId},
           ${teamId}::uuid,
@@ -261,8 +263,12 @@ export async function POST(request: Request) {
           title=EXCLUDED.title,
           event_type=EXCLUDED.event_type,
           starts_at=EXCLUDED.starts_at,
+          location=EXCLUDED.location,
           team_id=EXCLUDED.team_id,
           description=EXCLUDED.description,
+          deleted_at=NULL,
+          deleted_by=NULL,
+          delete_reason=NULL,
           updated_at=now()
         RETURNING id::text
       `;
