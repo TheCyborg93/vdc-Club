@@ -259,11 +259,26 @@ export async function syncIntegration(key: IntegrationKey): Promise<SyncResult> 
 
 export async function syncAllIntegrations() {
   const results: SyncResult[] = [];
+  const sql=getDb();
+
+  let enabledKeys: IntegrationKey[]=["vdc_tc","vdc_turnier","vdc_training"];
+  if (sql) {
+    const rows=await sql`
+      SELECT integration_key
+      FROM integration_connections
+      WHERE integration_key IN ('vdc_tc','vdc_turnier','vdc_training')
+        AND status <> 'disabled'
+    `;
+    if (rows.length) {
+      enabledKeys=rows.map((row)=>String(row.integration_key) as IntegrationKey);
+    }
+  }
 
   // TC zuerst, damit Mitglieder- und Mannschaftsbezüge für die Fachmodule bereits existieren.
-  results.push(await syncIntegration("vdc_tc"));
-  results.push(await syncIntegration("vdc_turnier"));
-  results.push(await syncIntegration("vdc_training"));
+  for (const key of ["vdc_tc","vdc_turnier","vdc_training"] as IntegrationKey[]) {
+    if (!enabledKeys.includes(key)) continue;
+    results.push(await syncIntegration(key));
+  }
 
   return {
     ok: results.every((result) => result.ok),
