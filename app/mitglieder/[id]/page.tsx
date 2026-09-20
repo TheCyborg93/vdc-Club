@@ -113,11 +113,14 @@ export default async function MemberDetailPage({
       LIMIT 1
     `,
     sql`
-      SELECT id::text,fiscal_year,amount,due_date,status,paid_on,notes
-      FROM membership_fees
-      WHERE member_id=${id}::uuid
-      ORDER BY fiscal_year DESC
-      LIMIT 4
+      SELECT
+        mf.id::text,mf.fiscal_year,mf.amount,mf.due_date,mf.status,mf.paid_on,mf.notes,
+        mf.fee_type_name,mf.payment_frequency,mf.reference_text,
+        COALESCE((SELECT SUM(p.amount) FROM membership_fee_payments p WHERE p.fee_id=mf.id),0) AS paid
+      FROM membership_fees mf
+      WHERE mf.member_id=${id}::uuid
+      ORDER BY mf.fiscal_year DESC
+      LIMIT 6
     `,
     sql`
       SELECT id::text,old_status,new_status,reason,effective_date,created_at
@@ -176,6 +179,7 @@ export default async function MemberDetailPage({
   const canWrite = hasPermission(actor.roles, "members.write");
   const canManageAccounts = hasPermission(actor.roles, "settings.manage");
   const canTraining = hasPermission(actor.roles, "training.read");
+  const canFinance = hasPermission(actor.roles, "finance.read");
   const trainingSummary = trainingSummaryRows[0] ?? { recorded:0,attended:0,excused:0,activity_rate:0,last_present:null };
 
   return (
@@ -200,10 +204,17 @@ export default async function MemberDetailPage({
         <article><span>Eintritt</span><strong>{formatDate(member.join_date)}</strong></article>
         <article><span>Kündigung</span><strong>{formatDate(member.notice_date)}</strong></article>
         <article><span>Austritt</span><strong>{formatDate(member.leave_date)}</strong></article>
-        <article>
-          <span>Beitrag {new Date().getFullYear()}</span>
-          <strong>{currentFee ? feeLabels[String(currentFee.status)] ?? String(currentFee.status) : "Nicht erzeugt"}</strong>
-        </article>
+        {canFinance && (
+          <article>
+            <span>Beitrag {new Date().getFullYear()}</span>
+            <strong>{currentFee ? feeLabels[String(currentFee.status)] ?? String(currentFee.status) : "Nicht erzeugt"}</strong>
+            {currentFee && (
+              <small>
+                {money(currentFee.paid)} von {money(currentFee.amount)} bezahlt
+              </small>
+            )}
+          </article>
+        )}
         {canTraining && (
           <article>
             <span>Training {new Date().getFullYear()}</span>
@@ -366,20 +377,39 @@ export default async function MemberDetailPage({
           </article>
         )}
 
-        <article className="panel">
-          <div className="panel-head"><div><span className="eyebrow">Beiträge</span><h2>Beitragsverlauf</h2></div></div>
-          <div className="member-fee-list">
-            {feeRows.length === 0 ? (
-              <div className="empty-state">Noch keine Beiträge für dieses Mitglied erzeugt.</div>
-            ) : feeRows.map((fee) => (
-              <div className="member-fee-row" key={String(fee.id)}>
-                <div><strong>{String(fee.fiscal_year)}</strong><span>Fällig {formatDate(fee.due_date)}</span></div>
-                <b>{money(fee.amount)}</b>
-                <span className={`fee-status fee-${fee.status}`}>{feeLabels[String(fee.status)] ?? String(fee.status)}</span>
-              </div>
-            ))}
-          </div>
-        </article>
+        {canFinance && (
+          <article className="panel">
+            <div className="panel-head">
+              <div><span className="eyebrow">Beiträge</span><h2>Beitragsverlauf</h2></div>
+              <Link href="/finanzen/beitraege" className="ghost-button">Beiträge verwalten</Link>
+            </div>
+            <div className="member-fee-list">
+              {feeRows.length === 0 ? (
+                <div className="empty-state">Noch keine Beiträge für dieses Mitglied erzeugt.</div>
+              ) : feeRows.map((fee) => {
+                const paid=Number(fee.paid ?? 0);
+                const total=Number(fee.amount ?? 0);
+                const remaining=Math.max(0,total-paid);
+                return (
+                  <div className="member-fee-row member-fee-row-extended" key={String(fee.id)}>
+                    <div>
+                      <strong>{String(fee.fiscal_year)} · {String(fee.fee_type_name || "Standard")}</strong>
+                      <span>
+                        Fällig {formatDate(fee.due_date)}
+                        {fee.reference_text ? ` · ${fee.reference_text}` : ""}
+                      </span>
+                    </div>
+                    <div className="member-fee-money">
+                      <strong>{money(paid)} / {money(total)}</strong>
+                      <span>{remaining > 0 ? `${money(remaining)} offen` : "vollständig bezahlt"}</span>
+                    </div>
+                    <span className={`fee-status fee-${fee.status}`}>{feeLabels[String(fee.status)] ?? String(fee.status)}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </article>
+        )}
 
         <article className="panel">
           <div className="panel-head"><div><span className="eyebrow">Historie</span><h2>Statusänderungen</h2></div></div>
