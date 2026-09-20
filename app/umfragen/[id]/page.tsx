@@ -33,7 +33,7 @@ export default async function SurveyDetailPage({
   searchParams,
 }: {
   params: Promise<{id:string}>;
-  searchParams: Promise<{created?:string;status?:string;duplicated?:string}>;
+  searchParams: Promise<{created?:string;updated?:string;status?:string;duplicated?:string;error?:string}>;
 }) {
   const user = await requirePermission("surveys.read");
   const sql = getDb();
@@ -125,8 +125,11 @@ export default async function SurveyDetailPage({
         </span>
       </section>
 
-      {(query.created || query.status || query.duplicated) && (
+      {(query.created || query.updated || query.status || query.duplicated) && (
         <div className="form-success">Umfrage wurde aktualisiert.</div>
+      )}
+      {query.error === "not_editable" && (
+        <div className="form-error">Nur unveröffentlichte Entwürfe ohne Antworten können bearbeitet werden.</div>
       )}
 
       <section className="stat-grid">
@@ -158,10 +161,14 @@ export default async function SurveyDetailPage({
           <div className="survey-control-list">
             <div><span>Status</span><strong>{statusLabels[String(survey.status)] ?? String(survey.status)}</strong></div>
             <div><span>Ergebnisse öffentlich</span><strong>{survey.results_visibility === "after_submit" ? "Nach Abgabe" : "Nein"}</strong></div>
+            <div><span>Mehrfachteilnahme</span><strong>{survey.one_response_per_browser ? "Pro Browser begrenzt" : "Erlaubt"}</strong></div>
             <div><span>Erstellt von</span><strong>{survey.creator_name ? String(survey.creator_name) : "System"}</strong></div>
           </div>
           {canWrite && (
             <div className="survey-control-actions">
+              {survey.status === "draft" && (
+                <Link href={`/umfragen/${id}/bearbeiten`} className="ghost-button">Bearbeiten</Link>
+              )}
               {survey.status === "draft" && (
                 <form action={updateSurveyStatusAction}>
                   <input type="hidden" name="id" value={id} />
