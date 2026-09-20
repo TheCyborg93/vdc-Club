@@ -134,14 +134,15 @@ export function SurveyBuilder() {
         <div className="form-grid">
           <label>
             Zielgruppe
-            <select name="targetGroup" defaultValue="Alle">
-              <option>Alle</option>
-              <option>Vorstand</option>
-              <option>1. Mannschaft</option>
-              <option>2. Mannschaft</option>
-              <option>Team Captains</option>
-              <option>Aktive Spieler</option>
-            </select>
+            <input name="targetGroup" defaultValue="Alle" list="survey-target-groups" placeholder="z. B. Alle oder eigene Gruppe" />
+            <datalist id="survey-target-groups">
+              <option value="Alle" />
+              <option value="Vorstand" />
+              <option value="1. Mannschaft" />
+              <option value="2. Mannschaft" />
+              <option value="Team Captains" />
+              <option value="Aktive Spieler" />
+            </datalist>
           </label>
           <label>
             Teilnahme bis
