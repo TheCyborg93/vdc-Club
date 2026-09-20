@@ -5,10 +5,11 @@ import { redirect } from "next/navigation";
 import { getDb } from "@/lib/db";
 import { requirePermission } from "@/lib/permissions";
 import { writeAudit } from "@/lib/audit";
+import { officialRoleKeys } from "@/lib/roles";
 
-const allowedRoles = new Set([
-  "admin","board","chair","vice_chair","treasurer","secretary",
-  "sport_director","team_captain","tournament_director",
+const allowedRoles = new Set<string>([
+  ...officialRoleKeys,
+  "tournament_director",
 ]);
 
 function value(formData: FormData, key: string) {
@@ -117,6 +118,8 @@ export async function updateAdminUserRolesAction(formData: FormData) {
   });
 
   revalidatePath("/admin/benutzer");
+  revalidatePath("/vorstand");
+  revalidatePath("/mitglieder");
   redirect("/admin/benutzer?roles=1");
 }
 
