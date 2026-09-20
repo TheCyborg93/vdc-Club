@@ -17,6 +17,7 @@ export type NavItem = {
 
 export const navigation: NavItem[] = [
   { href: "/", label: "Dashboard", short: "DB", group: "Dashboard" },
+  { href: "/anleitung", label: "Anleitung", short: "AN", group: "Dashboard" },
 
   { href: "/verein", label: "Vereinsprofil", short: "VP", group: "Verein", permission: "members.read" },
   { href: "/mitglieder", label: "Mitglieder", short: "MI", group: "Verein", permission: "members.read" },
