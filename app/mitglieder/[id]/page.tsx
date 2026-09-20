@@ -170,6 +170,7 @@ export default async function MemberDetailPage({
   const visibleRoleRows = roleRows
     .filter((role) => officialRoleKeys.includes(String(role.key) as (typeof officialRoleKeys)[number]))
     .sort((a, b) => rolePriority(String(a.key)) - rolePriority(String(b.key)));
+  const officialRoleSet = new Set<string>(officialRoleKeys);
 
   const currentFee = feeRows.find((fee) => Number(fee.fiscal_year) === new Date().getFullYear()) ?? null;
   const canWrite = hasPermission(actor.roles, "members.write");
@@ -285,6 +286,9 @@ export default async function MemberDetailPage({
                 <form action={updateMemberRolesAction} className="form-stack role-form">
                   <input type="hidden" name="memberId" value={id} />
                   <input type="hidden" name="userId" value={String(appUser.id)} />
+                  {[...assignedRoles]
+                    .filter((role) => !officialRoleSet.has(role))
+                    .map((role) => <input key={role} type="hidden" name="roles" value={role} />)}
                   <div className="checkbox-grid">
                     {visibleRoleRows.map((role) => (
                       <label className="checkbox-row" key={String(role.key)}>
