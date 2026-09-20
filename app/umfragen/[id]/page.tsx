@@ -60,6 +60,7 @@ export default async function SurveyDetailPage({
     identityFieldRows,
     identityValueRows,
     responseListRows,
+    individualAnswerRows,
   ] = await Promise.all([
     sql`
       SELECT s.*,u.display_name AS creator_name
@@ -128,6 +129,26 @@ export default async function SurveyDetailPage({
       ORDER BY submitted_at DESC
       LIMIT 250
     `,
+    sql`
+      SELECT
+        a.response_id::text,
+        q.position,
+        q.question_text,
+        q.question_type,
+        a.text_value,
+        COALESCE(
+          string_agg(o.label, ', ' ORDER BY o.position) FILTER (WHERE o.id IS NOT NULL),
+          ''
+        ) AS selected_options
+      FROM survey_answers a
+      JOIN survey_questions q ON q.id=a.question_id
+      LEFT JOIN survey_answer_options ao ON ao.answer_id=a.id
+      LEFT JOIN survey_options o ON o.id=ao.option_id
+      JOIN survey_responses r ON r.id=a.response_id
+      WHERE r.survey_id=${id}::uuid
+      GROUP BY a.id,a.response_id,q.position,q.question_text,q.question_type,a.text_value
+      ORDER BY a.response_id,q.position
+    `,
   ]);
 
   const survey = surveyRows[0];
@@ -160,6 +181,15 @@ export default async function SurveyDetailPage({
       identityByResponse.set(responseId, new Map());
     }
     identityByResponse.get(responseId)!.set(String(row.field_id), String(row.value));
+  }
+
+  const answersByResponse = new Map<string, typeof individualAnswerRows>();
+  for (const answer of individualAnswerRows) {
+    const responseId = String(answer.response_id);
+    if (!answersByResponse.has(responseId)) {
+      answersByResponse.set(responseId, []);
+    }
+    answersByResponse.get(responseId)!.push(answer);
   }
 
   const deadline = formatDate(survey.ends_at);
@@ -319,6 +349,23 @@ export default async function SurveyDetailPage({
                         </div>
                       ))}
                     </div>
+
+                    <details className="survey-participant-answers">
+                      <summary>Antworten dieser Person anzeigen</summary>
+                      <div>
+                        {(answersByResponse.get(String(response.id)) ?? []).map((answer, answerIndex) => {
+                          const answerValue = String(answer.text_value ?? "").trim()
+                            || String(answer.selected_options ?? "").trim()
+                            || "Keine Antwort";
+                          return (
+                            <div key={answerIndex}>
+                              <span>Frage {Number(answer.position)} · {String(answer.question_text)}</span>
+                              <strong>{answerValue}</strong>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </details>
                   </article>
                 );
               })}
