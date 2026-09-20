@@ -25,7 +25,7 @@ export default async function FinanceAnalysisPage({
   const [feeSummary,monthlyPayments,typeSummary,financeSummary]=sql ? await Promise.all([
     sql`
       SELECT
-        COALESCE(SUM(mf.amount),0) AS expected,
+        COALESCE(SUM(mf.amount) FILTER (WHERE mf.status NOT IN ('exempt','cancelled')),0) AS expected,
         COALESCE(SUM((SELECT COALESCE(SUM(p.amount),0) FROM membership_fee_payments p WHERE p.fee_id=mf.id)),0) AS paid,
         COUNT(*)::int AS fees,
         COUNT(*) FILTER (WHERE mf.status='exempt')::int AS exempt,
@@ -47,7 +47,7 @@ export default async function FinanceAnalysisPage({
       SELECT
         COALESCE(mf.fee_type_name,'Standard') AS fee_type_name,
         COUNT(*)::int AS members,
-        COALESCE(SUM(mf.amount),0) AS expected,
+        COALESCE(SUM(mf.amount) FILTER (WHERE mf.status NOT IN ('exempt','cancelled')),0) AS expected,
         COALESCE(SUM((SELECT COALESCE(SUM(p.amount),0) FROM membership_fee_payments p WHERE p.fee_id=mf.id)),0) AS paid
       FROM membership_fees mf
       WHERE mf.fiscal_year=${year}
