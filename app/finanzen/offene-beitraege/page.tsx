@@ -13,6 +13,25 @@ const formatDate=(value:unknown)=>{
   return Number.isNaN(d.getTime()) ? "–" : new Intl.DateTimeFormat("de-DE").format(d);
 };
 
+type OpenFeeRow = {
+  id: string;
+  amount: number;
+  status: string;
+  dueDate: unknown;
+  feeTypeName: string;
+  paymentFrequency: string;
+  reminderLevel: string;
+  lastReminderOn: unknown;
+  firstName: string;
+  lastName: string;
+  memberNumber: string;
+  nextDueDate: unknown;
+  total: number;
+  paid: number;
+  remaining: number;
+  overdue: number;
+};
+
 export default async function OpenMembershipFeesPage({
   searchParams,
 }:{
@@ -48,13 +67,31 @@ export default async function OpenMembershipFeesPage({
     ORDER BY m.last_name,m.first_name
   ` : [];
 
-  const rows=fees.map((fee)=>{
+  const rows: OpenFeeRow[]=fees.map((fee)=> {
     const total=Number(fee.amount ?? 0);
     const paid=Number(fee.paid ?? 0);
     const due=Number(fee.due_total ?? 0);
     const remaining=Math.max(0,total-paid);
     const overdue=Math.max(0,due-paid);
-    return {...fee,total,paid,remaining,overdue};
+
+    return {
+      id:String(fee.id),
+      amount:total,
+      status:String(fee.status ?? "open"),
+      dueDate:fee.dueDate,
+      feeTypeName:String(fee.feeTypeName ?? "Standard"),
+      paymentFrequency:String(fee.payment_frequency ?? "annual"),
+      reminderLevel:String(fee.reminderLevel ?? "none"),
+      lastReminderOn:fee.lastReminderOn,
+      firstName:String(fee.firstName ?? ""),
+      lastName:String(fee.lastName ?? ""),
+      memberNumber:String(fee.memberNumber ?? ""),
+      nextDueDate:fee.nextDueDate,
+      total,
+      paid,
+      remaining,
+      overdue,
+    };
   }).filter((fee)=>fee.remaining>0.001);
 
   const overdueRows=rows.filter((fee)=>fee.overdue>0.001);
@@ -104,13 +141,13 @@ export default async function OpenMembershipFeesPage({
         ) : (
           <div className="open-fee-list">
             {rows
-              .sort((a,b)=>b.overdue-a.overdue || String(a.last_name).localeCompare(String(b.last_name),"de"))
+              .sort((a,b)=>b.overdue-a.overdue || String(a.lastName).localeCompare(String(b.lastName),"de"))
               .map((fee)=>(
                 <article className={fee.overdue>0 ? "open-fee-card overdue" : "open-fee-card"} key={String(fee.id)}>
                   <div>
-                    <span>{fee.member_number ? `#${fee.member_number}` : "Mitglied"}</span>
-                    <strong>{String(fee.first_name)} {String(fee.last_name)}</strong>
-                    <small>{String(fee.fee_type_name || "Standard")}</small>
+                    <span>{fee.memberNumber ? `#${fee.memberNumber}` : "Mitglied"}</span>
+                    <strong>{String(fee.firstName)} {String(fee.lastName)}</strong>
+                    <small>{String(fee.feeTypeName || "Standard")}</small>
                   </div>
                   <div>
                     <span>Gesamt</span>
@@ -124,25 +161,25 @@ export default async function OpenMembershipFeesPage({
                   </div>
                   <div>
                     <span>Nächste Fälligkeit</span>
-                    <strong>{formatDate(fee.next_due_date || fee.due_date)}</strong>
+                    <strong>{formatDate(fee.nextDueDate || fee.dueDate)}</strong>
                     <small>{fee.overdue>0 ? "Handlungsbedarf" : "planmäßig"}</small>
                   </div>
                   <div className="open-fee-reminder">
                     <span>Erinnerungsstatus</span>
                     <strong>
-                      {fee.reminder_level==="reminder1"
+                      {fee.reminderLevel==="reminder1"
                         ? "1. Erinnerung"
-                        : fee.reminder_level==="reminder2"
+                        : fee.reminderLevel==="reminder2"
                           ? "2. Erinnerung"
-                          : fee.reminder_level==="dunning"
+                          : fee.reminderLevel==="dunning"
                             ? "Mahnung"
                             : "Keine"}
                     </strong>
-                    <small>{fee.last_reminder_on ? "zuletzt "+formatDate(fee.last_reminder_on) : "noch nicht erinnert"}</small>
+                    <small>{fee.lastReminderOn ? "zuletzt "+formatDate(fee.lastReminderOn) : "noch nicht erinnert"}</small>
                     {canWrite && (
                       <form action={updateMembershipFeeReminderAction}>
                         <input type="hidden" name="id" value={String(fee.id)} />
-                        <select name="reminderLevel" defaultValue={String(fee.reminder_level || "none")}>
+                        <select name="reminderLevel" defaultValue={String(fee.reminderLevel || "none")}>
                           <option value="none">Keine</option>
                           <option value="reminder1">1. Erinnerung</option>
                           <option value="reminder2">2. Erinnerung</option>
