@@ -24,6 +24,7 @@ export const navigation: NavItem[] = [
   { href: "/vorstand", label: "Vorstand", short: "VO", group: "Verein", permission: "members.read" },
   { href: "/sponsoren", label: "Sponsoren", short: "SP", group: "Verein", permission: "sponsors.read" },
   { href: "/finanzen", label: "Finanzen", short: "FI", group: "Verein", permission: "finance.read" },
+  { href: "/vereinschronik", label: "Vereinschronik", short: "VC", group: "Verein", permission: "chronicle.read" },
 
   { href: "/mannschaften", label: "Mannschaften", short: "MA", group: "Teams & Training", permission: "teams.read" },
   { href: "/training", label: "Training", short: "TR", group: "Teams & Training", permission: "training.read" },
