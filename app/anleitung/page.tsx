@@ -76,7 +76,13 @@ const modules: GuideModule[] = [
     href: "/umfragen",
     permission: "surveys.read",
     description: "Anonyme Umfragen mit öffentlichem Link erstellen, per WhatsApp verteilen und zentral auswerten.",
-    capabilities: ["Einzel-, Mehrfachauswahl und Freitext kombinieren", "Anonymen Link und WhatsApp-Text erzeugen", "Ergebnisse und Freitextantworten auswerten"],
+    capabilities: [
+      "Einzel-, Mehrfachauswahl und Freitext kombinieren",
+      "Entwürfe vor Veröffentlichung vollständig bearbeiten",
+      "Anonymen Link und fertigen WhatsApp-Text erzeugen",
+      "Optional nur eine Teilnahme pro Browser/Gerät zulassen",
+      "Ergebnisse, Prozentwerte und Freitextantworten auswerten",
+    ],
   },
   {
     title: "Dokumente & Archiv",
@@ -181,6 +187,24 @@ export default async function GuidePage() {
           );
         })}
       </section>
+
+      <article className="panel guide-survey-workflow">
+        <div className="panel-head">
+          <div><span className="eyebrow">Umfragen</span><h2>So läuft eine Umfrage ab</h2></div>
+          <Link href="/umfragen" className="ghost-button">Umfragen öffnen</Link>
+        </div>
+        <div className="guide-workflow-steps">
+          <div><b>1</b><span><strong>Erstellen</strong><small>Titel, Thema, Zielgruppe, Frist und Fragen festlegen.</small></span></div>
+          <div><b>2</b><span><strong>Entwurf prüfen</strong><small>Fragen, Antwortarten und Einstellungen können vor Veröffentlichung noch geändert werden.</small></span></div>
+          <div><b>3</b><span><strong>Veröffentlichen</strong><small>Der öffentliche anonyme Link wird freigeschaltet. Optional kann pro Browser nur eine Teilnahme erlaubt werden.</small></span></div>
+          <div><b>4</b><span><strong>Teilen</strong><small>Link oder automatisch erstellten WhatsApp-Text kopieren und an die Zielgruppe senden.</small></span></div>
+          <div><b>5</b><span><strong>Auswerten</strong><small>Teilnahmen, Auswahlwerte, Prozentangaben und anonyme Freitextantworten ansehen.</small></span></div>
+        </div>
+        <div className="survey-anonymous-note">
+          <strong>Anonymität</strong>
+          <span>Antworten werden ohne Namen, Mitglied, Benutzerkonto, E-Mail-Adresse oder IP-Adresse gespeichert. Der optionale Mehrfachschutz verwendet nur ein Cookie im jeweiligen Browser.</span>
+        </div>
+      </article>
 
       <article className="panel">
         <div className="panel-head">
