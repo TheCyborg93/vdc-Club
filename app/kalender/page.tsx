@@ -4,7 +4,6 @@ import { createEventAction, syncCalendarSourcesAction } from "@/app/kalender/act
 import { moveToTrashAction } from "@/app/admin/papierkorb/actions";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 import { ensureTrainingSchedule } from "@/lib/training";
-import { ensureIntegrationsFresh } from "@/lib/club-sync";
 
 const typeLabels: Record<string, string> = {
   club: "Verein",
@@ -56,7 +55,6 @@ export default async function CalendarPage({
   searchParams: Promise<{ error?: string; created?: string; deleted?: string; synced?: string; sync_error?: string }>;
 }) {
   const actor = await requirePermission("calendar.read");
-  await ensureIntegrationsFresh(2).catch(()=>null);
   await ensureTrainingSchedule(365);
   const sql = getDb();
   const params = await searchParams;
