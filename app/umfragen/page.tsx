@@ -22,8 +22,13 @@ function formatDate(value: unknown) {
   }).format(date);
 }
 
-export default async function SurveysPage() {
+export default async function SurveysPage({
+  searchParams,
+}: {
+  searchParams: Promise<{deleted?:string}>;
+}) {
   const user = await requirePermission("surveys.read");
+  const query = await searchParams;
   const sql = getDb();
   const canWrite = hasPermission(user.roles, "surveys.write");
 
@@ -34,6 +39,7 @@ export default async function SurveysPage() {
       s.topic,
       s.target_group,
       s.status,
+      s.is_anonymous,
       s.ends_at,
       s.created_at,
       count(DISTINCT r.id)::int AS responses,
@@ -57,7 +63,7 @@ export default async function SurveysPage() {
         <div>
           <span className="eyebrow">Organisation</span>
           <h1>Umfragen</h1>
-          <p>Anonyme Vereinsumfragen erstellen, verteilen und zentral auswerten.</p>
+          <p>Anonyme oder nicht anonyme Vereinsumfragen erstellen, verteilen und zentral auswerten.</p>
         </div>
         {canWrite && <Link href="/umfragen/neu" className="primary-button">+ Neue Umfrage</Link>}
       </section>
@@ -66,8 +72,10 @@ export default async function SurveysPage() {
         <article className="stat-card"><span>Umfragen</span><strong>{surveys.length}</strong><small>gesamt</small></article>
         <article className="stat-card"><span>Aktiv</span><strong>{active}</strong><small>öffentlich erreichbar</small></article>
         <article className="stat-card"><span>Entwürfe</span><strong>{drafts}</strong><small>noch nicht veröffentlicht</small></article>
-        <article className="stat-card"><span>Antworten</span><strong>{responses}</strong><small>anonym eingegangen</small></article>
+        <article className="stat-card"><span>Antworten</span><strong>{responses}</strong><small>insgesamt eingegangen</small></article>
       </section>
+
+      {query.deleted && <div className="form-success">Umfrage wurde endgültig gelöscht.</div>}
 
       <article className="panel">
         <div className="panel-head">
@@ -82,7 +90,9 @@ export default async function SurveysPage() {
               <div className="survey-list-main">
                 <span>{String(survey.topic)} · {String(survey.target_group)}</span>
                 <strong>{String(survey.title)}</strong>
-                <small>{Number(survey.questions)} Fragen · {Number(survey.responses)} Antworten</small>
+                <small>
+                  {Number(survey.questions)} Fragen · {Number(survey.responses)} Antworten · {survey.is_anonymous ? "Anonym" : "Nicht anonym"}
+                </small>
               </div>
               <div className="survey-list-meta">
                 <span className={`survey-status survey-status-${survey.status}`}>
