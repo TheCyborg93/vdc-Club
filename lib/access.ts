@@ -10,6 +10,7 @@ export type Permission =
   | "sponsors.read" | "sponsors.write"
   | "documents.read" | "documents.write"
   | "statistics.read"
+  | "surveys.read" | "surveys.write"
   | "settings.manage";
 
 export const rolePermissions: Record<string, Permission[] | ["*"]> = {
@@ -17,21 +18,21 @@ export const rolePermissions: Record<string, Permission[] | ["*"]> = {
   board: [
     "members.read", "teams.read", "tasks.read", "tasks.write",
     "calendar.read", "training.read", "meetings.read", "resolutions.read",
-    "sponsors.read", "documents.read", "statistics.read",
+    "sponsors.read", "documents.read", "statistics.read", "surveys.read", "surveys.write",
   ],
   chair: [
     "members.read", "members.write", "teams.read", "teams.write",
     "tasks.read", "tasks.write", "calendar.read", "calendar.write",
     "training.read", "training.write", "meetings.read", "meetings.write", "resolutions.read", "resolutions.write",
     "finance.read", "sponsors.read", "sponsors.write",
-    "documents.read", "documents.write", "statistics.read",
+    "documents.read", "documents.write", "statistics.read", "surveys.read", "surveys.write",
   ],
   vice_chair: [
     "members.read", "members.write", "teams.read", "teams.write",
     "tasks.read", "tasks.write", "calendar.read", "calendar.write",
     "training.read", "training.write", "meetings.read", "meetings.write", "resolutions.read", "resolutions.write",
     "sponsors.read", "sponsors.write",
-    "documents.read", "documents.write", "statistics.read",
+    "documents.read", "documents.write", "statistics.read", "surveys.read", "surveys.write",
   ],
   treasurer: [
     "members.read", "calendar.read", "meetings.read",
@@ -42,18 +43,18 @@ export const rolePermissions: Record<string, Permission[] | ["*"]> = {
     "members.read", "tasks.read", "tasks.write",
     "calendar.read", "calendar.write", "meetings.read", "resolutions.read",
     "sponsors.read", "sponsors.write", "documents.read", "documents.write",
-    "statistics.read",
+    "statistics.read", "surveys.read", "surveys.write",
   ],
   secretary: [
     "members.read", "tasks.read", "tasks.write", "calendar.read", "calendar.write",
     "meetings.read", "meetings.write", "resolutions.read", "resolutions.write",
-    "sponsors.read", "documents.read", "documents.write",
+    "sponsors.read", "documents.read", "documents.write", "surveys.read", "surveys.write",
   ],
   sport_director: [
     "members.read", "teams.read", "teams.write", "tasks.read", "tasks.write",
-    "calendar.read", "calendar.write", "training.read", "training.write", "statistics.read",
+    "calendar.read", "calendar.write", "training.read", "training.write", "statistics.read", "surveys.read", "surveys.write",
   ],
-  team_captain: ["members.read", "teams.read", "tasks.read", "calendar.read", "training.read", "statistics.read"],
+  team_captain: ["members.read", "teams.read", "tasks.read", "calendar.read", "training.read", "statistics.read", "surveys.read", "surveys.write"],
   tournament_director: ["members.read", "tasks.read", "tasks.write", "calendar.read", "calendar.write", "documents.read"],
 };
 
@@ -87,6 +88,8 @@ export const permissionLabels: Record<Permission,string> = {
   "documents.read":"Dokumente ansehen",
   "documents.write":"Dokumente bearbeiten",
   "statistics.read":"Statistik ansehen",
+  "surveys.read":"Umfragen ansehen",
+  "surveys.write":"Umfragen erstellen und verwalten",
   "settings.manage":"Administration verwalten",
 };
 
