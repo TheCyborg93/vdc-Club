@@ -490,6 +490,35 @@ export async function recordMembershipFeePaymentAction(formData: FormData) {
   redirect("/finanzen/beitraege?payment=1");
 }
 
+export async function updateMembershipFeeReminderAction(formData: FormData) {
+  const actor=await requirePermission("finance.write");
+  const sql=getDb();
+  if (!sql) redirect("/finanzen/offene-beitraege?error=database");
+
+  const id=value(formData,"id");
+  const reminderLevel=value(formData,"reminderLevel");
+  if (!id || !["none","reminder1","reminder2","dunning"].includes(reminderLevel)) {
+    redirect("/finanzen/offene-beitraege?error=invalid");
+  }
+
+  await sql`
+    UPDATE membership_fees
+    SET
+      reminder_level=${reminderLevel},
+      last_reminder_on=CASE
+        WHEN ${reminderLevel}='none' THEN NULL
+        ELSE CURRENT_DATE
+      END
+    WHERE id=${id}::uuid
+  `;
+
+  await writeAudit(actor.id,"finance.membership_fee_reminder","membership_fee",id,{
+    reminderLevel,
+  });
+  revalidateFinance();
+  redirect("/finanzen/offene-beitraege?reminder=1");
+}
+
 export async function updateMembershipFeeStatusAction(formData: FormData) {
   const actor=await requirePermission("finance.write");
   const sql=getDb();
