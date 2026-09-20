@@ -176,11 +176,11 @@ export function PwaInstallPrompt() {
           <button
             type="button"
             className="primary-button"
-            onClick={install}
+            onClick={platform === "ios" && showIosHelp ? snooze : install}
             disabled={!canInstall}
           >
             {platform === "ios"
-              ? showIosHelp ? "Anleitung geöffnet" : "So installierst du die App"
+              ? showIosHelp ? "Verstanden" : "So installierst du die App"
               : "App installieren"}
           </button>
           <button type="button" className="ghost-button" onClick={snooze}>
