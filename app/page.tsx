@@ -5,6 +5,7 @@ import { requireUser } from "@/lib/auth";
 import { hasPermission } from "@/lib/access";
 import { updateTaskStatusInlineAction } from "@/app/aufgaben/actions";
 import { resolutionStatusLabel,taskStatusLabel } from "@/lib/ui-labels";
+import { ensureIntegrationsFresh } from "@/lib/club-sync";
 
 export const dynamic = "force-dynamic";
 
@@ -120,6 +121,8 @@ export default async function DashboardPage() {
     board:"Vorstand",
     member:"Vereinszugang",
   };
+
+  await ensureIntegrationsFresh(2).catch(()=>null);
 
   const data=await getDashboardData({
     includeSystem:isAdmin,
