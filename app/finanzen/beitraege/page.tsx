@@ -30,12 +30,7 @@ const frequencyLabels:Record<string,string>={
   monthly:"Monatlich",
 };
 
-function derivedStatus(fee:{
-  status:unknown;
-  amount:unknown;
-  paid:unknown;
-  due_total:unknown;
-}) {
+function derivedStatus(fee: Record<string, unknown>) {
   const status=String(fee.status);
   if (status==="exempt") return {key:"exempt",label:"Befreit"};
   if (status==="cancelled") return {key:"cancelled",label:"Storniert"};
