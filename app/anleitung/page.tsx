@@ -193,6 +193,30 @@ export default async function GuidePage() {
         </div>
       </article>
 
+      <article className="panel guide-install-app">
+        <div className="panel-head">
+          <div><span className="eyebrow">VDC Club App</span><h2>Auf Handy oder Tablet installieren</h2></div>
+        </div>
+        <div className="guide-install-grid">
+          <div>
+            <strong>Android</strong>
+            <span>Beim ersten passenden Besuch erscheint „VDC Club als App installieren“. Über „App installieren“ öffnet sich der native Browserdialog.</span>
+          </div>
+          <div>
+            <strong>iPhone / iPad</strong>
+            <span>Das Installationsfenster zeigt die Schritte über „Teilen“ → „Zum Home-Bildschirm“ → „Hinzufügen“.</span>
+          </div>
+          <div>
+            <strong>Schon installiert?</strong>
+            <span>Wird VDC Club als installierte App geöffnet, erscheint der Installationshinweis nicht mehr.</span>
+          </div>
+          <div>
+            <strong>Später</strong>
+            <span>Mit „Später“ wird der Hinweis sieben Tage ausgeblendet. „Nicht mehr anzeigen“ deaktiviert ihn dauerhaft auf diesem Browser.</span>
+          </div>
+        </div>
+      </article>
+
       <section className="guide-grid">
         {modules.map((module) => {
           const available = !module.permission || hasPermission(user.roles, module.permission);
