@@ -103,10 +103,10 @@ export async function POST(request: Request) {
           VALUES (
             'vdc_turnier','tournament',${tournament.externalId},${eventId}::uuid,
             jsonb_build_object(
-              'type',${tournament.type ?? null},
-              'status',${tournament.status ?? null},
-              'format',${tournament.format ?? null},
-              'participants',${participants}
+              'type',${tournament.type ?? null}::text,
+              'status',${tournament.status ?? null}::text,
+              'format',${tournament.format ?? null}::text,
+              'participants',${participants}::int
             ),
             now()
           )
@@ -125,7 +125,7 @@ export async function POST(request: Request) {
         )
         SELECT
           'vdc_turnier','player',${player.externalId},tc.local_id,
-          jsonb_build_object('identity_source','vdc_tc','tc_external_id',${tcId}),
+          jsonb_build_object('identity_source','vdc_tc','tc_external_id',${tcId}::text),
           now()
         FROM integration_entity_links tc
         WHERE tc.integration_key='vdc_tc'
@@ -146,7 +146,7 @@ export async function POST(request: Request) {
       INSERT INTO integration_sync_runs (integration_key,direction,status,summary)
       VALUES (
         'vdc_turnier','inbound','success',
-        jsonb_build_object('tournaments',${tournaments.length},'players',${players.length})
+        jsonb_build_object('tournaments',${tournaments.length}::int,'players',${players.length}::int)
       )
     `;
 
