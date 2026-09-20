@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { SESSION_COOKIE } from "@/lib/auth-constants";
 
-const publicPaths = ["/login", "/setup"];
+const publicPaths = ["/login", "/setup", "/u"];
 const serverToServerPaths = [
   "/api/integrations/vdc-tc/sync",
   "/api/integrations/vdc-turnier/sync",
