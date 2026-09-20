@@ -1,7 +1,10 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { createSurveyAction } from "@/app/umfragen/actions";
+import {
+  createSurveyAction,
+  updateSurveyDraftAction,
+} from "@/app/umfragen/actions";
 
 type QuestionType = "single" | "multiple" | "text";
 type Question = {
@@ -13,9 +16,21 @@ type Question = {
   options: string[];
 };
 
-function makeQuestion(type: QuestionType = "single"): Question {
+type SurveyBuilderInitial = {
+  title: string;
+  topic: string;
+  description: string;
+  targetGroup: string;
+  endsAtLocal: string;
+  resultsVisibility: "internal" | "after_submit";
+  thankYouText: string;
+  oneResponsePerBrowser: boolean;
+  questions: Array<Omit<Question, "id"> & { id?: string }>;
+};
+
+function blankQuestion(type: QuestionType = "single", id = "initial-1"): Question {
   return {
-    id: crypto.randomUUID(),
+    id,
     text: "",
     type,
     required: true,
@@ -24,8 +39,24 @@ function makeQuestion(type: QuestionType = "single"): Question {
   };
 }
 
-export function SurveyBuilder() {
-  const [questions, setQuestions] = useState<Question[]>([makeQuestion()]);
+export function SurveyBuilder({
+  mode = "create",
+  surveyId,
+  initial,
+}: {
+  mode?: "create" | "edit";
+  surveyId?: string;
+  initial?: SurveyBuilderInitial;
+}) {
+  const [questions, setQuestions] = useState<Question[]>(() => {
+    if (initial?.questions?.length) {
+      return initial.questions.map((question, index) => ({
+        ...question,
+        id: question.id || `initial-${index + 1}`,
+      }));
+    }
+    return [blankQuestion()];
+  });
   const [timezoneOffset, setTimezoneOffset] = useState(0);
 
   useEffect(() => {
@@ -33,6 +64,7 @@ export function SurveyBuilder() {
   }, []);
 
   const payload = useMemo(() => JSON.stringify(questions), [questions]);
+  const action = mode === "edit" ? updateSurveyDraftAction : createSurveyAction;
 
   function patchQuestion(id: string, patch: Partial<Question>) {
     setQuestions((current) =>
@@ -101,24 +133,45 @@ export function SurveyBuilder() {
     });
   }
 
+  function addQuestion(type: QuestionType) {
+    setQuestions((current) => [
+      ...current,
+      blankQuestion(type, crypto.randomUUID()),
+    ]);
+  }
+
   return (
-    <form action={createSurveyAction} className="survey-builder">
+    <form action={action} className="survey-builder">
       <input type="hidden" name="questionsJson" value={payload} />
       <input type="hidden" name="timezoneOffset" value={timezoneOffset} />
+      {mode === "edit" && surveyId && <input type="hidden" name="surveyId" value={surveyId} />}
 
       <section className="panel">
         <div className="panel-head">
-          <div><span className="eyebrow">Grunddaten</span><h2>Neue Umfrage</h2></div>
+          <div>
+            <span className="eyebrow">Grunddaten</span>
+            <h2>{mode === "edit" ? "Entwurf bearbeiten" : "Neue Umfrage"}</h2>
+          </div>
         </div>
 
         <div className="form-grid">
           <label>
             Titel
-            <input name="title" required placeholder="z. B. Trainingsgestaltung 2026" />
+            <input
+              name="title"
+              required
+              defaultValue={initial?.title ?? ""}
+              placeholder="z. B. Trainingsgestaltung 2026"
+            />
           </label>
           <label>
             Thema
-            <input name="topic" required placeholder="z. B. Training, Vereinsabend, Anschaffung" />
+            <input
+              name="topic"
+              required
+              defaultValue={initial?.topic ?? ""}
+              placeholder="z. B. Training, Vereinsabend, Anschaffung"
+            />
           </label>
         </div>
 
@@ -127,6 +180,7 @@ export function SurveyBuilder() {
           <textarea
             name="description"
             rows={4}
+            defaultValue={initial?.description ?? ""}
             placeholder="Kurze Erklärung, warum die Umfrage durchgeführt wird und was mit den Ergebnissen passiert."
           />
         </label>
@@ -134,7 +188,12 @@ export function SurveyBuilder() {
         <div className="form-grid">
           <label>
             Zielgruppe
-            <input name="targetGroup" defaultValue="Alle" list="survey-target-groups" placeholder="z. B. Alle oder eigene Gruppe" />
+            <input
+              name="targetGroup"
+              defaultValue={initial?.targetGroup ?? "Alle"}
+              list="survey-target-groups"
+              placeholder="z. B. Alle oder eigene Gruppe"
+            />
             <datalist id="survey-target-groups">
               <option value="Alle" />
               <option value="Vorstand" />
@@ -146,28 +205,59 @@ export function SurveyBuilder() {
           </label>
           <label>
             Teilnahme bis
-            <input name="endsAt" type="datetime-local" />
+            <input
+              name="endsAt"
+              type="datetime-local"
+              defaultValue={initial?.endsAtLocal ?? ""}
+            />
           </label>
         </div>
 
         <div className="form-grid">
           <label>
             Ergebnisse für Teilnehmer
-            <select name="resultsVisibility" defaultValue="internal">
+            <select
+              name="resultsVisibility"
+              defaultValue={initial?.resultsVisibility ?? "internal"}
+            >
               <option value="internal">Nicht anzeigen</option>
               <option value="after_submit">Nach Abgabe anzeigen</option>
             </select>
           </label>
           <label>
             Danke-Text
-            <input name="thankYouText" defaultValue="Vielen Dank für deine Teilnahme." />
+            <input
+              name="thankYouText"
+              defaultValue={initial?.thankYouText ?? "Vielen Dank für deine Teilnahme."}
+            />
           </label>
         </div>
 
-        <label className="checkbox-row survey-publish-check">
-          <input type="checkbox" name="publishNow" value="1" />
-          <span>Direkt veröffentlichen und Link aktivieren</span>
-        </label>
+        <div className="survey-settings-box">
+          <label className="checkbox-row survey-publish-check">
+            <input
+              type="checkbox"
+              name="oneResponsePerBrowser"
+              value="1"
+              defaultChecked={initial?.oneResponsePerBrowser ?? false}
+            />
+            <span>
+              <strong>Nur eine Teilnahme pro Browser/Gerät</strong>
+              <small>
+                Nach dem Absenden merkt sich nur der Browser die Teilnahme per Cookie.
+                Es werden dafür keine Namen, Konten, E-Mails oder IP-Adressen gespeichert.
+              </small>
+            </span>
+          </label>
+
+          <label className="checkbox-row survey-publish-check">
+            <input type="checkbox" name="publishNow" value="1" />
+            <span>
+              <strong>{mode === "edit" ? "Änderungen speichern und veröffentlichen" : "Direkt veröffentlichen"}</strong>
+              <small>Der öffentliche Link wird anschließend für die Teilnahme freigeschaltet.</small>
+            </span>
+          </label>
+        </div>
       </section>
 
       <section className="survey-question-stack">
@@ -265,7 +355,13 @@ export function SurveyBuilder() {
                       required
                     />
                     {question.options.length > 2 && (
-                      <button type="button" className="mini-button" onClick={() => removeOption(question.id, optionIndex)}>×</button>
+                      <button
+                        type="button"
+                        className="mini-button"
+                        onClick={() => removeOption(question.id, optionIndex)}
+                      >
+                        ×
+                      </button>
                     )}
                   </div>
                 ))}
@@ -281,11 +377,13 @@ export function SurveyBuilder() {
       <div className="survey-builder-footer">
         <div className="survey-add-question">
           <span>Weitere Frage hinzufügen:</span>
-          <button type="button" className="ghost-button" onClick={() => setQuestions((current) => [...current, makeQuestion("single")])}>Einzelauswahl</button>
-          <button type="button" className="ghost-button" onClick={() => setQuestions((current) => [...current, makeQuestion("multiple")])}>Mehrfachauswahl</button>
-          <button type="button" className="ghost-button" onClick={() => setQuestions((current) => [...current, makeQuestion("text")])}>Freitext</button>
+          <button type="button" className="ghost-button" onClick={() => addQuestion("single")}>Einzelauswahl</button>
+          <button type="button" className="ghost-button" onClick={() => addQuestion("multiple")}>Mehrfachauswahl</button>
+          <button type="button" className="ghost-button" onClick={() => addQuestion("text")}>Freitext</button>
         </div>
-        <button type="submit" className="primary-button">Umfrage speichern</button>
+        <button type="submit" className="primary-button">
+          {mode === "edit" ? "Änderungen speichern" : "Umfrage speichern"}
+        </button>
       </div>
     </form>
   );
