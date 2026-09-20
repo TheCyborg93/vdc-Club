@@ -26,7 +26,14 @@ export default async function FinanceAnalysisPage({
     sql`
       SELECT
         COALESCE(SUM(mf.amount) FILTER (WHERE mf.status NOT IN ('exempt','cancelled')),0) AS expected,
-        COALESCE(SUM((SELECT COALESCE(SUM(p.amount),0) FROM membership_fee_payments p WHERE p.fee_id=mf.id)),0) AS paid,
+        COALESCE(SUM(
+          CASE
+            WHEN mf.status='paid'
+              AND COALESCE((SELECT SUM(p.amount) FROM membership_fee_payments p WHERE p.fee_id=mf.id),0)=0
+            THEN mf.amount
+            ELSE COALESCE((SELECT SUM(p.amount) FROM membership_fee_payments p WHERE p.fee_id=mf.id),0)
+          END
+        ),0) AS paid,
         COUNT(*)::int AS fees,
         COUNT(*) FILTER (WHERE mf.status='exempt')::int AS exempt,
         COUNT(*) FILTER (WHERE mf.status='cancelled')::int AS cancelled
@@ -48,7 +55,14 @@ export default async function FinanceAnalysisPage({
         COALESCE(mf.fee_type_name,'Standard') AS fee_type_name,
         COUNT(*)::int AS members,
         COALESCE(SUM(mf.amount) FILTER (WHERE mf.status NOT IN ('exempt','cancelled')),0) AS expected,
-        COALESCE(SUM((SELECT COALESCE(SUM(p.amount),0) FROM membership_fee_payments p WHERE p.fee_id=mf.id)),0) AS paid
+        COALESCE(SUM(
+          CASE
+            WHEN mf.status='paid'
+              AND COALESCE((SELECT SUM(p.amount) FROM membership_fee_payments p WHERE p.fee_id=mf.id),0)=0
+            THEN mf.amount
+            ELSE COALESCE((SELECT SUM(p.amount) FROM membership_fee_payments p WHERE p.fee_id=mf.id),0)
+          END
+        ),0) AS paid
       FROM membership_fees mf
       WHERE mf.fiscal_year=${year}
       GROUP BY COALESCE(mf.fee_type_name,'Standard')
