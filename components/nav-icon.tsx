@@ -24,6 +24,9 @@ export function NavIcon({href}:{href:string}) {
   if (href.startsWith("/verein")) {
     return <Svg><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="2.4"/><path d="M12 4v5.6M20 12h-5.6M12 20v-5.6M4 12h5.6"/></Svg>;
   }
+  if (href.startsWith("/vereinschronik")) {
+    return <Svg><path d="M5 4h14v16H5z"/><path d="M8 8h8M8 12h5"/><path d="m9 17 3-2 3 2v-5H9v5Z"/></Svg>;
+  }
   if (href.startsWith("/sponsoren")) {
     return <Svg><path d="m5 7 7-3 7 3v5c0 4-3 6.5-7 8-4-1.5-7-4-7-8V7Z"/><path d="M9.2 12.2 11 14l4-4"/></Svg>;
   }
