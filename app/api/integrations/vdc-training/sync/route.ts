@@ -158,6 +158,9 @@ export async function POST(request: Request) {
             starts_at=${day.startsAt}::timestamptz,
             ends_at=NULL,
             description=${description},
+            deleted_at=NULL,
+            deleted_by=NULL,
+            delete_reason=NULL,
             updated_at=now()
           WHERE id=${eventId}::uuid
         `;
@@ -181,6 +184,9 @@ export async function POST(request: Request) {
             starts_at=EXCLUDED.starts_at,
             ends_at=NULL,
             description=EXCLUDED.description,
+            deleted_at=NULL,
+            deleted_by=NULL,
+            delete_reason=NULL,
             updated_at=now()
           RETURNING id::text
         `;
