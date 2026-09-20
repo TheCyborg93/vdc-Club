@@ -9,6 +9,7 @@ export function SurveyShare({
   targetGroup,
   deadline,
   publicPath,
+  isAnonymous,
 }: {
   title: string;
   topic: string;
@@ -16,6 +17,7 @@ export function SurveyShare({
   targetGroup: string;
   deadline: string | null;
   publicPath: string;
+  isAnonymous: boolean;
 }) {
   const [copied, setCopied] = useState<"link" | "message" | null>(null);
   const [origin, setOrigin] = useState("");
@@ -35,14 +37,16 @@ export function SurveyShare({
       description ? "" : "",
       description,
       "",
-      "Die Umfrage ist *anonym*. Es werden keine Namen abgefragt.",
+      isAnonymous
+        ? "Die Umfrage ist *anonym*. Es werden keine persönlichen Teilnehmerangaben abgefragt."
+        : "Die Umfrage ist *nicht anonym*. Die im Formular angegebenen Teilnehmerdaten werden zusammen mit der Antwort gespeichert.",
       deadline ? `📅 Teilnahme bis: ${deadline}` : "",
       `🔗 Umfrage: ${publicUrl}`,
       "",
       "Vielen Dank für eure Rückmeldung! 🎯",
     ];
     return parts.filter((part, index, array) => part !== "" || (index > 0 && array[index - 1] !== "")).join("\n");
-  }, [title, topic, description, targetGroup, deadline, publicUrl]);
+  }, [title, topic, description, targetGroup, deadline, publicUrl, isAnonymous]);
 
   async function copy(value: string, type: "link" | "message") {
     await navigator.clipboard.writeText(value);
