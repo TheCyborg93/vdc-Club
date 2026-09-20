@@ -120,6 +120,7 @@ function normalizeTc(data: Record<string, unknown>) {
         eventType: "league",
         teamExternalId: text(ownTeam.id),
         description: description || null,
+        location: text(home.venue) || null,
       };
     }).filter((match) => match.externalId && match.startsAt && match.teamExternalId),
   };
@@ -167,6 +168,40 @@ function normalizeTraining(data: Record<string, unknown>) {
   };
 }
 
+async function cleanupMissingFutureEvents(key: IntegrationKey, externalIds: string[]) {
+  const sql=getDb();
+  if (!sql) return;
+
+  const source = key;
+  const encoded=JSON.stringify(externalIds);
+
+  await sql`
+    UPDATE club_events
+    SET
+      deleted_at=now(),
+      delete_reason='Automatisch entfernt: Termin ist in der Quell-App nicht mehr vorhanden.'
+    WHERE source=${source}
+      AND external_id IS NOT NULL
+      AND deleted_at IS NULL
+      AND starts_at >= now()
+      AND NOT EXISTS (
+        SELECT 1
+        FROM jsonb_array_elements_text(${encoded}::jsonb) AS ids(value)
+        WHERE ids.value=club_events.external_id
+      )
+  `;
+}
+
+function eventIdsFromPayload(key: IntegrationKey, payload: Record<string, unknown>) {
+  const collection = key === "vdc_tc"
+    ? asArray(payload.matches)
+    : key === "vdc_turnier"
+      ? asArray(payload.tournaments)
+      : asArray(payload.trainingDays);
+
+  return collection.map((item)=>text(item.externalId)).filter(Boolean);
+}
+
 async function pushToClub(key: IntegrationKey, payload: Record<string, unknown>): Promise<SyncResult> {
   const token = tokenFor(key);
   const response = await fetch(`${clubBaseUrl()}${targetPaths[key]}`, {
@@ -205,7 +240,12 @@ export async function syncIntegration(key: IntegrationKey): Promise<SyncResult> 
         ? normalizeTournament(source)
         : normalizeTraining(source);
 
-    return await pushToClub(key, normalized as Record<string, unknown>);
+    const payload=normalized as Record<string, unknown>;
+    const result=await pushToClub(key,payload);
+    if (result.ok) {
+      await cleanupMissingFutureEvents(key,eventIdsFromPayload(key,payload));
+    }
+    return result;
   } catch (error) {
     return {
       key,
