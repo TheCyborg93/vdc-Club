@@ -6,6 +6,7 @@ import { ReactNode, useEffect, useMemo, useState } from "react";
 import { logoutAction } from "@/app/auth/actions";
 import { groups, navigation } from "@/lib/navigation";
 import { hasPermission } from "@/lib/access";
+import { primaryRoleLabel } from "@/lib/roles";
 import { NavIcon } from "@/components/nav-icon";
 
 type ShellUser = {
@@ -22,18 +23,6 @@ type ShellNotification = {
   href: string;
   severity: "critical" | "warning" | "info";
   read: boolean;
-};
-
-const roleLabels: Record<string, string> = {
-  admin: "Administrator",
-  board: "Vorstand",
-  chair: "1. Vorsitz",
-  vice_chair: "2. Vorsitz",
-  treasurer: "Kassierer",
-  secretary: "Schriftführer",
-  sport_director: "Sportwart",
-  team_captain: "Team Captain",
-  tournament_director: "Turnierleitung",
 };
 
 function SearchIcon() {
@@ -89,9 +78,7 @@ export function AppShell({
     (item) => !item.permission || hasPermission(user.roles, item.permission),
   );
 
-  const primaryRole = user.roles.includes("admin")
-    ? "Administrator"
-    : roleLabels[user.roles[0] ?? ""] ?? "Vereinszugang";
+  const primaryRole = primaryRoleLabel(user.roles);
 
   const currentItem = [...visibleNavigation]
     .sort((a, b) => b.href.length - a.href.length)
