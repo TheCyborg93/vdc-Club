@@ -97,8 +97,6 @@ export async function updateAdminUserRolesAction(formData: FormData) {
   const before = Array.isArray(beforeRows[0]?.roles) ? beforeRows[0].roles.map(String) : [];
   const hadAdmin = before.includes("admin");
 
-  if (userId === actor.id) roles.add("admin");
-
   if (hadAdmin && !roles.has("admin") && await isLastActiveAdmin(userId)) {
     redirect("/admin/benutzer?error=last_admin");
   }
