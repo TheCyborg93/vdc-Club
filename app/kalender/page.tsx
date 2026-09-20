@@ -1,9 +1,10 @@
 import { getDb } from "@/lib/db";
 import { hasPermission, requirePermission } from "@/lib/permissions";
-import { createEventAction } from "@/app/kalender/actions";
+import { createEventAction, syncCalendarSourcesAction } from "@/app/kalender/actions";
 import { moveToTrashAction } from "@/app/admin/papierkorb/actions";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 import { ensureTrainingSchedule } from "@/lib/training";
+import { ensureIntegrationsFresh } from "@/lib/club-sync";
 
 const typeLabels: Record<string, string> = {
   club: "Verein",
@@ -20,6 +21,19 @@ const errors: Record<string, string> = {
 };
 
 export const dynamic = "force-dynamic";
+
+function formatSyncTime(value: unknown) {
+  if (!value) return "Noch nie";
+  const date = new Date(String(value));
+  if (Number.isNaN(date.getTime())) return "Noch nie";
+  return new Intl.DateTimeFormat("de-DE", {
+    day: "2-digit",
+    month: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: "Europe/Berlin",
+  }).format(date);
+}
 
 function formatDateTime(value: unknown) {
   if (!value) return "";
@@ -39,14 +53,15 @@ function formatDateTime(value: unknown) {
 export default async function CalendarPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; created?: string; deleted?: string }>;
+  searchParams: Promise<{ error?: string; created?: string; deleted?: string; synced?: string; sync_error?: string }>;
 }) {
   const actor = await requirePermission("calendar.read");
+  await ensureIntegrationsFresh(2).catch(()=>null);
   await ensureTrainingSchedule(365);
   const sql = getDb();
   const params = await searchParams;
 
-  const [events, counts] = sql
+  const [events, counts, integrations] = sql
     ? await Promise.all([
         sql`
           SELECT
@@ -96,8 +111,18 @@ export default async function CalendarPage({
           FROM club_events
           WHERE deleted_at IS NULL
         `,
+        sql`
+          SELECT integration_key,display_name,status,last_sync_at,last_error
+          FROM integration_connections
+          WHERE integration_key IN ('vdc_tc','vdc_turnier','vdc_training')
+          ORDER BY CASE integration_key
+            WHEN 'vdc_tc' THEN 0
+            WHEN 'vdc_turnier' THEN 1
+            ELSE 2
+          END
+        `,
       ])
-    : [[], [{ week: 0, league: 0, training: 0, board: 0 }]];
+    : [[], [{ week: 0, league: 0, training: 0, board: 0 }], []];
 
   const count = counts[0] ?? {};
   const canWrite = hasPermission(actor.roles, "calendar.write");
@@ -115,12 +140,46 @@ export default async function CalendarPage({
 
       {params.error && <div className="form-error">{errors[params.error] ?? "Die Aktion konnte nicht ausgeführt werden."}</div>}
       {(params.created || params.deleted) && <div className="form-success">Kalender wurde aktualisiert.</div>}
+      {params.synced && <div className="form-success">TC, Turnier und Training wurden manuell synchronisiert.</div>}
+      {params.sync_error && <div className="form-error">Mindestens eine Quelle konnte nicht synchronisiert werden. Details stehen unten beim Sync-Status.</div>}
 
       <section className="stat-grid">
         <article className="stat-card"><span>Diese Woche</span><strong>{Number(count.week ?? 0)}</strong><small>Termine</small></article>
         <article className="stat-card"><span>Liga</span><strong>{Number(count.league ?? 0)}</strong><small>kommende Spiele</small></article>
         <article className="stat-card"><span>Training</span><strong>{Number(count.training ?? 0)}</strong><small>kommende Einheiten</small></article>
         <article className="stat-card"><span>Vorstand</span><strong>{Number(count.board ?? 0)}</strong><small>kommende Termine</small></article>
+      </section>
+
+      <section className="calendar-sync-panel">
+        <div className="calendar-sync-head">
+          <div>
+            <span className="eyebrow">Automatische Aktualisierung</span>
+            <h2>Datenquellen</h2>
+            <p>VDC Club prüft beim Öffnen automatisch auf neue Daten und synchronisiert veraltete Quellen.</p>
+          </div>
+          {canWrite && (
+            <form action={syncCalendarSourcesAction}>
+              <button className="primary-button" type="submit">Jetzt synchronisieren</button>
+            </form>
+          )}
+        </div>
+        <div className="calendar-sync-grid">
+          {integrations.map((integration)=>(
+            <article className="calendar-sync-card" key={String(integration.integration_key)}>
+              <div>
+                <strong>{String(integration.display_name)}</strong>
+                <span className={"integration-status integration-"+String(integration.status)}>
+                  {String(integration.status)==="connected" ? "Aktuell" :
+                   String(integration.status)==="error" ? "Fehler" :
+                   String(integration.status)==="disabled" ? "Deaktiviert" : "Wartet"}
+                </span>
+              </div>
+              <span>Letzter Sync</span>
+              <b>{formatSyncTime(integration.last_sync_at)}</b>
+              {integration.last_error && <small>{String(integration.last_error)}</small>}
+            </article>
+          ))}
+        </div>
       </section>
 
       <section className={canWrite ? "management-grid" : "management-grid single"}>
