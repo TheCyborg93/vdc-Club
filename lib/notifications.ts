@@ -21,6 +21,70 @@ export async function getNotifications(
 
   const rows: Array<Record<string,unknown>>=[];
 
+  if (hasPermission(user.roles,"members.read")) {
+    rows.push(...await sql`
+      WITH upcoming_days AS (
+        SELECT day::date
+        FROM generate_series(
+          CURRENT_DATE,
+          CURRENT_DATE + interval '7 days',
+          interval '1 day'
+        ) AS day
+      )
+      SELECT
+        'birthday:' || m.id::text || ':' || to_char(d.day,'YYYY') AS key,
+        'Geburtstag: ' ||
+          m.first_name || ' ' || m.last_name ||
+          CASE
+            WHEN m.nickname IS NOT NULL AND trim(m.nickname)<>''
+              THEN ' „' || m.nickname || '“'
+            ELSE ''
+          END AS title,
+        CASE
+          WHEN d.day=CURRENT_DATE THEN 'Hat heute Geburtstag'
+          ELSE 'Geburtstag am ' || to_char(d.day,'DD.MM.YYYY')
+        END AS detail,
+        '/mitglieder/' || m.id::text AS href,
+        'info' AS severity,
+        d.day::timestamp AS sort_at
+      FROM members m
+      JOIN upcoming_days d
+        ON EXTRACT(MONTH FROM m.birth_date)=EXTRACT(MONTH FROM d.day)
+       AND EXTRACT(DAY FROM m.birth_date)=EXTRACT(DAY FROM d.day)
+      WHERE m.status IN ('active','passive')
+        AND m.birth_date IS NOT NULL
+
+      UNION ALL
+
+      SELECT
+        'anniversary:' || m.id::text || ':' || to_char(d.day,'YYYY') AS key,
+        'Vereinsjubiläum: ' ||
+          m.first_name || ' ' || m.last_name ||
+          CASE
+            WHEN m.nickname IS NOT NULL AND trim(m.nickname)<>''
+              THEN ' „' || m.nickname || '“'
+            ELSE ''
+          END AS title,
+        (
+          EXTRACT(YEAR FROM d.day)::int - EXTRACT(YEAR FROM m.join_date)::int
+        )::text || ' Jahre Mitglied' ||
+        CASE
+          WHEN d.day=CURRENT_DATE THEN ' · Heute'
+          ELSE ' · am ' || to_char(d.day,'DD.MM.YYYY')
+        END AS detail,
+        '/mitglieder/' || m.id::text AS href,
+        'info' AS severity,
+        d.day::timestamp AS sort_at
+      FROM members m
+      JOIN upcoming_days d
+        ON EXTRACT(MONTH FROM m.join_date)=EXTRACT(MONTH FROM d.day)
+       AND EXTRACT(DAY FROM m.join_date)=EXTRACT(DAY FROM d.day)
+      WHERE m.status IN ('active','passive')
+        AND m.join_date IS NOT NULL
+        AND EXTRACT(YEAR FROM d.day)::int - EXTRACT(YEAR FROM m.join_date)::int > 0
+    `);
+  }
+
   if (hasPermission(user.roles,"tasks.read") && user.memberId) {
     rows.push(...await sql`
       SELECT
