@@ -51,7 +51,12 @@ export default async function FinancePage({
     sql`
       SELECT
         mf.id::text,mf.amount,mf.status,
-        COALESCE((SELECT SUM(p.amount) FROM membership_fee_payments p WHERE p.fee_id=mf.id),0) AS paid,
+        CASE
+          WHEN mf.status='paid'
+            AND COALESCE((SELECT SUM(p.amount) FROM membership_fee_payments p WHERE p.fee_id=mf.id),0)=0
+          THEN mf.amount
+          ELSE COALESCE((SELECT SUM(p.amount) FROM membership_fee_payments p WHERE p.fee_id=mf.id),0)
+        END AS paid,
         COALESCE((SELECT SUM(i.amount) FROM membership_fee_installments i WHERE i.fee_id=mf.id AND i.due_date<=CURRENT_DATE),0) AS due_total
       FROM membership_fees mf
       WHERE mf.fiscal_year=${year}
