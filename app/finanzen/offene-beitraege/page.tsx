@@ -1,6 +1,7 @@
 import { getDb } from "@/lib/db";
-import { requirePermission } from "@/lib/permissions";
+import { hasPermission, requirePermission } from "@/lib/permissions";
 import { FinanceNav } from "@/components/finance-nav";
+import { updateMembershipFeeReminderAction } from "@/app/finanzen/actions";
 
 export const dynamic="force-dynamic";
 
@@ -15,11 +16,12 @@ const formatDate=(value:unknown)=>{
 export default async function OpenMembershipFeesPage({
   searchParams,
 }:{
-  searchParams:Promise<{year?:string}>;
+  searchParams:Promise<{year?:string;reminder?:string;error?:string}>;
 }) {
-  await requirePermission("finance.read");
+  const user=await requirePermission("finance.read");
   const sql=getDb();
   const params=await searchParams;
+  const canWrite=hasPermission(user.roles,"finance.write");
   const requestedYear=Number(params.year);
   const year=Number.isInteger(requestedYear) && requestedYear>=1900 && requestedYear<=2200
     ? requestedYear
@@ -28,6 +30,7 @@ export default async function OpenMembershipFeesPage({
   const fees=sql ? await sql`
     SELECT
       mf.id::text,mf.amount,mf.status,mf.due_date,mf.fee_type_name,mf.payment_frequency,
+      mf.reminder_level,mf.last_reminder_on,
       m.first_name,m.last_name,m.member_number,
       COALESCE((SELECT SUM(p.amount) FROM membership_fee_payments p WHERE p.fee_id=mf.id),0) AS paid,
       COALESCE((SELECT SUM(i.amount) FROM membership_fee_installments i WHERE i.fee_id=mf.id AND i.due_date<=CURRENT_DATE),0) AS due_total,
@@ -74,6 +77,9 @@ export default async function OpenMembershipFeesPage({
 
       <FinanceNav active="open" />
 
+      {params.reminder && <div className="form-success">Erinnerungsstatus wurde gespeichert.</div>}
+      {params.error && <div className="form-error">Der Erinnerungsstatus konnte nicht gespeichert werden.</div>}
+
       <section className="stat-grid">
         <article className="stat-card"><span>Offene Mitglieder</span><strong>{rows.length}</strong><small>{year}</small></article>
         <article className="stat-card"><span>Überfällig</span><strong>{overdueRows.length}</strong><small>bereits fällig</small></article>
@@ -114,6 +120,31 @@ export default async function OpenMembershipFeesPage({
                     <span>Nächste Fälligkeit</span>
                     <strong>{formatDate(fee.next_due_date || fee.due_date)}</strong>
                     <small>{fee.overdue>0 ? "Handlungsbedarf" : "planmäßig"}</small>
+                  </div>
+                  <div className="open-fee-reminder">
+                    <span>Erinnerungsstatus</span>
+                    <strong>
+                      {fee.reminder_level==="reminder1"
+                        ? "1. Erinnerung"
+                        : fee.reminder_level==="reminder2"
+                          ? "2. Erinnerung"
+                          : fee.reminder_level==="dunning"
+                            ? "Mahnung"
+                            : "Keine"}
+                    </strong>
+                    <small>{fee.last_reminder_on ? "zuletzt "+formatDate(fee.last_reminder_on) : "noch nicht erinnert"}</small>
+                    {canWrite && (
+                      <form action={updateMembershipFeeReminderAction}>
+                        <input type="hidden" name="id" value={String(fee.id)} />
+                        <select name="reminderLevel" defaultValue={String(fee.reminder_level || "none")}>
+                          <option value="none">Keine</option>
+                          <option value="reminder1">1. Erinnerung</option>
+                          <option value="reminder2">2. Erinnerung</option>
+                          <option value="dunning">Mahnung</option>
+                        </select>
+                        <button className="mini-button">Speichern</button>
+                      </form>
+                    )}
                   </div>
                 </article>
               ))}
