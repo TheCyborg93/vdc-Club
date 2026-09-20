@@ -423,3 +423,18 @@ button,a{font:inherit}button{cursor:pointer}a{color:inherit;text-decoration:none
 .guide-install-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.guide-install-grid>div{padding:11px;border:1px solid var(--line);border-radius:11px;background:rgba(255,255,255,.012)}.guide-install-grid strong,.guide-install-grid span{display:block}.guide-install-grid strong{font-size:9px;color:var(--accent)}.guide-install-grid span{font-size:8px;line-height:1.45;color:var(--muted);margin-top:4px}
 @media(max-width:1000px){.guide-install-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:720px){.guide-install-grid{grid-template-columns:1fr}}
+
+
+/* Dashboard celebrations */
+.dashboard-celebrations{display:grid;gap:12px}.celebration-count{min-width:30px;height:30px;display:grid;place-items:center;border-radius:99px;background:rgba(68,224,176,.09);color:var(--accent);font-size:10px;font-weight:900}
+.celebration-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.celebration-card{display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:11px;align-items:center;padding:14px;border:1px solid var(--line);border-radius:14px;background:var(--panel);transition:.15s ease}
+.celebration-card:hover{transform:translateY(-1px);border-color:rgba(68,224,176,.26)}
+.celebration-birthday{background:linear-gradient(135deg,rgba(255,202,104,.055),rgba(255,255,255,.012))}
+.celebration-anniversary{background:linear-gradient(135deg,rgba(68,224,176,.06),rgba(106,212,255,.02))}
+.celebration-icon{width:44px;height:44px;display:grid;place-items:center;border-radius:12px;background:rgba(255,255,255,.035);font-size:20px}
+.celebration-card>div{min-width:0}.celebration-card small,.celebration-card strong,.celebration-card>div>span{display:block}
+.celebration-card small{font-size:7px;color:var(--accent);text-transform:uppercase;letter-spacing:.08em}
+.celebration-card strong{font-size:11px;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.celebration-card>div>span{font-size:8px;color:var(--muted);margin-top:3px}.celebration-card>b{color:var(--accent);font-size:13px}
+@media(max-width:720px){.celebration-grid{grid-template-columns:1fr}.celebration-card{grid-template-columns:40px minmax(0,1fr) auto}.celebration-icon{width:40px;height:40px;font-size:18px}}
