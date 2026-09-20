@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 export function SurveyShare({
   title,
@@ -18,8 +18,13 @@ export function SurveyShare({
   publicPath: string;
 }) {
   const [copied, setCopied] = useState<"link" | "message" | null>(null);
+  const [origin, setOrigin] = useState("");
 
-  const publicUrl = typeof window === "undefined" ? publicPath : `${window.location.origin}${publicPath}`;
+  useEffect(() => {
+    setOrigin(window.location.origin);
+  }, []);
+
+  const publicUrl = origin ? `${origin}${publicPath}` : publicPath;
 
   const message = useMemo(() => {
     const parts = [
