@@ -1,5 +1,9 @@
 import { getDb } from "@/lib/db";
-import { setIntegrationEnabledAction } from "@/app/admin/integrationen/actions";
+import {
+  setIntegrationEnabledAction,
+  syncAllIntegrationsAction,
+  syncIntegrationAction,
+} from "@/app/admin/integrationen/actions";
 
 export const dynamic = "force-dynamic";
 
@@ -39,7 +43,7 @@ function formatDateTime(value: unknown) {
 export default async function SettingsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; updated?: string }>;
+  searchParams: Promise<{ error?: string; updated?: string; synced?: string; sync_error?: string }>;
 }) {
   const sql = getDb();
   const params = await searchParams;
@@ -109,12 +113,25 @@ export default async function SettingsPage({
 
       {params.error && <div className="form-error">Die Systemeinstellung konnte nicht geändert werden.</div>}
       {params.updated && <div className="form-success">Integration wurde aktualisiert.</div>}
+      {params.synced && <div className="form-success">Synchronisation wurde erfolgreich abgeschlossen.</div>}
+      {params.sync_error && <div className="form-error">Mindestens eine Synchronisation ist fehlgeschlagen. Bitte den Status der Quelle prüfen.</div>}
 
       <section className="stat-grid">
         <article className="stat-card"><span>Integrationen</span><strong>{connected}/{connections.length}</strong><small>verbunden</small></article>
         <article className="stat-card"><span>Rollen</span><strong>{Number(roleRows[0]?.count ?? 0)}</strong><small>Rechtesystem</small></article>
         <article className="stat-card"><span>Saison</span><strong>{activeSeason}</strong><small>aktive Teams</small></article>
         <article className="stat-card"><span>System</span><strong>Club</strong><small>zentrale Datenbasis</small></article>
+      </section>
+
+      <section className="integration-control-panel">
+        <div>
+          <span className="eyebrow">Zentrale Aktualisierung</span>
+          <h2>Club-Daten synchronisieren</h2>
+          <p>Die App aktualisiert sich automatisch. Bei Bedarf kann der komplette Datenabgleich hier sofort ausgelöst werden.</p>
+        </div>
+        <form action={syncAllIntegrationsAction}>
+          <button className="primary-button" type="submit">Alle jetzt synchronisieren</button>
+        </form>
       </section>
 
       <section className="integration-grid">
@@ -175,13 +192,21 @@ export default async function SettingsPage({
 
               {connection.last_error && <div className="integration-error">{String(connection.last_error)}</div>}
 
-              <form action={setIntegrationEnabledAction}>
-                <input type="hidden" name="key" value={key} />
-                <input type="hidden" name="enabled" value={connection.status === "disabled" ? "true" : "false"} />
-                <button className="ghost-button" type="submit">
-                  {connection.status === "disabled" ? "Integration aktivieren" : "Integration deaktivieren"}
-                </button>
-              </form>
+              <div className="integration-card-actions">
+                {connection.status !== "disabled" && (
+                  <form action={syncIntegrationAction}>
+                    <input type="hidden" name="key" value={key} />
+                    <button className="primary-button" type="submit">Jetzt synchronisieren</button>
+                  </form>
+                )}
+                <form action={setIntegrationEnabledAction}>
+                  <input type="hidden" name="key" value={key} />
+                  <input type="hidden" name="enabled" value={connection.status === "disabled" ? "true" : "false"} />
+                  <button className="ghost-button" type="submit">
+                    {connection.status === "disabled" ? "Integration aktivieren" : "Integration deaktivieren"}
+                  </button>
+                </form>
+              </div>
             </article>
           );
         })}
