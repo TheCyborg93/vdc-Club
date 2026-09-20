@@ -6,10 +6,11 @@ import { getDb } from "@/lib/db";
 import { hashPassword } from "@/lib/auth";
 import { requirePermission } from "@/lib/permissions";
 import { writeAudit } from "@/lib/audit";
+import { officialRoleKeys } from "@/lib/roles";
 
-const allowedRoles = new Set([
-  "admin", "board", "chair", "vice_chair", "treasurer",
-  "secretary", "sport_director", "team_captain", "tournament_director",
+const allowedRoles = new Set<string>([
+  ...officialRoleKeys,
+  "tournament_director",
 ]);
 
 const allowedStatuses = new Set(["active","passive","inactive"]);
@@ -282,6 +283,8 @@ export async function updateMemberRolesAction(formData: FormData) {
 
   revalidatePath(`/mitglieder/${memberId}`);
   revalidatePath("/admin/benutzer");
+  revalidatePath("/vorstand");
+  revalidatePath("/mitglieder");
   redirect(`/mitglieder/${memberId}?roles=1`);
 }
 
