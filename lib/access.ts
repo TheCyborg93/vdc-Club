@@ -38,6 +38,12 @@ export const rolePermissions: Record<string, Permission[] | ["*"]> = {
     "finance.read", "finance.write", "sponsors.read", "sponsors.write",
     "documents.read", "documents.write",
   ],
+  media_director: [
+    "members.read", "tasks.read", "tasks.write",
+    "calendar.read", "calendar.write", "meetings.read", "resolutions.read",
+    "sponsors.read", "sponsors.write", "documents.read", "documents.write",
+    "statistics.read",
+  ],
   secretary: [
     "members.read", "tasks.read", "tasks.write", "calendar.read", "calendar.write",
     "meetings.read", "meetings.write", "resolutions.read", "resolutions.write",
