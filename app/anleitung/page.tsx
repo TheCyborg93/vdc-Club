@@ -243,6 +243,8 @@ export default async function GuidePage() {
           Eine Person kann mehrere Rollen gleichzeitig haben. In der Vorstandsstruktur wird nur die
           höchste Rolle der festgelegten Reihenfolge als Hauptrolle angezeigt; alle weiteren Rollen
           stehen direkt darunter als Zusatzrollen. Die Berechtigungen aller zugewiesenen Rollen bleiben aktiv.
+          Die Rolle „Vorstand“ besitzt Vollzugriff auf VDC Club: Mitglieder anlegen und bearbeiten,
+          Benutzer und Rollen verwalten sowie alle Vereins-, Organisations-, Finanz- und Sportbereiche pflegen.
         </p>
       </article>
     </div>
