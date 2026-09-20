@@ -314,7 +314,8 @@ export async function uploadPhotoAction(formData: FormData) {
   }
 
   revalidateChronicle();
-  redirect("/vereinschronik/galerie?uploaded=1");
+  revalidatePath(`/vereinschronik/galerie/${albumId}`);
+  redirect(`/vereinschronik/galerie/${albumId}?uploaded=1`);
 }
 
 export async function setAlbumCoverAction(formData: FormData) {
@@ -335,7 +336,8 @@ export async function setAlbumCoverAction(formData: FormData) {
 
   await writeAudit(actor.id,"chronicle.album_cover_changed","club_photo_album",albumId,{photoId});
   revalidateChronicle();
-  redirect("/vereinschronik/galerie?cover=1");
+  revalidatePath(`/vereinschronik/galerie/${albumId}`);
+  redirect(`/vereinschronik/galerie/${albumId}?cover=1`);
 }
 
 export async function deletePhotoAction(formData: FormData) {
@@ -373,6 +375,10 @@ export async function deletePhotoAction(formData: FormData) {
     filename:String(photo?.original_filename ?? ""),
   });
   revalidateChronicle();
+  if (photo?.album_id) {
+    revalidatePath(`/vereinschronik/galerie/${String(photo.album_id)}`);
+    redirect(`/vereinschronik/galerie/${String(photo.album_id)}?photo_deleted=1`);
+  }
   redirect("/vereinschronik/galerie?photo_deleted=1");
 }
 
