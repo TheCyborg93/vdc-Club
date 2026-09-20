@@ -1,15 +1,43 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
 import { getCurrentUser } from "@/lib/auth";
 import { getNotifications } from "@/lib/notifications";
+import { PwaInstallPrompt } from "@/components/pwa-install-prompt";
 import "./globals.css";
 import "./vdc-theme.css";
 
 export const metadata: Metadata = {
-  title: "VDC Club",
-  description: "Digitale Vereinszentrale des Vestischen Darts Club",
+  title: {
+    default: "VDC Club",
+    template: "%s · VDC Club",
+  },
+  applicationName: "VDC Club",
+  description: "Digitale Vereinszentrale des Vestischen Dart Club e.V.",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    title: "VDC Club",
+    statusBarStyle: "black-translucent",
+  },
+  icons: {
+    icon: [
+      { url: "/api/pwa-icon/192", sizes: "192x192", type: "image/png" },
+      { url: "/api/pwa-icon/512", sizes: "512x512", type: "image/png" },
+    ],
+    apple: [
+      { url: "/api/pwa-icon/180", sizes: "180x180", type: "image/png" },
+    ],
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#08100f",
+  colorScheme: "dark",
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
 };
 
 const publicPaths = ["/login", "/setup", "/u"];
@@ -45,6 +73,7 @@ export default async function RootLayout({
             {children}
           </AppShell>
         )}
+        <PwaInstallPrompt />
       </body>
     </html>
   );
