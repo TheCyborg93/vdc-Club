@@ -9,6 +9,8 @@ export const dynamic = "force-dynamic";
 const errors: Record<string,string> = {
   invalid_questions: "Bitte mindestens eine gültige Frage anlegen.",
   invalid_options: "Auswahlfragen benötigen mindestens zwei Antwortmöglichkeiten.",
+  invalid_identity_fields: "Bei einer nicht anonymen Umfrage muss mindestens ein gültiges Teilnehmerfeld vorhanden sein.",
+  duplicate_identity_fields: "Teilnehmerfelder dürfen nicht dieselbe Bezeichnung haben.",
 };
 
 export default async function EditSurveyPage({
