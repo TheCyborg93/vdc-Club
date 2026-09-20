@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { getDb } from "@/lib/db";
 import { permissionLabels, rolePermissions, type Permission } from "@/lib/access";
+import { officialRoleKeys, rolePriority } from "@/lib/roles";
 import {
   revokeAdminUserSessionsAction,
   unlockAdminUserAction,
@@ -77,6 +78,10 @@ export default async function AdminUsersPage({
     : [[],[],[{active:0,disabled:0,locked:0,admins:0}],[]];
 
   const s=stats[0] ?? {};
+  const visibleRoles = roles
+    .filter((role) => officialRoleKeys.includes(String(role.key) as (typeof officialRoleKeys)[number]))
+    .sort((a, b) => rolePriority(String(a.key)) - rolePriority(String(b.key)));
+  const officialRoleSet = new Set<string>(officialRoleKeys);
 
   return (
     <div className="page-stack">
@@ -96,7 +101,7 @@ export default async function AdminUsersPage({
 
       <section className="stat-grid">
         <article className="stat-card"><span>Aktive Logins</span><strong>{Number(s.active ?? 0)}</strong><small>Benutzerkonten</small></article>
-        <article className="stat-card"><span>Administratoren</span><strong>{Number(s.admins ?? 0)}</strong><small>aktive Admins</small></article>
+        <article className="stat-card"><span>EDV-Wart</span><strong>{Number(s.admins ?? 0)}</strong><small>aktive Administratoren</small></article>
         <article className="stat-card"><span>Deaktiviert</span><strong>{Number(s.disabled ?? 0)}</strong><small>kein Zugriff</small></article>
         <article className="stat-card"><span>Gesperrt</span><strong>{Number(s.locked ?? 0)}</strong><small>Login-Lockout</small></article>
       </section>
@@ -130,8 +135,11 @@ export default async function AdminUsersPage({
 
               <form action={updateAdminUserRolesAction} className="admin-role-form">
                 <input type="hidden" name="userId" value={String(user.id)} />
+                {[...assigned]
+                  .filter((role) => !officialRoleSet.has(role))
+                  .map((role) => <input key={role} type="hidden" name="roles" value={role} />)}
                 <div className="checkbox-grid">
-                  {roles.map((role) => (
+                  {visibleRoles.map((role) => (
                     <label className="checkbox-row" key={String(role.key)} title={String(role.description ?? "")}>
                       <input
                         type="checkbox"
@@ -176,7 +184,7 @@ export default async function AdminUsersPage({
           <div><span className="eyebrow">Berechtigungen</span><h2>Rollen-Matrix</h2></div>
         </div>
         <div className="role-matrix">
-          {roles.map((role) => {
+          {visibleRoles.map((role) => {
             const key=String(role.key);
             const permissions=rolePermissions[key] ?? [];
             const all=permissions[0] === "*";
