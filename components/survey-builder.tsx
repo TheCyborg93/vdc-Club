@@ -7,6 +7,8 @@ import {
 } from "@/app/umfragen/actions";
 
 type QuestionType = "single" | "multiple" | "text";
+type IdentityFieldType = "text" | "email" | "tel" | "number";
+
 type Question = {
   id: string;
   text: string;
@@ -14,6 +16,13 @@ type Question = {
   required: boolean;
   maxSelections: number | null;
   options: string[];
+};
+
+type IdentityField = {
+  id: string;
+  label: string;
+  type: IdentityFieldType;
+  required: boolean;
 };
 
 type SurveyBuilderInitial = {
@@ -25,6 +34,8 @@ type SurveyBuilderInitial = {
   resultsVisibility: "internal" | "after_submit";
   thankYouText: string;
   oneResponsePerBrowser: boolean;
+  isAnonymous: boolean;
+  identityFields: Array<Omit<IdentityField, "id"> & { id?: string }>;
   questions: Array<Omit<Question, "id"> & { id?: string }>;
 };
 
@@ -36,6 +47,15 @@ function blankQuestion(type: QuestionType = "single", id = "initial-1"): Questio
     required: true,
     maxSelections: type === "multiple" ? 2 : null,
     options: type === "text" ? [] : ["", ""],
+  };
+}
+
+function blankIdentityField(id = "identity-1"): IdentityField {
+  return {
+    id,
+    label: "Name",
+    type: "text",
+    required: true,
   };
 }
 
@@ -57,13 +77,26 @@ export function SurveyBuilder({
     }
     return [blankQuestion()];
   });
+
+  const [isAnonymous, setIsAnonymous] = useState(initial?.isAnonymous ?? true);
+  const [identityFields, setIdentityFields] = useState<IdentityField[]>(() => {
+    if (initial?.identityFields?.length) {
+      return initial.identityFields.map((field, index) => ({
+        ...field,
+        id: field.id || `identity-${index + 1}`,
+      }));
+    }
+    return [blankIdentityField()];
+  });
+
   const [timezoneOffset, setTimezoneOffset] = useState(0);
 
   useEffect(() => {
     setTimezoneOffset(new Date().getTimezoneOffset());
   }, []);
 
-  const payload = useMemo(() => JSON.stringify(questions), [questions]);
+  const questionPayload = useMemo(() => JSON.stringify(questions), [questions]);
+  const identityPayload = useMemo(() => JSON.stringify(identityFields), [identityFields]);
   const action = mode === "edit" ? updateSurveyDraftAction : createSurveyAction;
 
   function patchQuestion(id: string, patch: Partial<Question>) {
@@ -140,9 +173,24 @@ export function SurveyBuilder({
     ]);
   }
 
+  function patchIdentityField(id: string, patch: Partial<IdentityField>) {
+    setIdentityFields((current) =>
+      current.map((field) => field.id === id ? { ...field, ...patch } : field),
+    );
+  }
+
+  function setSurveyMode(anonymous: boolean) {
+    setIsAnonymous(anonymous);
+    if (!anonymous && identityFields.length === 0) {
+      setIdentityFields([blankIdentityField(crypto.randomUUID())]);
+    }
+  }
+
   return (
     <form action={action} className="survey-builder">
-      <input type="hidden" name="questionsJson" value={payload} />
+      <input type="hidden" name="questionsJson" value={questionPayload} />
+      <input type="hidden" name="identityFieldsJson" value={identityPayload} />
+      <input type="hidden" name="isAnonymous" value={isAnonymous ? "1" : "0"} />
       <input type="hidden" name="timezoneOffset" value={timezoneOffset} />
       {mode === "edit" && surveyId && <input type="hidden" name="surveyId" value={surveyId} />}
 
@@ -157,21 +205,11 @@ export function SurveyBuilder({
         <div className="form-grid">
           <label>
             Titel
-            <input
-              name="title"
-              required
-              defaultValue={initial?.title ?? ""}
-              placeholder="z. B. Trainingsgestaltung 2026"
-            />
+            <input name="title" required defaultValue={initial?.title ?? ""} placeholder="z. B. Trainingsgestaltung 2026" />
           </label>
           <label>
             Thema
-            <input
-              name="topic"
-              required
-              defaultValue={initial?.topic ?? ""}
-              placeholder="z. B. Training, Vereinsabend, Anschaffung"
-            />
+            <input name="topic" required defaultValue={initial?.topic ?? ""} placeholder="z. B. Training, Vereinsabend, Anschaffung" />
           </label>
         </div>
 
@@ -205,34 +243,118 @@ export function SurveyBuilder({
           </label>
           <label>
             Teilnahme bis
-            <input
-              name="endsAt"
-              type="datetime-local"
-              defaultValue={initial?.endsAtLocal ?? ""}
-            />
+            <input name="endsAt" type="datetime-local" defaultValue={initial?.endsAtLocal ?? ""} />
           </label>
         </div>
 
         <div className="form-grid">
           <label>
             Ergebnisse für Teilnehmer
-            <select
-              name="resultsVisibility"
-              defaultValue={initial?.resultsVisibility ?? "internal"}
-            >
+            <select name="resultsVisibility" defaultValue={initial?.resultsVisibility ?? "internal"}>
               <option value="internal">Nicht anzeigen</option>
               <option value="after_submit">Nach Abgabe anzeigen</option>
             </select>
           </label>
           <label>
             Danke-Text
-            <input
-              name="thankYouText"
-              defaultValue={initial?.thankYouText ?? "Vielen Dank für deine Teilnahme."}
-            />
+            <input name="thankYouText" defaultValue={initial?.thankYouText ?? "Vielen Dank für deine Teilnahme."} />
           </label>
         </div>
+      </section>
 
+      <section className="panel survey-identity-panel">
+        <div className="panel-head">
+          <div>
+            <span className="eyebrow">Teilnehmer</span>
+            <h2>Anonymität & Teilnehmerfelder</h2>
+          </div>
+        </div>
+
+        <div className="survey-mode-choice">
+          <button
+            type="button"
+            className={isAnonymous ? "survey-mode active" : "survey-mode"}
+            onClick={() => setSurveyMode(true)}
+          >
+            <strong>Anonym</strong>
+            <span>Es werden keine persönlichen Teilnehmerangaben abgefragt.</span>
+          </button>
+          <button
+            type="button"
+            className={!isAnonymous ? "survey-mode active" : "survey-mode"}
+            onClick={() => setSurveyMode(false)}
+          >
+            <strong>Nicht anonym</strong>
+            <span>Du legst selbst fest, welche Teilnehmerangaben abgefragt werden.</span>
+          </button>
+        </div>
+
+        {!isAnonymous && (
+          <div className="survey-identity-editor">
+            <div className="survey-identity-head">
+              <div>
+                <strong>Teilnehmerfelder</strong>
+                <span>Die Bezeichnungen sind frei wählbar, z. B. Name, Mannschaft, Mitgliedsnummer oder E-Mail.</span>
+              </div>
+              <button
+                type="button"
+                className="ghost-button"
+                onClick={() => setIdentityFields((current) => [...current, blankIdentityField(crypto.randomUUID())])}
+              >
+                + Feld hinzufügen
+              </button>
+            </div>
+
+            {identityFields.map((field, index) => (
+              <div className="survey-identity-row" key={field.id}>
+                <span className="survey-field-number">{index + 1}</span>
+                <label>
+                  Bezeichnung
+                  <input
+                    value={field.label}
+                    onChange={(event) => patchIdentityField(field.id, { label: event.target.value })}
+                    placeholder="z. B. Name"
+                    required={!isAnonymous}
+                  />
+                </label>
+                <label>
+                  Feldart
+                  <select
+                    value={field.type}
+                    onChange={(event) => patchIdentityField(field.id, { type: event.target.value as IdentityFieldType })}
+                  >
+                    <option value="text">Text</option>
+                    <option value="email">E-Mail</option>
+                    <option value="tel">Telefon</option>
+                    <option value="number">Zahl / Nummer</option>
+                  </select>
+                </label>
+                <label className="checkbox-row survey-required-check">
+                  <input
+                    type="checkbox"
+                    checked={field.required}
+                    onChange={(event) => patchIdentityField(field.id, { required: event.target.checked })}
+                  />
+                  <span>Pflicht</span>
+                </label>
+                <button
+                  type="button"
+                  className="mini-button danger-button"
+                  onClick={() => setIdentityFields((current) => current.filter((item) => item.id !== field.id))}
+                  disabled={identityFields.length === 1}
+                >
+                  Entfernen
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="panel">
+        <div className="panel-head">
+          <div><span className="eyebrow">Einstellungen</span><h2>Teilnahme & Veröffentlichung</h2></div>
+        </div>
         <div className="survey-settings-box">
           <label className="checkbox-row survey-publish-check">
             <input
@@ -243,10 +365,7 @@ export function SurveyBuilder({
             />
             <span>
               <strong>Nur eine Teilnahme pro Browser/Gerät</strong>
-              <small>
-                Nach dem Absenden merkt sich nur der Browser die Teilnahme per Cookie.
-                Es werden dafür keine Namen, Konten, E-Mails oder IP-Adressen gespeichert.
-              </small>
+              <small>Nach dem Absenden merkt sich dieser Browser die Teilnahme per Cookie.</small>
             </span>
           </label>
 
@@ -254,7 +373,7 @@ export function SurveyBuilder({
             <input type="checkbox" name="publishNow" value="1" />
             <span>
               <strong>{mode === "edit" ? "Änderungen speichern und veröffentlichen" : "Direkt veröffentlichen"}</strong>
-              <small>Der öffentliche Link wird anschließend für die Teilnahme freigeschaltet.</small>
+              <small>Die Umfrage kann später unabhängig von einer Frist jederzeit manuell beendet werden.</small>
             </span>
           </label>
         </div>
