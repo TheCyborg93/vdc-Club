@@ -71,6 +71,14 @@ const modules: GuideModule[] = [
     capabilities: ["Tagesordnung vorbereiten", "Sitzungsmodus nutzen", "Beschlüsse und Folgeaufgaben dokumentieren"],
   },
   {
+    title: "Umfragen",
+    area: "Organisation",
+    href: "/umfragen",
+    permission: "surveys.read",
+    description: "Anonyme Umfragen mit öffentlichem Link erstellen, per WhatsApp verteilen und zentral auswerten.",
+    capabilities: ["Einzel-, Mehrfachauswahl und Freitext kombinieren", "Anonymen Link und WhatsApp-Text erzeugen", "Ergebnisse und Freitextantworten auswerten"],
+  },
+  {
     title: "Dokumente & Archiv",
     area: "Organisation",
     href: "/dokumente",
