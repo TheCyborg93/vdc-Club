@@ -118,7 +118,8 @@ export default async function MembershipFeesPage({
 
   const club=clubRows[0] ?? {};
   const configured=Number(profileRows[0]?.configured ?? 0);
-  const expected=fees.reduce((sum,fee)=>sum+Number(fee.amount ?? 0),0);
+  const chargeableFees=fees.filter((fee)=>!["exempt","cancelled"].includes(String(fee.status)));
+  const expected=chargeableFees.reduce((sum,fee)=>sum+Number(fee.amount ?? 0),0);
   const received=fees.reduce((sum,fee)=>sum+Number(fee.paid ?? 0),0);
   const open=Math.max(0,expected-received);
   const overdue=fees.filter((fee)=>derivedStatus(fee).key==="overdue").length;
