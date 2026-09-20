@@ -39,6 +39,21 @@ const modules: GuideModule[] = [
     capabilities: ["Hauptrolle jeder Person sehen", "Weitere Rollen als Vermerk erkennen", "Rollen nach festgelegter Priorität darstellen"],
   },
   {
+    title: "Vereinschronik",
+    area: "Verein",
+    href: "/vereinschronik",
+    permission: "chronicle.read",
+    description: "Die Geschichte des Vereins mit Meistern, Erfolgen und Fotoalben dauerhaft festhalten.",
+    capabilities: [
+      "Vereinsmeister und Weihnachtsmeister nach Jahr in der Hall of Fame führen",
+      "Weitere Titel wie Sommermeister mit eigener Bezeichnung ergänzen",
+      "Aufstiege, Meisterschaften, Turniersiege, Rekorde und Jubiläen dokumentieren",
+      "Fotoalben anlegen und JPG, PNG oder WebP hochladen",
+      "Titelbilder für Alben bestimmen und Fotos wieder löschen",
+      "Alle Einträge automatisch in einer gemeinsamen Vereinschronik anzeigen",
+    ],
+  },
+  {
     title: "Mannschaften & Training",
     area: "Sport",
     href: "/mannschaften",
@@ -154,7 +169,7 @@ export default async function GuidePage() {
           <span className="eyebrow">So funktioniert VDC Club</span>
           <h2>Eine Zentrale für die Vereinsarbeit</h2>
           <p>
-            VDC Club bündelt Vorstand, Mitglieder, Mannschaften, Training, Termine, Aufgaben,
+            VDC Club bündelt Vorstand, Mitglieder, Vereinschronik, Mannschaften, Training, Termine, Aufgaben,
             Sitzungen, Beschlüsse, Dokumente, Finanzen und die Daten aus den angebundenen VDC-Systemen.
             Welche Funktionen du bearbeiten kannst, richtet sich nach deinen Rollen.
           </p>
