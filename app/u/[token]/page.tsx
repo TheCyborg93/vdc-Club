@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import { cookies } from "next/headers";
 import { getDb } from "@/lib/db";
 import { submitSurveyResponseAction } from "@/app/umfragen/actions";
 
@@ -30,7 +31,7 @@ export default async function PublicSurveyPage({
   searchParams,
 }: {
   params: Promise<{token:string}>;
-  searchParams: Promise<{done?:string;error?:string}>;
+  searchParams: Promise<{done?:string;already?:string;error?:string}>;
 }) {
   const { token } = await params;
   const query = await searchParams;
@@ -39,7 +40,7 @@ export default async function PublicSurveyPage({
 
   const surveyRows = await sql`
     SELECT id::text,title,topic,description,target_group,status,starts_at,ends_at,
-           results_visibility,thank_you_text
+           results_visibility,thank_you_text,one_response_per_browser
     FROM surveys
     WHERE public_token=${token}
     LIMIT 1
@@ -74,9 +75,14 @@ export default async function PublicSurveyPage({
     (!survey.starts_at || new Date(String(survey.starts_at)).getTime() <= now) &&
     (!survey.ends_at || new Date(String(survey.ends_at)).getTime() >= now);
 
+  const jar = await cookies();
+  const alreadySubmitted =
+    Boolean(survey.one_response_per_browser) &&
+    jar.get(`vdc_survey_done_${token}`)?.value === "1";
+
   let publicResults: Array<{option_id:string;count:number}> = [];
   let responseCount = 0;
-  if (query.done && survey.results_visibility === "after_submit") {
+  if ((query.done || alreadySubmitted) && survey.results_visibility === "after_submit") {
     const [responseRows, countRows] = await Promise.all([
       sql`SELECT count(*)::int AS count FROM survey_responses WHERE survey_id=${survey.id}::uuid`,
       sql`
@@ -111,11 +117,15 @@ export default async function PublicSurveyPage({
           {survey.ends_at && <small>Teilnahme bis {formatDate(survey.ends_at)}</small>}
         </div>
 
-        {query.done ? (
+        {(query.done || alreadySubmitted) ? (
           <div className="public-survey-thanks">
             <div className="public-survey-check">✓</div>
-            <h2>{String(survey.thank_you_text)}</h2>
-            <p>Deine Antworten wurden anonym gespeichert.</p>
+            <h2>{alreadySubmitted && !query.done ? "Du hast bereits teilgenommen." : String(survey.thank_you_text)}</h2>
+            <p>
+              {alreadySubmitted && !query.done
+                ? "Dieser Browser ist für diese Umfrage bereits als teilgenommen markiert."
+                : "Deine Antworten wurden anonym gespeichert."}
+            </p>
 
             {survey.results_visibility === "after_submit" && (
               <div className="public-survey-results">
@@ -190,7 +200,10 @@ export default async function PublicSurveyPage({
 
               <div className="public-survey-privacy">
                 <strong>Anonyme Teilnahme</strong>
-                <span>Es werden keine Namen, Benutzerkonten, E-Mail-Adressen oder IP-Adressen mit deiner Antwort gespeichert.</span>
+                <span>
+                  Es werden keine Namen, Benutzerkonten, E-Mail-Adressen oder IP-Adressen mit deiner Antwort gespeichert.
+                  {survey.one_response_per_browser ? " Für den Mehrfachschutz merkt sich nur dieser Browser die Teilnahme per Cookie." : ""}
+                </span>
               </div>
 
               <button className="primary-button public-survey-submit" type="submit">Antworten absenden</button>
