@@ -76,7 +76,12 @@ export default async function MembershipFeesPage({
         mf.id::text,mf.member_id::text,mf.fiscal_year,mf.amount,mf.due_date,mf.status,mf.paid_on,
         mf.notes,mf.fee_type_name,mf.payment_frequency,mf.reference_text,
         m.first_name,m.last_name,m.member_number,
-        COALESCE((SELECT SUM(p.amount) FROM membership_fee_payments p WHERE p.fee_id=mf.id),0) AS paid,
+        CASE
+          WHEN mf.status='paid'
+            AND COALESCE((SELECT SUM(p.amount) FROM membership_fee_payments p WHERE p.fee_id=mf.id),0)=0
+          THEN mf.amount
+          ELSE COALESCE((SELECT SUM(p.amount) FROM membership_fee_payments p WHERE p.fee_id=mf.id),0)
+        END AS paid,
         COALESCE((SELECT SUM(i.amount) FROM membership_fee_installments i WHERE i.fee_id=mf.id AND i.due_date<=CURRENT_DATE),0) AS due_total,
         (SELECT MIN(i.due_date) FROM membership_fee_installments i WHERE i.fee_id=mf.id AND i.due_date>CURRENT_DATE) AS next_due_date,
         (SELECT COUNT(*) FROM membership_fee_installments i WHERE i.fee_id=mf.id)::int AS installments
