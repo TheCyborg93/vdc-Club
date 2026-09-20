@@ -29,7 +29,7 @@ export default async function EditSurveyPage({
     SELECT
       id::text,title,topic,description,target_group,status,
       to_char(ends_at AT TIME ZONE 'Europe/Berlin','YYYY-MM-DD"T"HH24:MI') AS ends_at_local,
-      results_visibility,thank_you_text,one_response_per_browser,
+      results_visibility,thank_you_text,one_response_per_browser,is_anonymous,
       (SELECT count(*)::int FROM survey_responses r WHERE r.survey_id=surveys.id) AS responses
     FROM surveys
     WHERE id=${id}::uuid
@@ -42,7 +42,7 @@ export default async function EditSurveyPage({
     redirect(`/umfragen/${id}?error=not_editable`);
   }
 
-  const [questionRows, optionRows] = await Promise.all([
+  const [questionRows, optionRows, identityRows] = await Promise.all([
     sql`
       SELECT id::text,position,question_text,question_type,required,max_selections
       FROM survey_questions
@@ -56,6 +56,12 @@ export default async function EditSurveyPage({
       WHERE q.survey_id=${id}::uuid
       ORDER BY o.question_id,o.position
     `,
+    sql`
+      SELECT id::text,position,label,field_type,required
+      FROM survey_identity_fields
+      WHERE survey_id=${id}::uuid
+      ORDER BY position
+    `,
   ]);
 
   const optionsByQuestion = new Map<string,string[]>();
@@ -64,6 +70,13 @@ export default async function EditSurveyPage({
     if (!optionsByQuestion.has(key)) optionsByQuestion.set(key, []);
     optionsByQuestion.get(key)!.push(String(option.label));
   }
+
+  const identityFields = identityRows.map((field) => ({
+    id: String(field.id),
+    label: String(field.label),
+    type: String(field.field_type) as "text" | "email" | "tel" | "number",
+    required: Boolean(field.required),
+  }));
 
   const questions = questionRows.map((question) => ({
     id: String(question.id),
@@ -103,6 +116,8 @@ export default async function EditSurveyPage({
           resultsVisibility: survey.results_visibility === "after_submit" ? "after_submit" : "internal",
           thankYouText: String(survey.thank_you_text ?? "Vielen Dank für deine Teilnahme."),
           oneResponsePerBrowser: Boolean(survey.one_response_per_browser),
+          isAnonymous: Boolean(survey.is_anonymous),
+          identityFields,
           questions,
         }}
       />
