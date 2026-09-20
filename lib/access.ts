@@ -16,11 +16,7 @@ export type Permission =
 
 export const rolePermissions: Record<string, Permission[] | ["*"]> = {
   admin: ["*"],
-  board: [
-    "members.read", "teams.read", "tasks.read", "tasks.write",
-    "calendar.read", "training.read", "meetings.read", "resolutions.read",
-    "sponsors.read", "documents.read", "statistics.read", "surveys.read", "surveys.write", "chronicle.read", "chronicle.write",
-  ],
+  board: ["*"],
   chair: [
     "members.read", "members.write", "teams.read", "teams.write",
     "tasks.read", "tasks.write", "calendar.read", "calendar.write",
