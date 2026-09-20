@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { getDb } from "@/lib/db";
 import { requirePermission } from "@/lib/permissions";
 import { writeAudit } from "@/lib/audit";
+import { syncAllIntegrations } from "@/lib/club-sync";
 
 function value(formData: FormData, key: string) {
   return String(formData.get(key) ?? "").trim();
@@ -118,4 +119,21 @@ export async function deleteEventAction(formData: FormData) {
   revalidatePath("/admin/papierkorb");
   revalidatePath("/");
   redirect("/kalender?deleted=1");
+}
+
+
+export async function syncCalendarSourcesAction() {
+  const actor=await requirePermission("calendar.write");
+  const result=await syncAllIntegrations();
+
+  await writeAudit(actor.id,"calendar.sources_synced","integration",null,{
+    ok:result.ok,
+    results:result.results.map((item)=>({key:item.key,ok:item.ok,status:item.status,error:item.error ?? null})),
+  });
+
+  revalidatePath("/");
+  revalidatePath("/kalender");
+  revalidatePath("/admin/integrationen");
+
+  redirect(result.ok ? "/kalender?synced=1" : "/kalender?sync_error=1");
 }
