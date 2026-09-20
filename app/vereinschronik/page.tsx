@@ -30,7 +30,7 @@ export default async function ClubChroniclePage() {
     `,
     sql`
       SELECT
-        a.id::text,a.title,a.event_date,a.description,
+        a.id::text,a.title,a.event_date,a.description,a.created_at,
         count(p.id)::int AS photos
       FROM club_photo_albums a
       LEFT JOIN club_photos p ON p.album_id=a.id
@@ -65,7 +65,7 @@ export default async function ClubChroniclePage() {
     })),
     ...albums.map((row)=>({
       key:"album-"+String(row.id),
-      date:row.event_date ? new Date(String(row.event_date)) : new Date(0),
+      date:row.event_date ? new Date(String(row.event_date)) : new Date(String(row.created_at)),
       type:"Galerie",
       title:String(row.title),
       detail:Number(row.photos)+" Fotos",
