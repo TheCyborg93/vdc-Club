@@ -12,7 +12,7 @@ export const metadata: Metadata = {
   description: "Digitale Vereinszentrale des Vestischen Darts Club",
 };
 
-const publicPaths = ["/login", "/setup"];
+const publicPaths = ["/login", "/setup", "/u"];
 
 export default async function RootLayout({
   children,
