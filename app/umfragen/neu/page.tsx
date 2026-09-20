@@ -9,6 +9,8 @@ const errors: Record<string,string> = {
   missing: "Titel und Thema sind erforderlich.",
   invalid_questions: "Bitte mindestens eine gültige Frage anlegen.",
   invalid_options: "Auswahlfragen benötigen mindestens zwei Antwortmöglichkeiten.",
+  invalid_identity_fields: "Bei einer nicht anonymen Umfrage muss mindestens ein gültiges Teilnehmerfeld vorhanden sein.",
+  duplicate_identity_fields: "Teilnehmerfelder dürfen nicht dieselbe Bezeichnung haben.",
 };
 
 export default async function NewSurveyPage({
@@ -26,7 +28,7 @@ export default async function NewSurveyPage({
           <Link href="/umfragen" className="back-link">← Umfragen</Link>
           <span className="eyebrow">Umfrage-Builder</span>
           <h1>Neue Umfrage erstellen</h1>
-          <p>Einzelauswahl, Mehrfachauswahl und Freitext können beliebig kombiniert werden.</p>
+          <p>Fragen kombinieren und festlegen, ob die Teilnahme anonym oder mit frei definierten Teilnehmerangaben erfolgt.</p>
         </div>
       </section>
 
