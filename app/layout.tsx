@@ -5,6 +5,7 @@ import { AppShell } from "@/components/app-shell";
 import { getCurrentUser } from "@/lib/auth";
 import { getNotifications } from "@/lib/notifications";
 import { PwaInstallPrompt } from "@/components/pwa-install-prompt";
+import { ensureIntegrationsFresh } from "@/lib/club-sync";
 import "./globals.css";
 import "./vdc-theme.css";
 
@@ -51,6 +52,11 @@ export default async function RootLayout({
   const user = await getCurrentUser();
 
   if (!isPublic && !user) redirect("/login");
+
+  if (!isPublic && user) {
+    await ensureIntegrationsFresh(2).catch(()=>null);
+  }
+
   const notifications = !isPublic && user
     ? await getNotifications(user,{limit:6})
     : { items:[],unread:0 };
