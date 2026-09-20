@@ -1,114 +1,80 @@
+import Link from "next/link";
 import { getDb } from "@/lib/db";
 import { hasPermission, requirePermission } from "@/lib/permissions";
-import {
-  createFinanceEntryAction,
-  generateMembershipFeesAction,
-  updateMembershipFeeStatusAction,
-  upsertBudgetAction,
-} from "@/app/finanzen/actions";
+import { upsertBudgetAction } from "@/app/finanzen/actions";
+import { FinanceNav } from "@/components/finance-nav";
 
-export const dynamic = "force-dynamic";
+export const dynamic="force-dynamic";
 
-const euro = new Intl.NumberFormat("de-DE", { style: "currency", currency: "EUR" });
-
-function money(value: unknown) {
-  return euro.format(Number(value ?? 0));
-}
-
-function formatDate(value: unknown) {
+const euro=new Intl.NumberFormat("de-DE",{style:"currency",currency:"EUR"});
+const money=(value:unknown)=>euro.format(Number(value ?? 0));
+const formatDate=(value:unknown)=>{
   if (!value) return "–";
-  const date = new Date(String(value));
-  return Number.isNaN(date.getTime()) ? "–" : new Intl.DateTimeFormat("de-DE").format(date);
-}
-
-const feeLabels: Record<string,string> = {
-  open: "Offen",
-  paid: "Bezahlt",
-  exempt: "Befreit",
-  cancelled: "Storniert",
+  const d=new Date(String(value));
+  return Number.isNaN(d.getTime()) ? "–" : new Intl.DateTimeFormat("de-DE").format(d);
 };
 
 export default async function FinancePage({
   searchParams,
-}: {
-  searchParams: Promise<{ error?: string; created?: string; budget?: string; fees?: string }>;
+}:{
+  searchParams:Promise<{budget?:string;error?:string}>;
 }) {
-  const actor = await requirePermission("finance.read");
-  const sql = getDb();
-  const params = await searchParams;
-  const canWrite = hasPermission(actor.roles, "finance.write");
+  const user=await requirePermission("finance.read");
+  const sql=getDb();
+  const params=await searchParams;
+  const canWrite=hasPermission(user.roles,"finance.write");
+  const year=new Date().getFullYear();
 
-  const [summaryRows, entries, budgets, fees, members, profileRows] = sql
-    ? await Promise.all([
-        sql`
-          SELECT
-            COALESCE((SELECT SUM(amount) FROM finance_budgets WHERE fiscal_year = EXTRACT(YEAR FROM CURRENT_DATE)::int),0) AS budget,
-            COALESCE((SELECT SUM(amount) FROM finance_entries WHERE entry_type = 'income' AND status = 'booked' AND EXTRACT(YEAR FROM booked_on) = EXTRACT(YEAR FROM CURRENT_DATE)),0) AS income,
-            COALESCE((SELECT SUM(amount) FROM finance_entries WHERE entry_type = 'expense' AND status = 'booked' AND EXTRACT(YEAR FROM booked_on) = EXTRACT(YEAR FROM CURRENT_DATE)),0) AS expense,
-            COALESCE((SELECT COUNT(*) FROM membership_fees WHERE fiscal_year = EXTRACT(YEAR FROM CURRENT_DATE)::int AND status = 'open'),0)::int AS open_fees
-        `,
-        sql`
-          SELECT
-            f.id::text,
-            f.entry_type,
-            f.amount,
-            f.category,
-            f.description,
-            f.booked_on,
-            m.first_name,
-            m.last_name
-          FROM finance_entries f
-          LEFT JOIN members m ON m.id = f.member_id
-          WHERE f.status = 'booked'
-          ORDER BY f.booked_on DESC, f.created_at DESC
-          LIMIT 30
-        `,
-        sql`
-          SELECT id::text, fiscal_year, category, amount, notes
-          FROM finance_budgets
-          WHERE fiscal_year = EXTRACT(YEAR FROM CURRENT_DATE)::int
-          ORDER BY category
-        `,
-        sql`
-          SELECT
-            mf.id::text,
-            mf.amount,
-            mf.due_date,
-            mf.status,
-            mf.paid_on,
-            m.first_name,
-            m.last_name,
-            m.member_number
-          FROM membership_fees mf
-          JOIN members m ON m.id = mf.member_id
-          WHERE mf.fiscal_year = EXTRACT(YEAR FROM CURRENT_DATE)::int
-          ORDER BY
-            CASE mf.status WHEN 'open' THEN 0 WHEN 'paid' THEN 1 ELSE 2 END,
-            m.last_name, m.first_name
-        `,
-        sql`
-          SELECT id::text, first_name, last_name
-          FROM members
-          WHERE status = 'active'
-          ORDER BY last_name, first_name
-        `,
-        sql`
-          SELECT default_annual_fee,fee_due_month,fee_due_day
-          FROM club_profile
-          WHERE id=1
-          LIMIT 1
-        `,
-      ])
-    : [[{ budget: 0, income: 0, expense: 0, open_fees: 0 }], [], [], [], [], []];
+  const [summaryRows,entries,budgets,feeRows]=sql ? await Promise.all([
+    sql`
+      SELECT
+        COALESCE((SELECT SUM(amount) FROM finance_budgets WHERE fiscal_year=${year}),0) AS budget,
+        COALESCE((SELECT SUM(amount) FROM finance_entries WHERE entry_type='income' AND status='booked' AND EXTRACT(YEAR FROM booked_on)=${year}),0) AS income,
+        COALESCE((SELECT SUM(amount) FROM finance_entries WHERE entry_type='expense' AND status='booked' AND EXTRACT(YEAR FROM booked_on)=${year}),0) AS expense
+    `,
+    sql`
+      SELECT
+        f.id::text,f.entry_type,f.amount,f.category,f.description,f.booked_on,
+        m.first_name,m.last_name
+      FROM finance_entries f
+      LEFT JOIN members m ON m.id=f.member_id
+      WHERE f.status='booked'
+      ORDER BY f.booked_on DESC,f.created_at DESC
+      LIMIT 8
+    `,
+    sql`
+      SELECT id::text,category,amount,notes
+      FROM finance_budgets
+      WHERE fiscal_year=${year}
+      ORDER BY category
+    `,
+    sql`
+      SELECT
+        mf.id::text,mf.amount,mf.status,
+        COALESCE((SELECT SUM(p.amount) FROM membership_fee_payments p WHERE p.fee_id=mf.id),0) AS paid,
+        COALESCE((SELECT SUM(i.amount) FROM membership_fee_installments i WHERE i.fee_id=mf.id AND i.due_date<=CURRENT_DATE),0) AS due_total
+      FROM membership_fees mf
+      WHERE mf.fiscal_year=${year}
+        AND mf.status<>'cancelled'
+    `,
+  ]) : [[{budget:0,income:0,expense:0}],[],[],[]];
 
-  const s = summaryRows[0] ?? {};
-  const profile = profileRows[0] ?? {};
-  const balance = Number(s.income ?? 0) - Number(s.expense ?? 0);
-  const budgetRemaining = Number(s.budget ?? 0) - Number(s.expense ?? 0);
-  const currentYear = new Date().getFullYear();
-  const defaultDueDate = profile.fee_due_month && profile.fee_due_day
-    ? `${currentYear}-${String(profile.fee_due_month).padStart(2,"0")}-${String(profile.fee_due_day).padStart(2,"0")}`
-    : "";
+  const s=summaryRows[0] ?? {};
+  const income=Number(s.income ?? 0);
+  const expense=Number(s.expense ?? 0);
+  const balance=income-expense;
+  const budget=Number(s.budget ?? 0);
+  const budgetRemaining=budget-expense;
+
+  const contributionExpected=feeRows
+    .filter((fee)=>String(fee.status)!=="exempt")
+    .reduce((sum,fee)=>sum+Number(fee.amount ?? 0),0);
+  const contributionPaid=feeRows.reduce((sum,fee)=>sum+Number(fee.paid ?? 0),0);
+  const contributionOpen=Math.max(0,contributionExpected-contributionPaid);
+  const overdueCount=feeRows.filter((fee)=>{
+    if (["paid","exempt","cancelled"].includes(String(fee.status))) return false;
+    return Number(fee.due_total ?? 0)>Number(fee.paid ?? 0)+0.001;
+  }).length;
 
   return (
     <div className="page-stack">
@@ -116,41 +82,68 @@ export default async function FinancePage({
         <div>
           <span className="eyebrow">Finanzen</span>
           <h1>Finanzübersicht</h1>
-          <p>Budgets, Einnahmen, Ausgaben und Mitgliedsbeiträge als schlanke Vorstandsübersicht.</p>
+          <p>Vereinsfinanzen, Budgets und Mitgliedsbeiträge auf einen Blick.</p>
         </div>
       </section>
 
+      <FinanceNav active="overview" />
+
+      {params.budget && <div className="form-success">Budget wurde gespeichert.</div>}
       {params.error && <div className="form-error">Die Eingaben konnten nicht verarbeitet werden.</div>}
-      {(params.created || params.budget || params.fees) && <div className="form-success">Finanzdaten wurden aktualisiert.</div>}
 
       <section className="stat-grid">
-        <article className="stat-card"><span>Budget</span><strong>{money(s.budget)}</strong><small>aktuelles Jahr</small></article>
-        <article className="stat-card"><span>Ausgaben</span><strong>{money(s.expense)}</strong><small>gebucht</small></article>
+        <article className="stat-card"><span>Einnahmen</span><strong>{money(income)}</strong><small>{year}</small></article>
+        <article className="stat-card"><span>Ausgaben</span><strong>{money(expense)}</strong><small>{year}</small></article>
+        <article className="stat-card"><span>Saldo</span><strong className={balance<0 ? "negative" : ""}>{money(balance)}</strong><small>Einnahmen minus Ausgaben</small></article>
         <article className="stat-card"><span>Budgetrest</span><strong>{money(budgetRemaining)}</strong><small>Plan minus Ausgaben</small></article>
-        <article className="stat-card"><span>Offene Beiträge</span><strong>{Number(s.open_fees ?? 0)}</strong><small>Mitglieder</small></article>
       </section>
 
-      <section className="finance-summary-strip">
-        <div><span>Einnahmen</span><strong>{money(s.income)}</strong></div>
-        <div><span>Ausgaben</span><strong>{money(s.expense)}</strong></div>
-        <div><span>Saldo</span><strong className={balance < 0 ? "negative" : ""}>{money(balance)}</strong></div>
+      <section className="finance-overview-links">
+        <Link href="/finanzen/beitraege">
+          <span>Mitgliedsbeiträge</span>
+          <strong>{money(contributionOpen)} offen</strong>
+          <small>{money(contributionPaid)} von {money(contributionExpected)} eingegangen</small>
+        </Link>
+        <Link href="/finanzen/offene-beitraege">
+          <span>Handlungsbedarf</span>
+          <strong>{overdueCount} überfällig</strong>
+          <small>Offene und fällige Beiträge prüfen</small>
+        </Link>
+        <Link href="/finanzen/beitragsarten">
+          <span>Beitragsmodelle</span>
+          <strong>Beitragsarten</strong>
+          <small>Standard, Jugend, Ermäßigt und individuelle Modelle</small>
+        </Link>
+        <Link href="/finanzen/auswertung">
+          <span>Jahresauswertung</span>
+          <strong>{year}</strong>
+          <small>Einzugsquote und Beitragsverteilung ansehen</small>
+        </Link>
       </section>
 
       <section className="panel-grid">
         <article className="panel">
-          <div className="panel-head"><div><span className="eyebrow">Buchungen</span><h2>Letzte Bewegungen</h2></div></div>
+          <div className="panel-head">
+            <div><span className="eyebrow">Buchungen</span><h2>Letzte Bewegungen</h2></div>
+            <Link href="/finanzen/buchungen" className="ghost-button">Alle Buchungen</Link>
+          </div>
           <div className="finance-list">
-            {entries.length === 0 ? <div className="empty-state">Noch keine Buchungen vorhanden.</div> : entries.map((entry) => (
+            {entries.length===0 ? (
+              <div className="empty-state">Noch keine Buchungen vorhanden.</div>
+            ) : entries.map((entry)=>(
               <div className="finance-row" key={String(entry.id)}>
-                <div className={`finance-icon finance-${entry.entry_type}`}>{entry.entry_type === "income" ? "+" : "−"}</div>
+                <div className={`finance-icon finance-${entry.entry_type}`}>
+                  {entry.entry_type==="income" ? "+" : "−"}
+                </div>
                 <div className="finance-main">
                   <strong>{String(entry.description)}</strong>
-                  <span>{String(entry.category)} · {formatDate(entry.booked_on)}
+                  <span>
+                    {String(entry.category)} · {formatDate(entry.booked_on)}
                     {entry.first_name ? ` · ${entry.first_name} ${entry.last_name}` : ""}
                   </span>
                 </div>
-                <b className={entry.entry_type === "expense" ? "negative" : ""}>
-                  {entry.entry_type === "expense" ? "−" : "+"}{money(entry.amount)}
+                <b className={entry.entry_type==="expense" ? "negative" : ""}>
+                  {entry.entry_type==="expense" ? "−" : "+"}{money(entry.amount)}
                 </b>
               </div>
             ))}
@@ -158,105 +151,34 @@ export default async function FinancePage({
         </article>
 
         <article className="panel">
-          <div className="panel-head"><div><span className="eyebrow">Budget</span><h2>Bereiche</h2></div></div>
+          <div className="panel-head">
+            <div><span className="eyebrow">Budget</span><h2>Bereiche {year}</h2></div>
+          </div>
           <div className="finance-list">
-            {budgets.length === 0 ? <div className="empty-state">Noch keine Budgets hinterlegt.</div> : budgets.map((budget) => (
-              <div className="budget-row" key={String(budget.id)}>
-                <div><strong>{String(budget.category)}</strong><span>{budget.notes ? String(budget.notes) : "Ohne Notiz"}</span></div>
-                <b>{money(budget.amount)}</b>
+            {budgets.length===0 ? (
+              <div className="empty-state">Noch keine Budgets hinterlegt.</div>
+            ) : budgets.map((item)=>(
+              <div className="budget-row" key={String(item.id)}>
+                <div>
+                  <strong>{String(item.category)}</strong>
+                  <span>{String(item.notes || "Ohne Notiz")}</span>
+                </div>
+                <b>{money(item.amount)}</b>
               </div>
             ))}
           </div>
-        </article>
-      </section>
 
-      <article className="panel">
-        <div className="panel-head">
-          <div><span className="eyebrow">Mitgliedsbeiträge</span><h2>Beitragsstatus {new Date().getFullYear()}</h2></div>
-          <span className="count-chip">{fees.length}</span>
-        </div>
-        <div className="fee-table">
-          {fees.length === 0 ? <div className="empty-state">Noch keine Beiträge für dieses Jahr erzeugt.</div> : fees.map((fee) => (
-            <div className="fee-row" key={String(fee.id)}>
-              <div>
-                <strong>{String(fee.first_name)} {String(fee.last_name)}</strong>
-                <span>{fee.member_number ? `#${fee.member_number} · ` : ""}Fällig {formatDate(fee.due_date)}</span>
-              </div>
-              <b>{money(fee.amount)}</b>
-              <span className={`fee-status fee-${fee.status}`}>{feeLabels[String(fee.status)] ?? String(fee.status)}</span>
-              {canWrite && (
-                <form action={updateMembershipFeeStatusAction}>
-                  <input type="hidden" name="id" value={String(fee.id)} />
-                  <select name="status" defaultValue={String(fee.status)}>
-                    <option value="open">Offen</option>
-                    <option value="paid">Bezahlt</option>
-                    <option value="exempt">Befreit</option>
-                    <option value="cancelled">Storniert</option>
-                  </select>
-                  <button className="mini-button">Speichern</button>
-                </form>
-              )}
-            </div>
-          ))}
-        </div>
-      </article>
-
-      {canWrite && (
-        <section className="finance-admin-grid">
-          <article className="panel">
-            <div className="panel-head"><div><span className="eyebrow">Neu</span><h2>Buchung erfassen</h2></div></div>
-            <form action={createFinanceEntryAction} className="form-stack">
-              <div className="form-grid">
-                <label>Art
-                  <select name="entryType" defaultValue="expense">
-                    <option value="income">Einnahme</option>
-                    <option value="expense">Ausgabe</option>
-                  </select>
-                </label>
-                <label>Betrag<input name="amount" inputMode="decimal" placeholder="0,00" required /></label>
-              </div>
-              <label>Kategorie<input name="category" placeholder="z. B. Material, Beitrag, Sponsor" required /></label>
-              <label>Beschreibung<input name="description" required /></label>
-              <div className="form-grid">
-                <label>Datum<input name="bookedOn" type="date" required /></label>
-                <label>Mitglied
-                  <select name="memberId" defaultValue="">
-                    <option value="">Keine Zuordnung</option>
-                    {members.map((m) => <option key={String(m.id)} value={String(m.id)}>{String(m.first_name)} {String(m.last_name)}</option>)}
-                  </select>
-                </label>
-              </div>
-              <button className="primary-button">Buchung speichern</button>
-            </form>
-          </article>
-
-          <article className="panel">
-            <div className="panel-head"><div><span className="eyebrow">Planung</span><h2>Budget setzen</h2></div></div>
-            <form action={upsertBudgetAction} className="form-stack">
-              <div className="form-grid">
-                <label>Jahr<input name="year" type="number" defaultValue={new Date().getFullYear()} required /></label>
-                <label>Betrag<input name="amount" inputMode="decimal" required /></label>
-              </div>
+          {canWrite && (
+            <form action={upsertBudgetAction} className="form-stack finance-budget-form">
+              <input type="hidden" name="year" value={year} />
               <label>Bereich<input name="category" required placeholder="z. B. Turniere" /></label>
-              <label>Notiz<textarea name="notes" rows={3} /></label>
+              <label>Betrag<input name="amount" inputMode="decimal" required /></label>
+              <label>Notiz<input name="notes" /></label>
               <button className="primary-button">Budget speichern</button>
             </form>
-          </article>
-
-          <article className="panel">
-            <div className="panel-head"><div><span className="eyebrow">Beiträge</span><h2>Jahresbeiträge erzeugen</h2></div></div>
-            <form action={generateMembershipFeesAction} className="form-stack">
-              <div className="form-grid">
-                <label>Jahr<input name="year" type="number" defaultValue={currentYear} required /></label>
-                <label>Beitrag pro Mitglied<input name="amount" inputMode="decimal" defaultValue={profile.default_annual_fee ?? ""} placeholder="aus Vereinsprofil" /></label>
-              </div>
-              <label>Fällig am<input name="dueDate" type="date" defaultValue={defaultDueDate} /></label>
-              <p className="form-hint">Standardbetrag und Fälligkeit kommen aus dem Vereinsprofil. Es werden nur aktive Mitglieder ergänzt, für die in diesem Jahr noch kein Beitrag existiert.</p>
-              <button className="primary-button">Beiträge erzeugen</button>
-            </form>
-          </article>
-        </section>
-      )}
+          )}
+        </article>
+      </section>
     </div>
   );
 }
