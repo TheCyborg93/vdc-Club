@@ -217,6 +217,18 @@ export default async function GuidePage() {
         </div>
       </article>
 
+      <article className="panel guide-auto-sync">
+        <div className="panel-head">
+          <div><span className="eyebrow">Automatische Datenpflege</span><h2>TC, Turnier und Training synchronisieren</h2></div>
+        </div>
+        <div className="guide-install-grid">
+          <div><strong>Automatisch beim Öffnen</strong><span>Dashboard und Kalender prüfen die Integrationen. Sind Daten älter als zwei Minuten, startet automatisch ein neuer Abgleich.</span></div>
+          <div><strong>Hintergrund-Sync</strong><span>Der Vercel-Cron ruft den zentralen Abgleich alle zehn Minuten auf, sobald CRON_SECRET in Production gesetzt ist.</span></div>
+          <div><strong>Manuell</strong><span>Im Vereinskalender kann der gesamte Abgleich sofort gestartet werden. Unter Admin → Integrationen kann zusätzlich jede Quelle einzeln synchronisiert werden.</span></div>
+          <div><strong>Änderungen & Löschungen</strong><span>Neue und verschobene Termine werden aktualisiert. Zukünftige externe Termine, die in der Quelle entfernt wurden, verschwinden automatisch auch aus Club.</span></div>
+        </div>
+      </article>
+
       <section className="guide-grid">
         {modules.map((module) => {
           const available = !module.permission || hasPermission(user.roles, module.permission);
