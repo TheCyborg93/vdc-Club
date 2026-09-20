@@ -75,13 +75,17 @@ const modules: GuideModule[] = [
     area: "Organisation",
     href: "/umfragen",
     permission: "surveys.read",
-    description: "Anonyme Umfragen mit öffentlichem Link erstellen, per WhatsApp verteilen und zentral auswerten.",
+    description: "Anonyme oder nicht anonyme Umfragen mit öffentlichem Link erstellen, per WhatsApp verteilen, manuell beenden und zentral auswerten.",
     capabilities: [
       "Einzel-, Mehrfachauswahl und Freitext kombinieren",
       "Entwürfe vor Veröffentlichung vollständig bearbeiten",
-      "Anonymen Link und fertigen WhatsApp-Text erzeugen",
+      "Anonym oder nicht anonym auswählen",
+      "Bei nicht anonymen Umfragen eigene Teilnehmerfelder frei benennen",
+      "Öffentlichen Link und fertigen WhatsApp-Text erzeugen",
       "Optional nur eine Teilnahme pro Browser/Gerät zulassen",
-      "Ergebnisse, Prozentwerte und Freitextantworten auswerten",
+      "Aktive Umfragen jederzeit selbst beenden oder wieder öffnen",
+      "Umfragen inklusive aller Antworten endgültig löschen",
+      "Ergebnisse, Prozentwerte, Teilnehmerangaben und Freitextantworten auswerten",
     ],
   },
   {
@@ -194,15 +198,15 @@ export default async function GuidePage() {
           <Link href="/umfragen" className="ghost-button">Umfragen öffnen</Link>
         </div>
         <div className="guide-workflow-steps">
-          <div><b>1</b><span><strong>Erstellen</strong><small>Titel, Thema, Zielgruppe, Frist und Fragen festlegen.</small></span></div>
+          <div><b>1</b><span><strong>Erstellen</strong><small>Titel, Thema, Zielgruppe, Frist, Fragen und anonym/nicht anonym festlegen.</small></span></div>
           <div><b>2</b><span><strong>Entwurf prüfen</strong><small>Fragen, Antwortarten und Einstellungen können vor Veröffentlichung noch geändert werden.</small></span></div>
-          <div><b>3</b><span><strong>Veröffentlichen</strong><small>Der öffentliche anonyme Link wird freigeschaltet. Optional kann pro Browser nur eine Teilnahme erlaubt werden.</small></span></div>
+          <div><b>3</b><span><strong>Veröffentlichen</strong><small>Der öffentliche Link wird freigeschaltet. Bei nicht anonymen Umfragen erscheinen die selbst definierten Teilnehmerfelder.</small></span></div>
           <div><b>4</b><span><strong>Teilen</strong><small>Link oder automatisch erstellten WhatsApp-Text kopieren und an die Zielgruppe senden.</small></span></div>
-          <div><b>5</b><span><strong>Auswerten</strong><small>Teilnahmen, Auswahlwerte, Prozentangaben und anonyme Freitextantworten ansehen.</small></span></div>
+          <div><b>5</b><span><strong>Auswerten & beenden</strong><small>Ergebnisse ansehen, die Umfrage jederzeit manuell beenden und bei Bedarf später endgültig löschen.</small></span></div>
         </div>
         <div className="survey-anonymous-note">
           <strong>Anonymität</strong>
-          <span>Antworten werden ohne Namen, Mitglied, Benutzerkonto, E-Mail-Adresse oder IP-Adresse gespeichert. Der optionale Mehrfachschutz verwendet nur ein Cookie im jeweiligen Browser.</span>
+          <span>Bei anonymen Umfragen werden keine Teilnehmerangaben gespeichert. Bei nicht anonymen Umfragen bestimmst du selbst, welche Felder abgefragt werden. Der optionale Mehrfachschutz verwendet zusätzlich nur ein Cookie im jeweiligen Browser.</span>
         </div>
       </article>
 
