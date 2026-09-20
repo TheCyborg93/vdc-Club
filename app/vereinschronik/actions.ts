@@ -50,6 +50,16 @@ export async function createHonorAction(formData: FormData) {
   const thirdPlaceName = value(formData, "thirdPlaceName");
   const participantsRaw = value(formData, "participants");
   const participants = participantsRaw ? Number(participantsRaw) : null;
+  const tournamentFormat = value(formData, "tournamentFormat");
+  const venue = value(formData, "venue");
+  const finalScore = value(formData, "finalScore");
+  const highFinishRaw = value(formData, "highFinish");
+  const shortLegRaw = value(formData, "shortLeg");
+  const averageRaw = value(formData, "average");
+  const albumId = value(formData, "albumId");
+  const highFinish = highFinishRaw ? Number(highFinishRaw) : null;
+  const shortLeg = shortLegRaw ? Number(shortLegRaw) : null;
+  const average = averageRaw ? Number(averageRaw.replace(",", ".")) : null;
   const notes = value(formData, "notes");
 
   if (
@@ -66,12 +76,15 @@ export async function createHonorAction(formData: FormData) {
   const rows = await sql`
     INSERT INTO club_honors (
       honor_type,custom_title,year,event_date,winner_member_id,winner_name,
-      runner_up_name,third_place_name,participants,notes,created_by_user_id
+      runner_up_name,third_place_name,participants,tournament_format,venue,
+      final_score,high_finish,short_leg,average,album_id,notes,created_by_user_id
     )
     VALUES (
       ${honorType},${customTitle || null},${year},${eventDate || null}::date,
       ${winnerMemberId || null}::uuid,${winnerName},${runnerUpName || null},
-      ${thirdPlaceName || null},${participants},${notes || null},${actor.id}::uuid
+      ${thirdPlaceName || null},${participants},${tournamentFormat || null},${venue || null},
+      ${finalScore || null},${highFinish},${shortLeg},${average},
+      ${albumId || null}::uuid,${notes || null},${actor.id}::uuid
     )
     RETURNING id::text
   `;
@@ -80,6 +93,61 @@ export async function createHonorAction(formData: FormData) {
   await writeAudit(actor.id,"chronicle.honor_created","club_honor",id,{honorType,year,winnerName});
   revalidateChronicle();
   redirect("/vereinschronik/hall-of-fame?created=1");
+}
+
+export async function updateHonorAction(formData: FormData) {
+  const actor = await requirePermission("chronicle.write");
+  const sql = getDb();
+  if (!sql) redirect("/vereinschronik/hall-of-fame?error=database");
+
+  const id = value(formData, "id");
+  const customTitle = value(formData, "customTitle");
+  const eventDate = value(formData, "eventDate");
+  const winnerName = value(formData, "winnerName");
+  const runnerUpName = value(formData, "runnerUpName");
+  const thirdPlaceName = value(formData, "thirdPlaceName");
+  const participantsRaw = value(formData, "participants");
+  const participants = participantsRaw ? Number(participantsRaw) : null;
+  const tournamentFormat = value(formData, "tournamentFormat");
+  const venue = value(formData, "venue");
+  const finalScore = value(formData, "finalScore");
+  const highFinishRaw = value(formData, "highFinish");
+  const shortLegRaw = value(formData, "shortLeg");
+  const averageRaw = value(formData, "average");
+  const albumId = value(formData, "albumId");
+  const highFinish = highFinishRaw ? Number(highFinishRaw) : null;
+  const shortLeg = shortLegRaw ? Number(shortLegRaw) : null;
+  const average = averageRaw ? Number(averageRaw.replace(",", ".")) : null;
+  const notes = value(formData, "notes");
+
+  if (!id || !winnerName) {
+    redirect(`/vereinschronik/hall-of-fame/${id}?error=invalid`);
+  }
+
+  await sql`
+    UPDATE club_honors
+    SET
+      custom_title=${customTitle || null},
+      event_date=${eventDate || null}::date,
+      winner_name=${winnerName},
+      runner_up_name=${runnerUpName || null},
+      third_place_name=${thirdPlaceName || null},
+      participants=${participants},
+      tournament_format=${tournamentFormat || null},
+      venue=${venue || null},
+      final_score=${finalScore || null},
+      high_finish=${highFinish},
+      short_leg=${shortLeg},
+      average=${average},
+      album_id=${albumId || null}::uuid,
+      notes=${notes || null}
+    WHERE id=${id}::uuid
+  `;
+
+  await writeAudit(actor.id,"chronicle.honor_updated","club_honor",id,{winnerName});
+  revalidateChronicle();
+  revalidatePath(`/vereinschronik/hall-of-fame/${id}`);
+  redirect(`/vereinschronik/hall-of-fame/${id}?updated=1`);
 }
 
 export async function deleteHonorAction(formData: FormData) {
