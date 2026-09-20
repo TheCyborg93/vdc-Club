@@ -248,7 +248,7 @@ export default async function HallOfFamePage({
                     <span>{honorLabel(honor)}</span>
                     <h2>{honor.winnerName}</h2>
                     <div className="hall-meta">
-                      {honor.eventDate && <small>{formatDate(honor.eventDate)}</small>}
+                      {Boolean(honor.eventDate) && <small>{formatDate(honor.eventDate)}</small>}
                       {honor.participants!=null && <small>{honor.participants} Teilnehmer</small>}
                       {honor.finalScore && <small>Finale {honor.finalScore}</small>}
                     </div>
