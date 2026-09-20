@@ -12,6 +12,9 @@ export function NavIcon({href}:{href:string}) {
   if (href==="/") {
     return <Svg><path d="M3 11.5 12 4l9 7.5"/><path d="M5.5 10.5V20h13v-9.5"/><path d="M9.5 20v-6h5v6"/></Svg>;
   }
+  if (href.startsWith("/anleitung")) {
+    return <Svg><path d="M5 4.5h6.5A2.5 2.5 0 0 1 14 7v12H7.5A2.5 2.5 0 0 0 5 21.5v-17Z"/><path d="M19 4.5h-2.5A2.5 2.5 0 0 0 14 7v12h2.5A2.5 2.5 0 0 1 19 21.5v-17Z"/><path d="M8 9h3M8 12h3"/></Svg>;
+  }
   if (href.startsWith("/mitglieder")) {
     return <Svg><circle cx="9" cy="8" r="3"/><path d="M3.5 20c0-3 2.3-5.2 5.5-5.2s5.5 2.2 5.5 5.2"/><circle cx="17" cy="9" r="2.2"/><path d="M15.5 15.2c2.8-.2 5 1.5 5 4.3"/></Svg>;
   }
