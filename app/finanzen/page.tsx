@@ -57,7 +57,13 @@ export default async function FinancePage({
           THEN mf.amount
           ELSE COALESCE((SELECT SUM(p.amount) FROM membership_fee_payments p WHERE p.fee_id=mf.id),0)
         END AS paid,
-        COALESCE((SELECT SUM(i.amount) FROM membership_fee_installments i WHERE i.fee_id=mf.id AND i.due_date<=CURRENT_DATE),0) AS due_total
+        CASE
+          WHEN EXISTS (SELECT 1 FROM membership_fee_installments i WHERE i.fee_id=mf.id)
+          THEN COALESCE((SELECT SUM(i.amount) FROM membership_fee_installments i WHERE i.fee_id=mf.id AND i.due_date<=CURRENT_DATE),0)
+          WHEN mf.due_date IS NOT NULL AND mf.due_date<=CURRENT_DATE
+          THEN mf.amount
+          ELSE 0
+        END AS due_total
       FROM membership_fees mf
       WHERE mf.fiscal_year=${year}
         AND mf.status<>'cancelled'
