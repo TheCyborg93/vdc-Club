@@ -27,6 +27,7 @@ export async function createMemberAction(formData: FormData) {
 
   const firstName = value(formData, "firstName");
   const lastName = value(formData, "lastName");
+  const nickname = value(formData, "nickname");
   const email = value(formData, "email").toLowerCase();
   const memberNumber = value(formData, "memberNumber");
   const joinDate = value(formData, "joinDate");
@@ -40,11 +41,12 @@ export async function createMemberAction(formData: FormData) {
   try {
     const rows = await sql`
       INSERT INTO members (
-        first_name, last_name, email, member_number, join_date, status, membership_type
+        first_name, last_name, nickname, email, member_number, join_date, status, membership_type
       )
       VALUES (
         ${firstName},
         ${lastName},
+        ${nickname || null},
         ${email || null},
         ${memberNumber || null},
         ${joinDate || null}::date,
@@ -88,6 +90,7 @@ export async function updateMemberAction(formData: FormData) {
   const id = value(formData, "id");
   const firstName = value(formData, "firstName");
   const lastName = value(formData, "lastName");
+  const nickname = value(formData, "nickname");
   const email = value(formData, "email").toLowerCase();
   const phone = value(formData, "phone");
   const memberNumber = value(formData, "memberNumber");
@@ -123,6 +126,7 @@ export async function updateMemberAction(formData: FormData) {
     SET
       first_name = ${firstName},
       last_name = ${lastName},
+      nickname = ${nickname || null},
       email = ${email || null},
       phone = ${phone || null},
       member_number = ${memberNumber || null},
