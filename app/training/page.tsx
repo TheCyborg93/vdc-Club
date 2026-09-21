@@ -91,6 +91,7 @@ export default async function TrainingPage({
           FROM training_sessions s
           LEFT JOIN training_attendance a ON a.session_id=s.id
           WHERE s.deleted_at IS NULL
+            AND NOT (s.status='cancelled' AND s.notes LIKE 'homegame:%')
             AND s.scheduled_at >= now()
           GROUP BY s.id
           ORDER BY s.scheduled_at
@@ -115,6 +116,7 @@ export default async function TrainingPage({
           LEFT JOIN training_attendance a ON a.session_id=s.id
           LEFT JOIN members m ON m.id=a.member_id
           WHERE s.deleted_at IS NULL
+            AND NOT (s.status='cancelled' AND s.notes LIKE 'homegame:%')
             AND s.scheduled_at < now()
           GROUP BY s.id
           ORDER BY s.scheduled_at DESC
