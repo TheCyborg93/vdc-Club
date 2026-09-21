@@ -68,7 +68,8 @@ export default async function GalleryPage({
   const errorLabels:Record<string,string>={
     database:"Datenbank nicht verfügbar.",
     missing:"Bitte einen Albumtitel angeben.",
-    photo_missing:"Bitte Album und Bild auswählen.",
+    photo_missing:"Bitte Album und mindestens ein Bild auswählen.",
+    photo_count:"Bitte maximal 20 Fotos gleichzeitig auswählen.",
     photo_type:"Erlaubt sind JPG, PNG und WebP.",
     photo_size:"Das Bild ist zu groß. Maximal 8 MB.",
     storage:"Der private Dateispeicher ist noch nicht konfiguriert.",
@@ -148,7 +149,7 @@ export default async function GalleryPage({
 
           <article className="panel">
             <div className="panel-head">
-              <div><span className="eyebrow">Schnellupload</span><h2>Foto hinzufügen</h2></div>
+              <div><span className="eyebrow">Schnellupload</span><h2>Fotos hinzufügen</h2></div>
             </div>
             <form action={uploadPhotoAction} className="form-stack" encType="multipart/form-data">
               <label>Album
@@ -157,11 +158,19 @@ export default async function GalleryPage({
                   {albums.map((album)=><option key={album.id} value={album.id}>{album.title}</option>)}
                 </select>
               </label>
-              <label>Bild<input name="file" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" required /></label>
-              <small>JPG, PNG oder WebP · maximal 8 MB. Nach dem Upload öffnet sich das Album.</small>
-              <label>Titel<input name="title" placeholder="Optional" /></label>
-              <label>Bildbeschreibung<textarea name="caption" rows={3} placeholder="Optional" /></label>
-              <button className="primary-button" disabled={albums.length===0}>Foto hochladen</button>
+              <label>Fotos
+                <input
+                  name="files"
+                  type="file"
+                  accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+                  multiple
+                  required
+                />
+              </label>
+              <small>Mehrfachauswahl möglich · maximal 20 Fotos · JPG, PNG oder WebP · maximal 8 MB je Foto. Danach öffnet sich das Album.</small>
+              <label>Titel<input name="title" placeholder="Optional · nur bei einem einzelnen Foto" /></label>
+              <label>Gemeinsame Bildbeschreibung<textarea name="caption" rows={3} placeholder="Optional · wird auf alle ausgewählten Fotos angewendet" /></label>
+              <button className="primary-button" disabled={albums.length===0}>Fotos hochladen</button>
             </form>
           </article>
         </section>
