@@ -301,7 +301,7 @@ export default async function TrainingPage({
         <div>
           <span className="eyebrow">Sportbetrieb</span>
           <h1>Training</h1>
-          <p>Dienstag und Freitag · Beginn 19:00 Uhr · Ende offen. Anwesenheit wird händisch mit einem Klick pro Mitglied erfasst.</p>
+          <p>Dienstag und Freitag · Beginn 19:00 Uhr · Ende offen. An Heimspieltagen entfällt das Regeltraining automatisch. Anwesenheit wird händisch mit einem Klick pro Mitglied erfasst.</p>
         </div>
         <div className="training-heading-actions">
           <Link href="/training/auswertung" className="ghost-button">Auswertung</Link>
@@ -314,7 +314,7 @@ export default async function TrainingPage({
       </section>
 
       {params.error && <div className="form-error">{errorLabels[params.error] ?? "Die Trainingsaktion konnte nicht ausgeführt werden."}</div>}
-      {params.refreshed && <div className="form-success">Trainingskalender wurde für die nächsten 12 Monate aktualisiert.</div>}
+      {params.refreshed && <div className="form-success">Trainingskalender wurde für die nächsten 12 Monate aktualisiert. Heimspieltage wurden automatisch ausgespart.</div>}
       {params.pause && <div className="form-success">Trainingspause wurde eingetragen.</div>}
       {params.pause_removed && <div className="form-success">Trainingspause wurde aufgehoben.</div>}
       {params.deleted && <div className="form-success">Sondertraining wurde in den Papierkorb verschoben.</div>}
@@ -364,7 +364,7 @@ export default async function TrainingPage({
         <article className="panel">
           <div className="panel-head">
             <div><span className="eyebrow">Plan</span><h2>Nächste Trainingstage</h2></div>
-            <span className="training-rule-chip">DI + FR · 19:00</span>
+            <span className="training-rule-chip">DI + FR · 19:00 · außer Heimspiel</span>
           </div>
           <div className="training-upcoming-list">
             {upcoming.map((session)=>(
