@@ -1,5 +1,6 @@
 import "server-only";
 import { getDb } from "@/lib/db";
+import { ensureTrainingSchedule } from "@/lib/training";
 
 type IntegrationKey = "vdc_tc" | "vdc_turnier" | "vdc_training";
 
@@ -245,6 +246,9 @@ export async function syncIntegration(key: IntegrationKey): Promise<SyncResult> 
     const result=await pushToClub(key,payload);
     if (result.ok) {
       await cleanupMissingFutureEvents(key,eventIdsFromPayload(key,payload));
+      if (key === "vdc_tc") {
+        await ensureTrainingSchedule(365);
+      }
     }
     return result;
   } catch (error) {
