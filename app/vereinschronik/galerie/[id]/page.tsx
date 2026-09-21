@@ -140,7 +140,7 @@ export default async function AlbumPage({
                   required
                 />
               </label>
-              <small>Mehrfachauswahl möglich · maximal 20 Fotos · JPG, PNG oder WebP · maximal 8 MB je Foto.</small>
+              <small>Mehrfachauswahl möglich · maximal 20 Fotos · JPG, PNG oder WebP · maximal 8 MB je Foto und 80 MB pro Upload.</small>
               <label>Titel<input name="title" placeholder="Optional · nur bei einem einzelnen Foto" /></label>
               <label>Gemeinsame Bildbeschreibung<textarea name="caption" rows={3} placeholder="Optional · wird auf alle ausgewählten Fotos angewendet" /></label>
               <button className="primary-button">Fotos hochladen</button>
