@@ -13,6 +13,7 @@ import {
 } from "@/lib/document-storage";
 
 const MAX_PHOTO_SIZE = 8 * 1024 * 1024;
+const MAX_PHOTO_BATCH_SIZE = 80 * 1024 * 1024;
 const allowedPhotoTypes = new Set(["image/jpeg","image/png","image/webp"]);
 
 function value(formData: FormData, key: string) {
@@ -275,6 +276,9 @@ export async function uploadPhotoAction(formData: FormData) {
   }
   if (files.some((file) => file.size > MAX_PHOTO_SIZE)) {
     redirect("/vereinschronik/galerie?error=photo_size");
+  }
+  if (files.reduce((sum,file)=>sum+file.size,0) > MAX_PHOTO_BATCH_SIZE) {
+    redirect("/vereinschronik/galerie?error=photo_batch_size");
   }
   if (!isDocumentStorageConfigured()) {
     redirect("/vereinschronik/galerie?error=storage");
