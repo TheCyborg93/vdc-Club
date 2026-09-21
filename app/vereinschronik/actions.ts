@@ -259,13 +259,26 @@ export async function uploadPhotoAction(formData: FormData) {
   const albumId = value(formData,"albumId");
   const title = value(formData,"title");
   const caption = value(formData,"caption");
-  const rawFile = formData.get("file");
-  const file = rawFile instanceof File && rawFile.size > 0 ? rawFile : null;
+  const rawFiles = formData.getAll("files");
+  const files = rawFiles.filter(
+    (entry): entry is File => entry instanceof File && entry.size > 0,
+  );
 
-  if (!albumId || !file) redirect("/vereinschronik/galerie?error=photo_missing");
-  if (!allowedPhotoTypes.has(file.type)) redirect("/vereinschronik/galerie?error=photo_type");
-  if (file.size > MAX_PHOTO_SIZE) redirect("/vereinschronik/galerie?error=photo_size");
-  if (!isDocumentStorageConfigured()) redirect("/vereinschronik/galerie?error=storage");
+  if (!albumId || files.length === 0) {
+    redirect("/vereinschronik/galerie?error=photo_missing");
+  }
+  if (files.length > 20) {
+    redirect("/vereinschronik/galerie?error=photo_count");
+  }
+  if (files.some((file) => !allowedPhotoTypes.has(file.type))) {
+    redirect("/vereinschronik/galerie?error=photo_type");
+  }
+  if (files.some((file) => file.size > MAX_PHOTO_SIZE)) {
+    redirect("/vereinschronik/galerie?error=photo_size");
+  }
+  if (!isDocumentStorageConfigured()) {
+    redirect("/vereinschronik/galerie?error=storage");
+  }
 
   const album = await sql`
     SELECT id::text
@@ -275,47 +288,76 @@ export async function uploadPhotoAction(formData: FormData) {
   `;
   if (!album[0]) redirect("/vereinschronik/galerie?error=album");
 
-  const bytes = new Uint8Array(await file.arrayBuffer());
+  const coverRows = await sql`
+    SELECT EXISTS(
+      SELECT 1 FROM club_photos WHERE album_id=${albumId}::uuid
+    ) AS has_photos
+  `;
+  let albumAlreadyHasPhotos = Boolean(coverRows[0]?.has_photos);
+
   const now = new Date();
   const year = now.getUTCFullYear();
   const month = String(now.getUTCMonth()+1).padStart(2,"0");
-  const key = `chronicle/photos/${year}/${month}/${randomUUID()}-${sanitizeFilename(file.name)}`;
+  const uploadedKeys: string[] = [];
+  const uploadedPhotoIds: string[] = [];
 
   try {
-    await uploadDocumentObject({
-      key,
-      body:bytes,
-      contentType:file.type,
-    });
+    for (const [index,file] of files.entries()) {
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      const key = `chronicle/photos/${year}/${month}/${randomUUID()}-${sanitizeFilename(file.name)}`;
+      await uploadDocumentObject({
+        key,
+        body:bytes,
+        contentType:file.type,
+      });
+      uploadedKeys.push(key);
 
-    const photoRows = await sql`
-      INSERT INTO club_photos (
-        album_id,title,caption,storage_ref,mime_type,original_filename,
-        file_size_bytes,is_cover,uploaded_by_user_id
-      )
-      VALUES (
-        ${albumId}::uuid,${title || null},${caption || null},${key},${file.type},
-        ${file.name},${file.size},
-        NOT EXISTS (SELECT 1 FROM club_photos WHERE album_id=${albumId}::uuid),
-        ${actor.id}::uuid
-      )
-      RETURNING id::text
-    `;
+      const photoRows = await sql`
+        INSERT INTO club_photos (
+          album_id,title,caption,storage_ref,mime_type,original_filename,
+          file_size_bytes,is_cover,uploaded_by_user_id
+        )
+        VALUES (
+          ${albumId}::uuid,
+          ${files.length === 1 ? title || null : null},
+          ${caption || null},
+          ${key},
+          ${file.type},
+          ${file.name},
+          ${file.size},
+          ${!albumAlreadyHasPhotos && index === 0},
+          ${actor.id}::uuid
+        )
+        RETURNING id::text
+      `;
 
-    const photoId = String(photoRows[0]?.id ?? "");
-    await writeAudit(actor.id,"chronicle.photo_uploaded","club_photo",photoId,{
-      albumId,
-      originalFilename:file.name,
-      size:file.size,
-    });
+      const photoId = String(photoRows[0]?.id ?? "");
+      if (photoId) uploadedPhotoIds.push(photoId);
+      albumAlreadyHasPhotos = true;
+
+      await writeAudit(actor.id,"chronicle.photo_uploaded","club_photo",photoId,{
+        albumId,
+        originalFilename:file.name,
+        size:file.size,
+        batchSize:files.length,
+      });
+    }
   } catch (error) {
-    try { await deleteDocumentObject(key); } catch {}
+    if (uploadedPhotoIds.length) {
+      await sql`
+        DELETE FROM club_photos
+        WHERE id = ANY(${uploadedPhotoIds}::uuid[])
+      `;
+    }
+    for (const key of uploadedKeys) {
+      try { await deleteDocumentObject(key); } catch {}
+    }
     throw error;
   }
 
   revalidateChronicle();
   revalidatePath(`/vereinschronik/galerie/${albumId}`);
-  redirect(`/vereinschronik/galerie/${albumId}?uploaded=1`);
+  redirect(`/vereinschronik/galerie/${albumId}?uploaded=${files.length}`);
 }
 
 export async function setAlbumCoverAction(formData: FormData) {
