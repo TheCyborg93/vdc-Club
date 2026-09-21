@@ -71,7 +71,8 @@ export default async function GalleryPage({
     photo_missing:"Bitte Album und mindestens ein Bild auswählen.",
     photo_count:"Bitte maximal 20 Fotos gleichzeitig auswählen.",
     photo_type:"Erlaubt sind JPG, PNG und WebP.",
-    photo_size:"Das Bild ist zu groß. Maximal 8 MB.",
+    photo_size:"Mindestens ein Bild ist zu groß. Maximal 8 MB pro Foto.",
+    photo_batch_size:"Die gesamte Auswahl ist zu groß. Maximal 80 MB pro Upload.",
     storage:"Der private Dateispeicher ist noch nicht konfiguriert.",
     album:"Das ausgewählte Album wurde nicht gefunden.",
   };
@@ -167,7 +168,7 @@ export default async function GalleryPage({
                   required
                 />
               </label>
-              <small>Mehrfachauswahl möglich · maximal 20 Fotos · JPG, PNG oder WebP · maximal 8 MB je Foto. Danach öffnet sich das Album.</small>
+              <small>Mehrfachauswahl möglich · maximal 20 Fotos · JPG, PNG oder WebP · maximal 8 MB je Foto und 80 MB pro Upload. Danach öffnet sich das Album.</small>
               <label>Titel<input name="title" placeholder="Optional · nur bei einem einzelnen Foto" /></label>
               <label>Gemeinsame Bildbeschreibung<textarea name="caption" rows={3} placeholder="Optional · wird auf alle ausgewählten Fotos angewendet" /></label>
               <button className="primary-button" disabled={albums.length===0}>Fotos hochladen</button>
