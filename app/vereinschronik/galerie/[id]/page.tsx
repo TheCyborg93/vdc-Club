@@ -85,7 +85,13 @@ export default async function AlbumPage({
       <ChronicleNav active="gallery" />
 
       {(query.uploaded || query.cover || query.photo_deleted) && (
-        <div className="form-success">Album wurde aktualisiert.</div>
+        <div className="form-success">
+          {query.uploaded
+            ? Number(query.uploaded) > 1
+              ? `${query.uploaded} Fotos wurden hochgeladen.`
+              : "Foto wurde hochgeladen."
+            : "Album wurde aktualisiert."}
+        </div>
       )}
 
       {honorRows.length>0 && (
@@ -121,17 +127,23 @@ export default async function AlbumPage({
         <section className="chronicle-gallery-manage">
           <article className="panel">
             <div className="panel-head">
-              <div><span className="eyebrow">Album</span><h2>Foto hinzufügen</h2></div>
+              <div><span className="eyebrow">Album</span><h2>Fotos hinzufügen</h2></div>
             </div>
             <form action={uploadPhotoAction} className="form-stack" encType="multipart/form-data">
               <input type="hidden" name="albumId" value={id} />
-              <label>Bild
-                <input name="file" type="file" accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp" required />
+              <label>Fotos
+                <input
+                  name="files"
+                  type="file"
+                  accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
+                  multiple
+                  required
+                />
               </label>
-              <small>JPG, PNG oder WebP · maximal 8 MB.</small>
-              <label>Titel<input name="title" placeholder="Optional" /></label>
-              <label>Bildbeschreibung<textarea name="caption" rows={3} placeholder="Optional" /></label>
-              <button className="primary-button">Foto hochladen</button>
+              <small>Mehrfachauswahl möglich · maximal 20 Fotos · JPG, PNG oder WebP · maximal 8 MB je Foto.</small>
+              <label>Titel<input name="title" placeholder="Optional · nur bei einem einzelnen Foto" /></label>
+              <label>Gemeinsame Bildbeschreibung<textarea name="caption" rows={3} placeholder="Optional · wird auf alle ausgewählten Fotos angewendet" /></label>
+              <button className="primary-button">Fotos hochladen</button>
             </form>
           </article>
 
