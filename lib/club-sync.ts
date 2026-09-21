@@ -107,6 +107,7 @@ function normalizeTc(data: Record<string, unknown>) {
       const ownTeam = home.isOwn === true ? home : away.isOwn === true ? away : {};
       const title = [text(home.name) || "Heim", text(away.name) || "Gast"].join(" – ");
       const description = [
+        home.isOwn === true ? "Heimspiel" : away.isOwn === true ? "Auswärtsspiel" : null,
         text(match.competition) || null,
         match.matchday != null ? `Spieltag ${text(match.matchday)}` : null,
         text(match.status) ? `Status ${text(match.status)}` : null,
