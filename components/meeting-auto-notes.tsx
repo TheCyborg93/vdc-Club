@@ -34,8 +34,26 @@ export function MeetingAutoNotes({
     return ()=>window.clearTimeout(timer);
   },[value,meetingId,agendaItemId]);
 
+  const templates=[
+    ["Zur Kenntnis genommen","Der Tagesordnungspunkt wurde zur Kenntnis genommen."],
+    ["Erledigt","Der Tagesordnungspunkt wurde abschließend behandelt."],
+    ["Vertagt","Der Tagesordnungspunkt wurde vertagt und wird in einer kommenden Vorstandssitzung erneut behandelt."],
+    ["Keine Entscheidung","Der Tagesordnungspunkt wurde beraten. Es wurde keine Entscheidung getroffen."],
+  ];
+
   return (
     <div className="meeting-autosave-notes">
+      <div className="meeting-note-templates">
+        {templates.map(([label,text])=>(
+          <button
+            type="button"
+            key={label}
+            onClick={()=>setValue(text)}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
       <textarea
         name="notes"
         rows={6}
