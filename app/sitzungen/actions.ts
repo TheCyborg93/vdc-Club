@@ -352,6 +352,7 @@ export async function addAttendeeAction(formData: FormData) {
       SELECT 1 FROM meetings m
       WHERE m.id=${meetingId}::uuid
         AND m.deleted_at IS NULL
+        AND m.status IN ('planned','running')
     )
     ON CONFLICT (meeting_id, member_id) DO NOTHING
   `;
@@ -493,7 +494,13 @@ export async function updateMeetingStatusAction(formData: FormData) {
           FROM meeting_attendees ma
           WHERE ma.meeting_id=m.id
             AND ma.attendance='invited'
-        ) AS unresolved_attendance
+        ) AS unresolved_attendance,
+        (
+          SELECT count(*)::int
+          FROM meeting_guests mg
+          WHERE mg.meeting_id=m.id
+            AND mg.attendance='invited'
+        ) AS unresolved_guest_attendance
       FROM meetings m
       LEFT JOIN agenda_items ai ON ai.meeting_id=m.id
       LEFT JOIN resolutions r ON r.agenda_item_id=ai.id
@@ -517,6 +524,9 @@ export async function updateMeetingStatusAction(formData: FormData) {
     }
     if (Number(check.unresolved_attendance ?? 0)>0) {
       redirect(`/sitzungen/${meetingId}?error=attendance_open`);
+    }
+    if (Number(check.unresolved_guest_attendance ?? 0)>0) {
+      redirect(`/sitzungen/${meetingId}?error=guest_attendance_open`);
     }
     if (Number(check.incomplete_votes ?? 0)>0) {
       redirect(`/sitzungen/${meetingId}?error=vote_incomplete`);
@@ -1290,6 +1300,11 @@ export async function addVoteExclusionAction(formData:FormData) {
       SELECT 1
       FROM agenda_items ai
       JOIN meetings m ON m.id=ai.meeting_id
+      JOIN meeting_attendees ma
+        ON ma.meeting_id=m.id
+       AND ma.member_id=${memberId}::uuid
+       AND ma.attendance='present'
+       AND ma.voting_eligible=true
       WHERE ai.id=${agendaItemId}::uuid
         AND ai.meeting_id=${meetingId}::uuid
         AND m.status='running'
@@ -1316,9 +1331,15 @@ export async function deleteVoteExclusionAction(formData:FormData) {
   const exclusionId=value(formData,"exclusionId");
 
   await sql`
-    DELETE FROM agenda_vote_exclusions
-    WHERE id=${exclusionId}::uuid
-      AND agenda_item_id=${agendaItemId}::uuid
+    DELETE FROM agenda_vote_exclusions ave
+    USING agenda_items ai,meetings m
+    WHERE ave.id=${exclusionId}::uuid
+      AND ave.agenda_item_id=${agendaItemId}::uuid
+      AND ai.id=ave.agenda_item_id
+      AND ai.meeting_id=${meetingId}::uuid
+      AND m.id=ai.meeting_id
+      AND m.status='running'
+      AND m.deleted_at IS NULL
   `;
 
   await writeAudit(actor.id,"agenda.vote_exclusion_removed","agenda_item",agendaItemId,{exclusionId});
@@ -1350,6 +1371,12 @@ export async function carryForwardAgendaItemAction(formData:FormData) {
       source.id
     FROM agenda_items source
     WHERE source.id=${sourceAgendaItemId}::uuid
+      AND EXISTS (
+        SELECT 1 FROM meetings target
+        WHERE target.id=${meetingId}::uuid
+          AND target.deleted_at IS NULL
+          AND target.status IN ('planned','running')
+      )
       AND NOT EXISTS (
         SELECT 1 FROM agenda_items existing
         WHERE existing.meeting_id=${meetingId}::uuid
@@ -1388,6 +1415,12 @@ export async function carryForwardTaskAction(formData:FormData) {
     FROM tasks task
     WHERE task.id=${sourceTaskId}::uuid
       AND task.deleted_at IS NULL
+      AND EXISTS (
+        SELECT 1 FROM meetings target
+        WHERE target.id=${meetingId}::uuid
+          AND target.deleted_at IS NULL
+          AND target.status IN ('planned','running')
+      )
       AND task.status IN ('open','in_progress','blocked')
       AND NOT EXISTS (
         SELECT 1 FROM agenda_items existing
