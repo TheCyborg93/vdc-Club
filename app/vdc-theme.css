@@ -3730,13 +3730,43 @@ body{
 
 /* ---- Resolution implementation register ------------------ */
 .resolution-filter-panel{
-  padding:13px;
+  padding:0;
+  overflow:hidden;
+}
+.resolution-filter-summary{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  padding:12px 14px;
+  cursor:pointer;
+  list-style:none;
+}
+.resolution-filter-summary::-webkit-details-marker{
+  display:none;
+}
+.resolution-filter-summary strong,
+.resolution-filter-summary span{
+  display:block;
+}
+.resolution-filter-summary>div>strong{
+  margin-top:2px;
+  color:#e6e1db;
+  font-size:10px;
+}
+.resolution-filter-summary>span{
+  color:#777378;
+  font-size:8px;
+}
+.resolution-filter-panel[open]>.resolution-filter-summary{
+  border-bottom:1px solid rgba(255,255,255,.07);
 }
 .resolution-filter-form{
   display:grid;
-  grid-template-columns:minmax(220px,1.8fr) minmax(120px,.7fr) minmax(150px,.8fr) auto auto;
+  grid-template-columns:minmax(220px,1.7fr) minmax(120px,.7fr) minmax(150px,.8fr) auto auto;
   gap:8px;
   align-items:end;
+  padding:12px 14px 14px;
 }
 .resolution-filter-form label{
   display:grid;
