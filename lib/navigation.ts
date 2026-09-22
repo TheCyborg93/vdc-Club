@@ -33,6 +33,7 @@ export const navigation: NavItem[] = [
 
   { href: "/aufgaben", label: "Aufgaben", short: "AU", group: "Organisation", permission: "tasks.read" },
   { href: "/sitzungen", label: "Sitzungen", short: "SI", group: "Organisation", permission: "meetings.read" },
+  { href: "/sitzungen-neu", label: "Sitzungen V3", short: "S3", group: "Organisation", permission: "meetings.read" },
   { href: "/beschluesse", label: "Beschlüsse", short: "BE", group: "Organisation", permission: "resolutions.read" },
   { href: "/umfragen", label: "Umfragen", short: "UM", group: "Organisation", permission: "surveys.read" },
   { href: "/dokumente", label: "Dokumente", short: "DO", group: "Organisation", permission: "documents.read" },
