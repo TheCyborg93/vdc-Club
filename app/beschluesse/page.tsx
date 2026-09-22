@@ -394,33 +394,44 @@ export default async function ResolutionsPage({
 
               <p className="resolution-text">{String(resolution.decision_text)}</p>
 
-              <div className="resolution-meta-grid">
-                <div><span>Ergebnis</span><strong>{resolution.decision_outcome==="accepted" ? "Angenommen" : resolution.decision_outcome==="rejected" ? "Abgelehnt" : "–"}</strong></div>
-                <div><span>Stimmberechtigt</span><strong>{Number(resolution.eligible_voters ?? 0)}</strong></div>
-                <div><span>Ausgeschlossen</span><strong>{Number(resolution.excluded_voters ?? 0)}</strong></div>
-                <div><span>Ja</span><strong>{Number(resolution.votes_yes)}</strong></div>
-                <div><span>Nein</span><strong>{Number(resolution.votes_no)}</strong></div>
-                <div><span>Enthaltung</span><strong>{Number(resolution.votes_abstain)}</strong></div>
-                <div><span>Abstimmungsart</span><strong>{voteMethodLabels[String(resolution.vote_method)] ?? "–"}</strong></div>
-                <div>
-                  <span>Umgesetzt am</span>
-                  <strong>{resolution.implemented_at ? formatDate(resolution.implemented_at) : "–"}</strong>
-                </div>
-              </div>
+              <details className="resolution-details-drawer">
+                <summary>
+                  <div>
+                    <strong>Beschlussdetails</strong>
+                    <span>Abstimmung, Stimmen & Umsetzungsnotiz</span>
+                  </div>
+                  <b>+</b>
+                </summary>
+                <div className="resolution-details-body">
+                  <div className="resolution-meta-grid">
+                    <div><span>Ergebnis</span><strong>{resolution.decision_outcome==="accepted" ? "Angenommen" : resolution.decision_outcome==="rejected" ? "Abgelehnt" : "–"}</strong></div>
+                    <div><span>Stimmberechtigt</span><strong>{Number(resolution.eligible_voters ?? 0)}</strong></div>
+                    <div><span>Ausgeschlossen</span><strong>{Number(resolution.excluded_voters ?? 0)}</strong></div>
+                    <div><span>Ja</span><strong>{Number(resolution.votes_yes)}</strong></div>
+                    <div><span>Nein</span><strong>{Number(resolution.votes_no)}</strong></div>
+                    <div><span>Enthaltung</span><strong>{Number(resolution.votes_abstain)}</strong></div>
+                    <div><span>Abstimmungsart</span><strong>{voteMethodLabels[String(resolution.vote_method)] ?? "–"}</strong></div>
+                    <div>
+                      <span>Umgesetzt am</span>
+                      <strong>{resolution.implemented_at ? formatDate(resolution.implemented_at) : "–"}</strong>
+                    </div>
+                  </div>
 
-              {resolution.vote_details && (
-                <div className="resolution-implementation-note">
-                  <span className="eyebrow">Namentliche Abstimmung</span>
-                  <p>{String(resolution.vote_details)}</p>
-                </div>
-              )}
+                  {resolution.vote_details && (
+                    <div className="resolution-implementation-note">
+                      <span className="eyebrow">Namentliche Abstimmung</span>
+                      <p>{String(resolution.vote_details)}</p>
+                    </div>
+                  )}
 
-              {resolution.implementation_notes && (
-                <div className="resolution-implementation-note">
-                  <span className="eyebrow">Umsetzungsnotiz</span>
-                  <p>{String(resolution.implementation_notes)}</p>
+                  {resolution.implementation_notes && (
+                    <div className="resolution-implementation-note">
+                      <span className="eyebrow">Umsetzungsnotiz</span>
+                      <p>{String(resolution.implementation_notes)}</p>
+                    </div>
+                  )}
                 </div>
-              )}
+              </details>
 
               {resolution.task_id ? (
                 <div className="resolution-task-box">
@@ -440,7 +451,12 @@ export default async function ResolutionsPage({
                     <b className={"status-badge status-"+String(resolution.task_status)}>
                       {taskStatusLabel(resolution.task_status)}
                     </b>
-                    <Link href="/aufgaben" className="mini-button">Aufgaben öffnen</Link>
+                    <Link
+                      href={resolution.task_overdue ? "/aufgaben?view=overdue" : "/aufgaben"}
+                      className="mini-button"
+                    >
+                      {resolution.task_overdue ? "Überfällige Aufgabe öffnen" : "Aufgaben öffnen"}
+                    </Link>
                   </div>
                 </div>
               ) : canCreateTasks && resolution.decision_outcome!=="rejected" && !["implemented","withdrawn"].includes(String(resolution.status)) ? (
@@ -507,44 +523,57 @@ export default async function ResolutionsPage({
               )}
 
               {canWrite && resolution.decision_outcome!=="rejected" && resolution.status!=="withdrawn" && (
-                <div className="resolution-actions">
-                  {resolution.status!=="open" && (
-                    <form action={updateResolutionStatusAction}>
-                      <input type="hidden" name="id" value={String(resolution.id)} />
-                      <input type="hidden" name="status" value="open" />
-                      <button className="mini-button">Offen</button>
-                    </form>
-                  )}
-
-                  {resolution.status!=="in_progress" && resolution.status!=="implemented" && (
+                <div className="resolution-workflow-actions">
+                  {resolution.status==="open" && (
                     <form action={updateResolutionStatusAction}>
                       <input type="hidden" name="id" value={String(resolution.id)} />
                       <input type="hidden" name="status" value="in_progress" />
-                      <button className="mini-button">In Umsetzung</button>
+                      <button className="primary-button">Umsetzung starten</button>
                     </form>
                   )}
 
-                  {resolution.status!=="implemented" && (
+                  {resolution.status==="in_progress" && (
                     <form action={updateResolutionStatusAction}>
                       <input type="hidden" name="id" value={String(resolution.id)} />
                       <input type="hidden" name="status" value="implemented" />
-                      <button className="mini-button task-done-button">Umgesetzt</button>
+                      <ConfirmSubmitButton
+                        message="Beschluss als vollständig umgesetzt markieren? Eine verknüpfte Folgeaufgabe wird ebenfalls erledigt."
+                        className="primary-button"
+                      >
+                        Als umgesetzt markieren
+                      </ConfirmSubmitButton>
                     </form>
                   )}
 
-                  <form action={updateResolutionStatusAction}>
-                    <input type="hidden" name="id" value={String(resolution.id)} />
-                    <input type="hidden" name="status" value="withdrawn" />
-                    <ConfirmSubmitButton
-                      message={
-                        "Beschluss „"+
-                        String(resolution.resolution_number ?? resolution.title)+
-                        "“ wirklich aufheben? Eine offene Folgeaufgabe wird abgebrochen."
-                      }
-                    >
-                      Aufheben
-                    </ConfirmSubmitButton>
-                  </form>
+                  {resolution.status==="implemented" && (
+                    <span className="resolution-workflow-complete">✓ Umsetzung abgeschlossen</span>
+                  )}
+
+                  <details className="resolution-more-actions">
+                    <summary>Weitere Aktionen</summary>
+                    <div>
+                      {resolution.status!=="open" && (
+                        <form action={updateResolutionStatusAction}>
+                          <input type="hidden" name="id" value={String(resolution.id)} />
+                          <input type="hidden" name="status" value="open" />
+                          <button className="mini-button">Wieder öffnen</button>
+                        </form>
+                      )}
+                      <form action={updateResolutionStatusAction}>
+                        <input type="hidden" name="id" value={String(resolution.id)} />
+                        <input type="hidden" name="status" value="withdrawn" />
+                        <ConfirmSubmitButton
+                          message={
+                            "Beschluss „"+
+                            String(resolution.resolution_number ?? resolution.title)+
+                            "“ wirklich aufheben? Eine offene Folgeaufgabe wird abgebrochen."
+                          }
+                        >
+                          Aufheben
+                        </ConfirmSubmitButton>
+                      </form>
+                    </div>
+                  </details>
                 </div>
               )}
             </div>
