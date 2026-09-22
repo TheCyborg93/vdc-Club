@@ -487,7 +487,7 @@ export default async function MinutesPage({
         </header>
 
         <section className="minutes-meta">
-          <div><span>Beginn</span><strong>{formatDateTime(meeting.starts_at)}</strong></div>
+          <div><span>Beginn</span><strong>{formatDateTime(meeting.opened_at ?? meeting.starts_at)}</strong></div>
           <div><span>Ende</span><strong>{meeting.ended_at ? formatDateTime(meeting.ended_at) : "Noch nicht beendet"}</strong></div>
           <div><span>Ort</span><strong>{meeting.location ? String(meeting.location) : "–"}</strong></div>
           <div><span>Status</span><strong>{minutesStatusLabels[minutesStatus] ?? minutesStatus}</strong></div>
@@ -512,13 +512,33 @@ export default async function MinutesPage({
           </div>
         </section>
 
+        <section className="minutes-section minutes-formalities">
+          <h2>Formale Feststellungen</h2>
+          <div className="minutes-formality-grid">
+            <div><span>Sitzungsart</span><strong>{meetingModeLabels[String(meeting.meeting_mode)] ?? String(meeting.meeting_mode)}</strong></div>
+            <div><span>Einladung versendet</span><strong>{meeting.invited_at ? formatShortDateTime(meeting.invited_at) : "–"}</strong></div>
+            <div><span>Einladungsweg</span><strong>{meeting.invitation_method ? String(meeting.invitation_method) : "–"}</strong></div>
+            <div><span>Fristgerecht</span><strong>{meeting.invitation_timely===true ? "Ja" : meeting.invitation_timely===false ? "Nein / Abweichung" : "Nicht dokumentiert"}</strong></div>
+            <div><span>Tagesordnung mit Einladung</span><strong>{meeting.agenda_sent_with_invitation===true ? "Ja" : meeting.agenda_sent_with_invitation===false ? "Nein / Abweichung" : "Nicht dokumentiert"}</strong></div>
+            <div><span>Beschlussfähigkeit</span><strong>{meeting.quorum_confirmed===true ? "Festgestellt" : meeting.quorum_confirmed===false ? "Nicht gegeben" : "Nicht dokumentiert"}</strong></div>
+            <div><span>Anwesend</span><strong>{present.length}</strong></div>
+            <div><span>Stimmberechtigt anwesend</span><strong>{votingPresent.length}</strong></div>
+          </div>
+          {meeting.quorum_basis && <p><strong>Grundlage:</strong> {String(meeting.quorum_basis)}</p>}
+          {meeting.quorum_note && <p><strong>Beschlussfähigkeit:</strong> {String(meeting.quorum_note)}</p>}
+          {meeting.formalities_note && <p><strong>Besonderheiten:</strong> {String(meeting.formalities_note)}</p>}
+        </section>
+
         <section className="minutes-section">
           <h2>Teilnehmer</h2>
           <div className="minutes-attendance-grid">
             <div>
               <h3>Anwesend</h3>
               {present.length === 0 ? <p>–</p> : present.map((row) => (
-                <p key={`${row.first_name}-${row.last_name}`}>{String(row.first_name)} {String(row.last_name)}</p>
+                <p key={`${row.first_name}-${row.last_name}`}>
+                  {String(row.first_name)} {String(row.last_name)}
+                  {row.voting_eligible===false ? " · nicht stimmberechtigt" : ""}
+                </p>
               ))}
             </div>
             <div>
@@ -535,6 +555,21 @@ export default async function MinutesPage({
             </div>
           </div>
         </section>
+
+        {guests.length>0 && (
+          <section className="minutes-section">
+            <h2>Gäste</h2>
+            <div className="minutes-guest-list">
+              {guests.map((guest)=>(
+                <p key={String(guest.id)}>
+                  <strong>{String(guest.name)}</strong>
+                  {guest.organization ? " · "+String(guest.organization) : ""}
+                  {guest.note ? " · "+String(guest.note) : ""}
+                </p>
+              ))}
+            </div>
+          </section>
+        )}
 
         {meeting.minutes_intro && (
           <section className="minutes-section">
@@ -560,20 +595,41 @@ export default async function MinutesPage({
                 <div className="minutes-top-title">
                   <span>TOP {String(item.position).padStart(2, "0")}</span>
                   <h3>{String(item.title)}</h3>
+                  {!item.announced_with_invitation && <b className="minutes-spontaneous">nachträglich ergänzt</b>}
                 </div>
                 {item.description && <p>{String(item.description)}</p>}
                 {item.notes && <p><strong>Ergebnis:</strong> {String(item.notes)}</p>}
+                {!item.announced_with_invitation && item.decision_basis_note && (
+                  <p><strong>Formale Begründung:</strong> {String(item.decision_basis_note)}</p>
+                )}
+
+                {exclusions.filter((entry)=>String(entry.agenda_item_id)===String(item.id)).length>0 && (
+                  <div className="minutes-exclusions">
+                    <strong>Von Beratung/Abstimmung ausgeschlossen:</strong>
+                    {exclusions
+                      .filter((entry)=>String(entry.agenda_item_id)===String(item.id))
+                      .map((entry)=>(
+                        <span key={String(entry.id)}>
+                          {String(entry.person_name)} · {String(entry.reason)}
+                        </span>
+                      ))}
+                  </div>
+                )}
 
                 {item.resolution_number && (
                   <div className="minutes-resolution">
                     <div className="minutes-resolution-head">
                       <strong>Beschluss {String(item.resolution_number)}</strong>
-                      <span>{String(item.resolution_status)}</span>
+                      <span>{outcomeLabels[String(item.decision_outcome)] ?? String(item.resolution_status)}</span>
                     </div>
                     <h4>{String(item.resolution_title)}</h4>
                     <p>{String(item.decision_text)}</p>
                     <p className="minutes-vote">
-                      Abstimmung: {Number(item.votes_yes)} Ja · {Number(item.votes_no)} Nein · {Number(item.votes_abstain)} Enthaltung
+                      Abstimmung: {voteMethodLabels[String(item.vote_method)] ?? "–"} ·
+                      {" "}{Number(item.eligible_voters ?? 0)} stimmberechtigt ·
+                      {" "}{Number(item.excluded_voters ?? 0)} ausgeschlossen ·
+                      {" "}{Number(item.votes_yes)} Ja · {Number(item.votes_no)} Nein · {Number(item.votes_abstain)} Enthaltung ·
+                      {" "}<strong>{outcomeLabels[String(item.decision_outcome)] ?? "Ergebnis offen"}</strong>
                     </p>
                     {item.task_title && (
                       <div className="minutes-task">
@@ -587,6 +643,20 @@ export default async function MinutesPage({
                     )}
                   </div>
                 )}
+
+                {attachments.filter((doc)=>String(doc.agenda_item_id)===String(item.id)).length>0 && (
+                  <div className="minutes-attachments">
+                    <strong>Anlagen zu diesem TOP:</strong>
+                    {attachments
+                      .filter((doc)=>String(doc.agenda_item_id)===String(item.id))
+                      .map((doc,index)=>(
+                        <span key={String(doc.id)}>
+                          Anlage {index+1}: {String(doc.title)}
+                          {doc.original_filename ? " ("+String(doc.original_filename)+")" : ""}
+                        </span>
+                      ))}
+                  </div>
+                )}
               </section>
             ))}
           </div>
@@ -596,6 +666,13 @@ export default async function MinutesPage({
           <section className="minutes-section">
             <h2>Abschluss</h2>
             <p>{String(meeting.minutes_closing)}</p>
+          </section>
+        )}
+
+        {meeting.next_meeting_at && (
+          <section className="minutes-section">
+            <h2>Nächster Sitzungstermin</h2>
+            <p>{formatDateTime(meeting.next_meeting_at)}</p>
           </section>
         )}
 
