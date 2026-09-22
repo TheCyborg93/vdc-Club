@@ -15,6 +15,7 @@ export const resolutionStatusLabels:Record<string,string>={
   in_progress:"In Umsetzung",
   implemented:"Umgesetzt",
   withdrawn:"Aufgehoben",
+  rejected:"Abgelehnt",
 };
 
 export const sponsorStatusLabels:Record<string,string>={
