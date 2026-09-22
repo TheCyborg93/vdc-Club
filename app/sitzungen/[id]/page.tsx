@@ -386,7 +386,8 @@ export default async function MeetingDetailPage({
   const canResolve=hasPermission(actor.roles,"resolutions.write");
   const canCreateTasks=hasPermission(actor.roles,"tasks.write");
   const canDocumentsWrite=hasPermission(actor.roles,"documents.write");
-  const minutesStatus=String(meeting.minutes_status ?? "draft");
+  const rawMinutesStatus=String(meeting.minutes_status ?? "draft");
+  const minutesStatus=rawMinutesStatus==="approved" ? "archived" : rawMinutesStatus;
 
   const invitedIds=new Set(attendees.map((row)=>String(row.member_id)));
   const availableMembers=members.filter((row)=>!invitedIds.has(String(row.id)));
@@ -520,7 +521,7 @@ export default async function MeetingDetailPage({
             <Link href={`/sitzungen/${id}/protokoll`} className="primary-button">Protokoll öffnen</Link>
           )}
 
-          {canWrite && meeting.status==="completed" && minutesStatus!=="archived" && (
+          {canWrite && meeting.status==="completed" && !["approved","archived"].includes(rawMinutesStatus) && (
             <details className="meeting-hero-more">
               <summary className="mini-button">•••</summary>
               <div>
