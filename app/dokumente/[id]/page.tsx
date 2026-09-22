@@ -30,6 +30,7 @@ const errorLabels:Record<string,string>={
   storage:"Der private Dokumentenspeicher ist nicht verfügbar.",
   upload:"Die neue Datei konnte nicht hochgeladen werden.",
   protected_source:"Automatisch erzeugte interne Protokolle können nicht durch eine Datei ersetzt werden.",
+  protocol_managed:"Dieses Sitzungsprotokoll wird automatisch über den Sitzungsworkflow verwaltet.",
 };
 
 function formatDate(value:unknown) {
@@ -162,7 +163,9 @@ export default async function DocumentDetailPage({
   const doc=documentRows[0];
   if (!doc) notFound();
 
-  const canReplace=canWrite && doc.storage_type!=="internal" && doc.status!=="archived";
+  const isMeetingMinutes=doc.category==="Protokoll" && Boolean(doc.meeting_id);
+  const canManage=canWrite && !isMeetingMinutes;
+  const canReplace=canManage && doc.storage_type!=="internal" && doc.status!=="archived";
 
   const currentSource=(
     <>
@@ -197,14 +200,30 @@ export default async function DocumentDetailPage({
           <h1>{String(doc.title)}</h1>
           <p>Dokumentdetails, Verknüpfungen und Versionshistorie.</p>
         </div>
-        <span className={"document-status document-"+String(doc.status)}>
-          {statusLabels[String(doc.status)] ?? String(doc.status)}
-        </span>
+        <div className="document-detail-status">
+          {isMeetingMinutes && <span className="document-system-chip">Systemgeführt</span>}
+          <span className={"document-status document-"+String(doc.status)}>
+            {statusLabels[String(doc.status)] ?? String(doc.status)}
+          </span>
+        </div>
       </section>
 
       {query.saved && <div className="form-success">Dokumentdaten wurden gespeichert.</div>}
       {query.version && <div className="form-success">Neue Dokumentversion wurde hinterlegt. Der vorherige Stand bleibt erhalten.</div>}
       {query.error && <div className="form-error">{errorLabels[query.error] ?? "Die Aktion konnte nicht ausgeführt werden."}</div>}
+
+      {isMeetingMinutes && (
+        <section className="document-managed-protocol">
+          <div>
+            <span className="eyebrow">Sitzungsprotokoll</span>
+            <strong>Wird automatisch über die Sitzung verwaltet</strong>
+            <small>Status, Freigabe und Archivierung werden ausschließlich im Sitzungsworkflow geändert.</small>
+          </div>
+          <Link href={"/sitzungen/"+String(doc.meeting_id)+"/protokoll"} className="primary-button">
+            Zur Protokollansicht
+          </Link>
+        </section>
+      )}
 
       <section className="document-detail-summary">
         <article className="panel document-current-card">
@@ -253,7 +272,7 @@ export default async function DocumentDetailPage({
         </article>
       </section>
 
-      {canWrite && (
+      {canManage && (
         <section className="management-grid">
           <article className="panel">
             <div className="panel-head">
