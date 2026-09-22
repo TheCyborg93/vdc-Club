@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { AnimatePresence, motion } from "motion/react";
+import { AnimatePresence, motion, useReducedMotion } from "motion/react";
 import {
   Activity,
   Archive,
@@ -221,7 +221,7 @@ const logoutButton = css({
   gap: "2",
   w: "full",
   mt: "3",
-  h: "9",
+  h: { base: "[44px]", md: "9" },
   border: "1px solid",
   borderColor: "surface.border",
   borderRadius: "l1",
@@ -261,8 +261,8 @@ const iconButton = css({
   display: "grid",
   placeItems: "center",
   flexShrink: 0,
-  w: "9",
-  h: "9",
+  w: { base: "[44px]", md: "9" },
+  h: { base: "[44px]", md: "9" },
   border: "1px solid",
   borderColor: "surface.border",
   borderRadius: "l1",
@@ -380,7 +380,9 @@ const notificationCritical = css({ "& i": { background: "status.danger" } });
 const notificationWarning = css({ "& i": { background: "status.warning" } });
 const notificationEmpty = css({ p: "4", color: "fg.muted", fontSize: "xs" });
 const notificationAll = css({
-  display: "block",
+  display: "grid",
+  placeItems: "center",
+  minH: "[44px]",
   p: "3",
   color: "brand.hover",
   textAlign: "center",
@@ -455,6 +457,7 @@ export function AppShell({
   notifications: { items: ShellNotification[]; unread: number };
 }) {
   const pathname = usePathname();
+  const reducedMotion = useReducedMotion();
   const [open, setOpen] = useState(false);
   const [collapsed, setCollapsed] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
@@ -601,10 +604,10 @@ export function AppShell({
                 {notificationsOpen && (
                   <motion.div
                     className={notificationPanel}
-                    initial={{ opacity: 0, y: -6, scale: 0.98 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: -4, scale: 0.985 }}
-                    transition={{ duration: 0.16 }}
+                    initial={reducedMotion ? false : { opacity: 0, y: -6, scale: 0.98 }}
+                    animate={reducedMotion ? undefined : { opacity: 1, y: 0, scale: 1 }}
+                    exit={reducedMotion ? undefined : { opacity: 0, y: -4, scale: 0.985 }}
+                    transition={reducedMotion ? undefined : { duration: 0.16 }}
                   >
                     <div className={notificationHead}>
                       <div><span>Persönlich</span><strong>Hinweise</strong></div>
