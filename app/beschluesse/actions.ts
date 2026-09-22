@@ -75,7 +75,7 @@ export async function updateResolutionStatusAction(formData: FormData) {
       WHERE source_type='resolution'
         AND source_id=${id}::uuid
         AND deleted_at IS NULL
-        AND status NOT IN ('done','cancelled')
+        AND status<>'cancelled'
     `;
   } else if (status==="open") {
     await sql`
@@ -84,7 +84,7 @@ export async function updateResolutionStatusAction(formData: FormData) {
       WHERE source_type='resolution'
         AND source_id=${id}::uuid
         AND deleted_at IS NULL
-        AND status NOT IN ('done','cancelled')
+        AND status<>'cancelled'
     `;
   }
 
@@ -163,6 +163,7 @@ export async function createResolutionTaskAction(formData: FormData) {
       SELECT 1 FROM resolutions r
       WHERE r.id=${resolutionId}::uuid
         AND COALESCE(r.decision_outcome,'accepted')='accepted'
+        AND r.status NOT IN ('implemented','withdrawn')
     )
     AND NOT EXISTS (
       SELECT 1
@@ -173,6 +174,10 @@ export async function createResolutionTaskAction(formData: FormData) {
     )
     RETURNING id::text
   `;
+
+  if (!rows.length) {
+    redirect("/beschluesse?error=task_unavailable");
+  }
 
   if (rows.length) {
     await sql`
