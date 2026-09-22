@@ -455,6 +455,7 @@ export async function updateMeetingStatusAction(formData: FormData) {
              OR r.eligible_voters IS NULL
              OR r.decision_outcome IS NULL
              OR r.eligible_voters <> (r.votes_yes+r.votes_no+r.votes_abstain)
+             OR (r.vote_method='roll_call' AND NULLIF(trim(r.vote_details),'') IS NULL)
         )::int AS incomplete_votes,
         count(r.id) FILTER (
           WHERE ai.announced_with_invitation=false
