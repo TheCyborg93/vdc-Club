@@ -677,8 +677,10 @@ export async function getDashboardData(
         AND decision_outcome IS NULL
         AND eligible_voters IS NULL
       )
+        AND status IN ('open','in_progress')
+        AND COALESCE(decision_outcome,'accepted')<>'rejected'
       ORDER BY
-        CASE status WHEN 'open' THEN 0 WHEN 'in_progress' THEN 1 WHEN 'implemented' THEN 2 ELSE 3 END,
+        CASE status WHEN 'in_progress' THEN 0 ELSE 1 END,
         decided_at DESC
       LIMIT 3
     `;
@@ -687,6 +689,11 @@ export async function getDashboardData(
       SELECT id::text,title,category,meeting_id::text,status,review_on,valid_until
       FROM documents
       WHERE deleted_at IS NULL
+        AND (
+          category<>'Protokoll'
+          OR status<>'review'
+          OR ${["chair","vice_chair","board","admin"].includes(options.primaryRole ?? "")}
+        )
         AND (
           status='review'
           OR (review_on IS NOT NULL AND review_on<=CURRENT_DATE+interval '30 days')
