@@ -6725,3 +6725,306 @@ body{
     display:grid;
   }
 }
+
+
+/* ============================================================
+   Meetings mobile typography refinement · 2026-09
+   Improves readability without changing meeting workflow/layout.
+   ============================================================ */
+
+body{
+  -webkit-font-smoothing:antialiased;
+  -moz-osx-font-smoothing:grayscale;
+  text-rendering:optimizeLegibility;
+}
+
+.topbar-title strong{
+  color:#f7f4ee;
+  font-weight:850;
+  letter-spacing:-.018em;
+  line-height:1.15;
+}
+
+.meetings-overview-page{
+  color:#f4f1eb;
+}
+
+.meetings-overview-page .eyebrow{
+  color:#f05a43;
+  font-weight:900;
+  letter-spacing:.12em;
+  line-height:1.2;
+}
+
+.meetings-overview-hero h1,
+.meeting-focus-overview-copy h2,
+.meetings-section-head h2{
+  color:#f8f5ef;
+  font-weight:900;
+  letter-spacing:-.028em;
+  line-height:1.12;
+}
+
+.meetings-overview-hero p,
+.meeting-focus-overview-copy>p{
+  color:#b7b2ae!important;
+  font-size:13px;
+  line-height:1.55;
+}
+
+.meetings-kpi-strip span{
+  color:#aaa5a2;
+  font-size:10px;
+  font-weight:800;
+  letter-spacing:.075em;
+  line-height:1.25;
+}
+
+.meetings-kpi-strip strong{
+  color:#f8f5ef;
+  font-weight:900;
+  line-height:1;
+}
+
+.meetings-kpi-strip small{
+  color:#8faaa4;
+  font-size:10px;
+  font-weight:600;
+  line-height:1.35;
+}
+
+.meetings-section-head h2{
+  margin-top:5px;
+}
+
+.meetings-section-head>span{
+  color:#b2adaa;
+  font-weight:700;
+}
+
+.meetings-overview-page .empty-state{
+  color:#aaa6a3;
+  font-size:13px;
+  line-height:1.55;
+}
+
+.meeting-overview-title strong{
+  color:#f2eee8;
+  font-weight:850;
+  line-height:1.3;
+}
+
+.meeting-overview-title span,
+.meeting-overview-readiness span,
+.meeting-overview-readiness.is-protocol small,
+.meeting-overview-state .minutes-status{
+  color:#aaa6a3;
+  line-height:1.4;
+}
+
+.meeting-overview-badges span{
+  color:#aaa6a3;
+  font-weight:650;
+}
+
+.meeting-create-drawer>summary strong{
+  color:#eeeae4;
+  font-weight:850;
+  line-height:1.3;
+}
+
+.meeting-create-form label{
+  display:grid;
+  gap:7px;
+  min-width:0;
+  color:#d8d3cd;
+  font-size:12px;
+  font-weight:750;
+  line-height:1.25;
+}
+
+.meeting-create-form input,
+.meeting-create-form textarea{
+  width:100%;
+  min-width:0;
+  border:1px solid rgba(255,255,255,.13);
+  border-radius:9px;
+  background:#101216;
+  color:#f5f2ec;
+  font:inherit;
+  font-size:13px;
+  font-weight:550;
+  line-height:1.45;
+  outline:none;
+}
+
+.meeting-create-form input{
+  min-height:42px;
+  padding:9px 11px;
+}
+
+.meeting-create-form textarea{
+  min-height:92px;
+  padding:10px 11px;
+  resize:vertical;
+}
+
+.meeting-create-form input::placeholder,
+.meeting-create-form textarea::placeholder{
+  color:#817e80;
+  opacity:1;
+  font-weight:500;
+}
+
+.meeting-create-form input:focus,
+.meeting-create-form textarea:focus{
+  border-color:rgba(230,52,38,.58);
+  box-shadow:0 0 0 3px rgba(230,52,38,.10);
+}
+
+.meeting-create-form .primary-button,
+.meetings-overview-hero .primary-button,
+.meeting-focus-overview-actions .primary-button{
+  font-weight:900;
+  letter-spacing:-.012em;
+}
+
+.meetings-history-section{
+  opacity:1;
+}
+
+@media(max-width:720px){
+  .topbar-title strong{
+    font-size:15px;
+    line-height:1.1;
+  }
+
+  .meetings-overview-page{
+    gap:18px;
+  }
+
+  .meetings-overview-page .eyebrow{
+    font-size:10px;
+    letter-spacing:.11em;
+  }
+
+  .meetings-overview-hero h1{
+    font-size:29px;
+    line-height:1.04;
+  }
+
+  .meetings-overview-hero p,
+  .meeting-focus-overview-copy>p{
+    font-size:14px;
+  }
+
+  .meetings-kpi-strip>article{
+    min-height:112px;
+    padding:14px;
+  }
+
+  .meetings-kpi-strip span{
+    font-size:10px;
+  }
+
+  .meetings-kpi-strip strong{
+    margin:8px 0 7px;
+    font-size:27px;
+  }
+
+  .meetings-kpi-strip small{
+    font-size:11px;
+    line-height:1.3;
+  }
+
+  .meetings-section-head{
+    padding-bottom:14px;
+  }
+
+  .meetings-section-head h2{
+    font-size:21px;
+    line-height:1.15;
+  }
+
+  .meetings-section-head>span{
+    min-width:32px;
+    height:32px;
+    font-size:11px;
+  }
+
+  .meetings-overview-page .empty-state{
+    padding:22px 0;
+    font-size:14px;
+    line-height:1.5;
+  }
+
+  .meeting-create-drawer>summary{
+    padding:15px 16px;
+  }
+
+  .meeting-create-drawer>summary strong{
+    margin-top:5px;
+    font-size:14px;
+  }
+
+  .meeting-create-form{
+    gap:14px;
+    padding:16px;
+  }
+
+  .meeting-create-form label{
+    gap:7px;
+    font-size:13px;
+  }
+
+  .meeting-create-form input,
+  .meeting-create-form textarea{
+    font-size:16px;
+  }
+
+  .meeting-create-form input{
+    min-height:46px;
+    padding:10px 12px;
+  }
+
+  .meeting-create-form textarea{
+    min-height:100px;
+    padding:11px 12px;
+  }
+
+  .meeting-create-form .primary-button,
+  .meetings-overview-hero .primary-button{
+    min-height:48px;
+    font-size:16px;
+  }
+
+  .meeting-overview-title strong{
+    font-size:14px;
+  }
+
+  .meeting-overview-title span{
+    margin-top:4px;
+    font-size:11px;
+  }
+
+  .meeting-overview-badges span,
+  .meeting-overview-readiness span,
+  .meeting-overview-readiness.is-protocol small,
+  .meeting-overview-state .minutes-status{
+    font-size:10px;
+  }
+}
+
+@media(max-width:420px){
+  .meetings-kpi-strip>article{
+    min-height:108px;
+  }
+
+  .meetings-section-head h2{
+    font-size:20px;
+  }
+
+  .meeting-create-form{
+    padding:15px;
+  }
+}
