@@ -116,10 +116,6 @@ export async function addAgendaItemAction(formData: FormData) {
   const meetingId = value(formData, "meetingId");
   const title = value(formData, "title");
   const description = value(formData, "description");
-  const announcementStatus=value(formData,"announcementStatus") || "announced";
-  const announcedWithInvitation=announcementStatus!=="spontaneous";
-  const decisionBasisNote=value(formData,"decisionBasisNote");
-
   if (!meetingId || !title) redirect(`/sitzungen/${meetingId}?error=missing`);
 
   await sql`
@@ -129,20 +125,16 @@ export async function addAgendaItemAction(formData: FormData) {
     )
     SELECT
       ${meetingId}::uuid,
-      COALESCE(MAX(position), 0) + 1,
+      COALESCE((SELECT MAX(ai.position) FROM agenda_items ai WHERE ai.meeting_id=m.id), 0) + 1,
       ${title},
       ${description || null},
       'open',
-      ${announcedWithInvitation},
-      ${decisionBasisNote || null}
-    FROM agenda_items
-    WHERE meeting_id = ${meetingId}::uuid
-      AND EXISTS (
-        SELECT 1 FROM meetings m
-        WHERE m.id=${meetingId}::uuid
-          AND m.deleted_at IS NULL
-          AND m.status IN ('planned','running')
-      )
+      (m.status='planned' AND m.invited_at IS NULL),
+      NULL
+    FROM meetings m
+    WHERE m.id=${meetingId}::uuid
+      AND m.deleted_at IS NULL
+      AND m.status IN ('planned','running')
   `;
 
   revalidatePath(`/sitzungen/${meetingId}`);
@@ -431,6 +423,167 @@ export async function updateAttendanceAction(formData: FormData) {
   redirect(`/sitzungen/${meetingId}`);
 }
 
+export async function startMeetingAction(formData:FormData) {
+  const actor=await requirePermission("meetings.write");
+  const sql=getDb();
+  if (!sql) redirect("/sitzungen?error=database");
+
+  const meetingId=value(formData,"meetingId");
+  const quorumRaw=value(formData,"quorumConfirmed");
+  const quorumConfirmed=quorumRaw==="yes" ? true : quorumRaw==="no" ? false : null;
+  const quorumBasis=value(formData,"quorumBasis");
+  const quorumNote=value(formData,"quorumNote");
+
+  if (quorumConfirmed==null) {
+    redirect(`/sitzungen/${meetingId}?error=start_quorum`);
+  }
+
+  const meetingRows=await sql`
+    SELECT
+      id::text,status,chair_member_id::text,minute_taker_member_id::text,
+      invited_at,invitation_method,invitation_timely,agenda_sent_with_invitation
+    FROM meetings
+    WHERE id=${meetingId}::uuid
+      AND deleted_at IS NULL
+    LIMIT 1
+  `;
+  const meeting=meetingRows[0];
+  if (!meeting || String(meeting.status)!=="planned") {
+    redirect(`/sitzungen/${meetingId}?error=meeting_locked`);
+  }
+  if (
+    !meeting.chair_member_id ||
+    !meeting.minute_taker_member_id ||
+    !meeting.invited_at ||
+    !String(meeting.invitation_method ?? "").trim() ||
+    meeting.invitation_timely==null ||
+    meeting.agenda_sent_with_invitation==null
+  ) {
+    redirect(`/sitzungen/${meetingId}?error=start_preparation`);
+  }
+
+  const [attendeeRows,guestRows,agendaRows]=await Promise.all([
+    sql`
+      SELECT member_id::text
+      FROM meeting_attendees
+      WHERE meeting_id=${meetingId}::uuid
+      ORDER BY member_id
+    `,
+    sql`
+      SELECT id::text
+      FROM meeting_guests
+      WHERE meeting_id=${meetingId}::uuid
+      ORDER BY id
+    `,
+    sql`
+      SELECT id::text
+      FROM agenda_items
+      WHERE meeting_id=${meetingId}::uuid
+      ORDER BY position
+    `,
+  ]);
+
+  if (!attendeeRows.length) redirect(`/sitzungen/${meetingId}?error=start_attendees`);
+  if (!agendaRows.length) redirect(`/sitzungen/${meetingId}?error=start_agenda`);
+
+  const attendeeUpdates=attendeeRows.map((row)=>{
+    const memberId=String(row.member_id);
+    const attendance=value(formData,`attendee:${memberId}`);
+    if (!["present","absent","excused"].includes(attendance)) return null;
+    return {memberId,attendance};
+  });
+  if (attendeeUpdates.some((row)=>row==null)) {
+    redirect(`/sitzungen/${meetingId}?error=start_attendance`);
+  }
+
+  const guestUpdates=guestRows.map((row)=>{
+    const guestId=String(row.id);
+    const attendance=value(formData,`guest:${guestId}`);
+    if (!["present","absent"].includes(attendance)) return null;
+    return {guestId,attendance};
+  });
+  if (guestUpdates.some((row)=>row==null)) {
+    redirect(`/sitzungen/${meetingId}?error=start_guest_attendance`);
+  }
+
+  const presentIds=new Set(
+    attendeeUpdates
+      .filter((row)=>row?.attendance==="present")
+      .map((row)=>row?.memberId),
+  );
+  if (
+    !presentIds.has(String(meeting.chair_member_id)) ||
+    !presentIds.has(String(meeting.minute_taker_member_id))
+  ) {
+    redirect(`/sitzungen/${meetingId}?error=start_officers_present`);
+  }
+
+  for (const row of attendeeUpdates) {
+    if (!row) continue;
+    await sql`
+      UPDATE meeting_attendees
+      SET attendance=${row.attendance}
+      WHERE meeting_id=${meetingId}::uuid
+        AND member_id=${row.memberId}::uuid
+    `;
+  }
+  for (const row of guestUpdates) {
+    if (!row) continue;
+    await sql`
+      UPDATE meeting_guests
+      SET attendance=${row.attendance}
+      WHERE meeting_id=${meetingId}::uuid
+        AND id=${row.guestId}::uuid
+    `;
+  }
+
+  const started=await sql`
+    UPDATE meetings
+    SET
+      status='running',
+      opened_at=now(),
+      ended_at=NULL,
+      quorum_confirmed=${quorumConfirmed},
+      quorum_basis=${quorumBasis || null},
+      quorum_note=${quorumNote || null},
+      updated_at=now()
+    WHERE id=${meetingId}::uuid
+      AND status='planned'
+      AND deleted_at IS NULL
+    RETURNING id::text
+  `;
+  if (!started.length) redirect(`/sitzungen/${meetingId}?error=meeting_locked`);
+
+  const firstAgenda=await sql`
+    UPDATE agenda_items
+    SET status='active'
+    WHERE id=(
+      SELECT id
+      FROM agenda_items
+      WHERE meeting_id=${meetingId}::uuid
+        AND status='open'
+      ORDER BY position
+      LIMIT 1
+    )
+    RETURNING id::text
+  `;
+
+  await writeAudit(actor.id,"meeting.started","meeting",meetingId,{
+    quorumConfirmed,
+    attendees:attendeeUpdates.length,
+    guests:guestUpdates.length,
+  });
+
+  revalidatePath(`/sitzungen/${meetingId}`);
+  revalidatePath("/sitzungen");
+  revalidatePath("/");
+  redirect(
+    firstAgenda[0]?.id
+      ? `/sitzungen/${meetingId}?top=${String(firstAgenda[0].id)}&started=1`
+      : `/sitzungen/${meetingId}?started=1`,
+  );
+}
+
 export async function updateMeetingStatusAction(formData: FormData) {
   const actor=await requirePermission("meetings.write");
   const sql=getDb();
@@ -438,6 +591,8 @@ export async function updateMeetingStatusAction(formData: FormData) {
 
   const meetingId=value(formData,"meetingId");
   const statusRaw=value(formData,"status");
+  const minutesClosing=value(formData,"minutesClosing");
+  const nextMeetingAt=value(formData,"nextMeetingAt");
   const status=["planned","running","completed","cancelled"].includes(statusRaw)
     ? statusRaw
     : "planned";
@@ -571,6 +726,15 @@ export async function updateMeetingStatusAction(formData: FormData) {
         WHEN ${status}='running' AND status='completed' AND minutes_status<>'archived'
           THEN 'Sitzung wurde wieder geöffnet. Protokoll muss erneut geprüft werden.'
         ELSE minutes_return_note
+      END,
+      minutes_closing=CASE
+        WHEN ${status}='completed' THEN NULLIF(${minutesClosing},'')
+        ELSE minutes_closing
+      END,
+      next_meeting_at=CASE
+        WHEN ${status}='completed' AND ${nextMeetingAt}<>'' THEN (${nextMeetingAt}::timestamp AT TIME ZONE 'Europe/Berlin')
+        WHEN ${status}='completed' THEN NULL
+        ELSE next_meeting_at
       END,
       updated_at=now()
     WHERE id=${meetingId}::uuid
@@ -1153,16 +1317,11 @@ export async function updateMeetingFormalitiesAction(formData:FormData) {
   const invitationMethod=value(formData,"invitationMethod");
   const invitationTimelyRaw=value(formData,"invitationTimely");
   const agendaSentRaw=value(formData,"agendaSentWithInvitation");
-  const quorumRaw=value(formData,"quorumConfirmed");
-  const quorumNote=value(formData,"quorumNote");
-  const quorumBasis=value(formData,"quorumBasis");
   const formalitiesNote=value(formData,"formalitiesNote");
-  const nextMeetingAt=value(formData,"nextMeetingAt");
 
   const boolOrNull=(raw:string) => raw==="yes" ? true : raw==="no" ? false : null;
   const invitationTimely=boolOrNull(invitationTimelyRaw);
   const agendaSentWithInvitation=boolOrNull(agendaSentRaw);
-  const quorumConfirmed=boolOrNull(quorumRaw);
 
   const rows=await sql`
     UPDATE meetings
@@ -1172,11 +1331,7 @@ export async function updateMeetingFormalitiesAction(formData:FormData) {
       invitation_method=${invitationMethod || null},
       invitation_timely=${invitationTimely},
       agenda_sent_with_invitation=${agendaSentWithInvitation},
-      quorum_confirmed=${quorumConfirmed},
-      quorum_note=${quorumNote || null},
-      quorum_basis=${quorumBasis || null},
       formalities_note=${formalitiesNote || null},
-      next_meeting_at=CASE WHEN ${nextMeetingAt}='' THEN NULL ELSE (${nextMeetingAt}::timestamp AT TIME ZONE 'Europe/Berlin') END,
       updated_at=now()
     WHERE id=${meetingId}::uuid
       AND deleted_at IS NULL
@@ -1187,7 +1342,7 @@ export async function updateMeetingFormalitiesAction(formData:FormData) {
   if (!rows.length) redirect(`/sitzungen/${meetingId}?error=meeting_locked`);
 
   await writeAudit(actor.id,"meeting.formalities_updated","meeting",meetingId,{
-    meetingMode,invitationTimely,agendaSentWithInvitation,quorumConfirmed,
+    meetingMode,invitationTimely,agendaSentWithInvitation,
   });
 
   revalidatePath(`/sitzungen/${meetingId}`);
