@@ -23,7 +23,7 @@ export const vdcFinanceGlobalCss = {
     display:"grid",gridTemplateColumns:{base:"1fr",md:"repeat(2,minmax(0,1fr))",xl:"minmax(150px,.7fr) minmax(150px,.7fr) minmax(0,1.4fr) auto"},gap:"2.5",alignItems:"end",
   },
   ".contribution-run-form label":{display:"grid",gap:"1.5",color:"fg.muted",fontSize:"xs",fontWeight:"750"},
-  ".contribution-run-form input":{width:"full",minHeight:"10",p:"2.5",border:"1px solid",borderColor:"surface.border",borderRadius:"l1",background:"surface.bg",color:"fg",outline:"none",_focus:{borderColor:"brand.solid",boxShadow:"focus"}},
+  ".contribution-run-form input":{width:"full",minHeight:{base:"[44px]",md:"10"},p:"2.5",border:"1px solid",borderColor:"surface.border",borderRadius:"l1",background:"surface.bg",color:"fg",outline:"none",_focus:{borderColor:"brand.solid",boxShadow:"focus"}},
   ".contribution-run-copy": {"& strong,& span":{display:"block"},"& strong":{fontSize:"xs",fontWeight:"900"},"& span":{mt:"1",color:"fg.muted",fontSize:"[10px]",lineHeight:"1.4"}},
 
   ".contribution-card,.member-fee-profile-card,.fee-type-card": {
@@ -50,7 +50,7 @@ export const vdcFinanceGlobalCss = {
   ".contribution-payment-form,.contribution-status-form":{display:"grid",gap:"2.5"},
   ".contribution-payment-form label,.contribution-status-form label":{display:"grid",gap:"1.5",color:"fg.muted",fontSize:"xs",fontWeight:"750"},
   ".contribution-payment-form input,.contribution-payment-form select,.contribution-status-form input,.contribution-status-form select,.contribution-status-form textarea": {
-    width:"full",minHeight:"10",p:"2.5",border:"1px solid",borderColor:"surface.border",borderRadius:"l1",background:"surface.bg",color:"fg",outline:"none",_focus:{borderColor:"brand.solid",boxShadow:"focus"},
+    width:"full",minHeight:{base:"[44px]",md:"10"},p:"2.5",border:"1px solid",borderColor:"surface.border",borderRadius:"l1",background:"surface.bg",color:"fg",outline:"none",_focus:{borderColor:"brand.solid",boxShadow:"focus"},
   },
 
   ".fee-type-readonly":{display:"grid",gap:"1.5",color:"fg.muted",fontSize:"xs"},
