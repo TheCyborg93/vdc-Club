@@ -1031,6 +1031,9 @@ export async function updateMeetingStatusAction(formData: FormData) {
   revalidatePath("/dokumente");
   revalidatePath("/archiv");
   revalidatePath("/");
+  if (status==="completed") {
+    redirect(`/sitzungen/${meetingId}/protokoll?completed=1`);
+  }
   redirect(`/sitzungen/${meetingId}?status=${status}`);
 }
 
