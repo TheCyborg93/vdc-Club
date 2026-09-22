@@ -46,7 +46,7 @@ export const dynamic = "force-dynamic";
 
 const page=css({display:"grid",gap:{base:"4",md:"5"}});
 const newLink=css({
-  display:"inline-flex",alignItems:"center",justifyContent:"center",gap:"2",minH:"10",px:"4",
+  display:"inline-flex",alignItems:"center",justifyContent:"center",gap:"2",minH:{base:"[44px]",md:"10"},px:"4",
   border:"1px solid",borderColor:"brand.solid",borderRadius:"l1",background:"brand.solid",
   color:"warmWhite",fontSize:"sm",fontWeight:"850",_hover:{background:"brand.hover",transform:"translateY(-1px)"},
 });
@@ -66,7 +66,7 @@ const eyebrow=css({color:"brand.hover",fontSize:"[9px]",fontWeight:"900",letterS
 const focusMeta=css({display:"flex",gap:"1.5",mt:"3",flexWrap:"wrap"});
 const focusActions=css({display:"flex",flexDirection:{base:"row",md:"column"},alignItems:{md:"stretch"},gap:"2",flexWrap:"wrap"});
 const primaryAction=css({
-  display:"inline-flex",alignItems:"center",justifyContent:"center",minH:"10",px:"4",
+  display:"inline-flex",alignItems:"center",justifyContent:"center",minH:{base:"[44px]",md:"10"},px:"4",
   border:"1px solid",borderColor:"brand.solid",borderRadius:"l1",background:"brand.solid",
   color:"warmWhite",fontSize:"sm",fontWeight:"850",whiteSpace:"nowrap",_hover:{background:"brand.hover"},
 });
