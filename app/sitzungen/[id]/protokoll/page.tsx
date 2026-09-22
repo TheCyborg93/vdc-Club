@@ -1,10 +1,32 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getDb } from "@/lib/db";
-import { requirePermission } from "@/lib/permissions";
+import { hasPermission, requirePermission } from "@/lib/permissions";
 import { meetingStatusLabel } from "@/lib/ui-labels";
+import {
+  approveMeetingMinutesAction,
+  archiveMeetingMinutesAction,
+  returnMeetingMinutesAction,
+  submitMeetingMinutesAction,
+  updateMeetingMinutesTextAction,
+} from "@/app/sitzungen/actions";
+import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 
 export const dynamic = "force-dynamic";
+
+const minutesStatusLabels:Record<string,string>={
+  draft:"Entwurf",
+  review:"In Prüfung",
+  approved:"Freigegeben",
+  archived:"Archiviert",
+};
+
+const errors:Record<string,string>={
+  minutes_locked:"Das Protokoll kann in diesem Status nicht bearbeitet werden.",
+  meeting_not_completed:"Die Sitzung muss zuerst beendet werden, bevor das Protokoll zur Prüfung eingereicht werden kann.",
+  officers_missing:"Sitzungsleitung und Protokollführung müssen vor der Einreichung festgelegt werden.",
+  return_note:"Bitte einen Grund für die Rückgabe angeben.",
+};
 
 function formatDateTime(value: unknown) {
   if (!value) return "–";
@@ -21,23 +43,58 @@ function formatDateTime(value: unknown) {
   }).format(date);
 }
 
+function formatShortDateTime(value:unknown) {
+  if (!value) return "–";
+  const date=new Date(String(value));
+  if (Number.isNaN(date.getTime())) return "–";
+  return new Intl.DateTimeFormat("de-DE",{
+    day:"2-digit",
+    month:"2-digit",
+    year:"numeric",
+    hour:"2-digit",
+    minute:"2-digit",
+    timeZone:"Europe/Berlin",
+  }).format(date);
+}
+
 export default async function MinutesPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams:Promise<Record<string,string|undefined>>;
 }) {
-  await requirePermission("meetings.read");
+  const actor=await requirePermission("meetings.read");
   const sql = getDb();
   if (!sql) notFound();
 
   const { id } = await params;
+  const query=await searchParams;
 
-  const [meetingRows, attendees, agenda] = await Promise.all([
+  const [meetingRows, attendees, agenda, revisions] = await Promise.all([
     sql`
-      SELECT id::text, title, starts_at, ended_at, location, status, notes
-      FROM meetings
-      WHERE id = ${id}::uuid
-        AND deleted_at IS NULL
+      SELECT
+        m.id::text,m.title,m.starts_at,m.ended_at,m.location,m.status,m.notes,
+        m.minutes_intro,m.minutes_closing,m.minutes_status,m.minutes_return_note,
+        m.minutes_submitted_at,m.minutes_approved_at,m.minutes_archived_at,
+        m.minutes_version,
+        chair.id::text AS chair_member_id,
+        chair.first_name AS chair_first_name,
+        chair.last_name AS chair_last_name,
+        taker.id::text AS minute_taker_member_id,
+        taker.first_name AS minute_taker_first_name,
+        taker.last_name AS minute_taker_last_name,
+        submitted.display_name AS submitted_by_name,
+        approved.display_name AS approved_by_name,
+        archived.display_name AS archived_by_name
+      FROM meetings m
+      LEFT JOIN members chair ON chair.id=m.chair_member_id
+      LEFT JOIN members taker ON taker.id=m.minute_taker_member_id
+      LEFT JOIN app_users submitted ON submitted.id=m.minutes_submitted_by
+      LEFT JOIN app_users approved ON approved.id=m.minutes_approved_by
+      LEFT JOIN app_users archived ON archived.id=m.minutes_archived_by
+      WHERE m.id = ${id}::uuid
+        AND m.deleted_at IS NULL
       LIMIT 1
     `,
     sql`
@@ -80,6 +137,16 @@ export default async function MinutesPage({
       WHERE ai.meeting_id = ${id}::uuid
       ORDER BY ai.position
     `,
+    sql`
+      SELECT
+        r.version,r.status,r.change_note,r.return_note,r.created_at,
+        u.display_name AS changed_by_name
+      FROM meeting_minutes_revisions r
+      LEFT JOIN app_users u ON u.id=r.changed_by
+      WHERE r.meeting_id=${id}::uuid
+      ORDER BY r.version DESC,r.created_at DESC
+      LIMIT 20
+    `,
   ]);
 
   const meeting = meetingRows[0];
@@ -89,14 +156,259 @@ export default async function MinutesPage({
   const excused = attendees.filter((row) => row.attendance === "excused");
   const absent = attendees.filter((row) => ["absent", "invited"].includes(String(row.attendance)));
 
+  const canWrite=hasPermission(actor.roles,"meetings.write");
+  const canApprove=actor.roles.some((role)=>["chair","vice_chair","board","admin"].includes(role));
+  const minutesStatus=String(meeting.minutes_status ?? "draft");
+  const officersComplete=Boolean(meeting.chair_member_id && meeting.minute_taker_member_id);
+  const meetingComplete=String(meeting.status)==="completed";
+
   return (
-    <main className="minutes-page">
+    <main className="minutes-page secretary-workspace-page">
+      <div className="secretary-workspace no-print">
+        <section className="secretary-workspace-head">
+          <div>
+            <Link href={`/sitzungen/${id}`} className="back-link">← Sitzung</Link>
+            <span className="eyebrow">Schriftführer-Arbeitsplatz</span>
+            <h1>Protokoll bearbeiten</h1>
+            <p>{String(meeting.title)} · Version {Number(meeting.minutes_version ?? 1)}</p>
+          </div>
+          <div className="secretary-workspace-actions">
+            <span className={"minutes-status minutes-"+minutesStatus}>
+              {minutesStatusLabels[minutesStatus] ?? minutesStatus}
+            </span>
+            <a href="#druckansicht" className="ghost-button">Druckansicht</a>
+          </div>
+        </section>
+
+        {query.error && <div className="form-error">{errors[query.error] ?? "Die Aktion konnte nicht ausgeführt werden."}</div>}
+        {query.saved && <div className="form-success">Protokolltext wurde gespeichert.</div>}
+        {query.submitted && <div className="form-success">Das Protokoll wurde zur Prüfung eingereicht.</div>}
+        {query.returned && <div className="form-success">Das Protokoll wurde zur Überarbeitung zurückgegeben.</div>}
+        {query.approved && <div className="form-success">Das Protokoll wurde freigegeben.</div>}
+        {query.archived && <div className="form-success">Das Protokoll wurde archiviert.</div>}
+
+        <section className="minutes-workflow">
+          {[
+            ["draft","1","Entwurf","Schriftführer bearbeitet"],
+            ["review","2","Prüfung","Vorsitz prüft"],
+            ["approved","3","Freigegeben","finale Fassung"],
+            ["archived","4","Archiv","abgeschlossen"],
+          ].map(([key,number,label,sub])=>{
+            const order=["draft","review","approved","archived"];
+            const activeIndex=order.indexOf(minutesStatus);
+            const itemIndex=order.indexOf(key);
+            return (
+              <div className={"minutes-workflow-step "+(itemIndex<activeIndex ? "is-done" : itemIndex===activeIndex ? "is-current" : "")} key={key}>
+                <b>{number}</b>
+                <div><strong>{label}</strong><span>{sub}</span></div>
+              </div>
+            );
+          })}
+        </section>
+
+        {meeting.minutes_return_note && minutesStatus==="draft" && (
+          <article className="minutes-return-note">
+            <span className="eyebrow">Zur Überarbeitung zurückgegeben</span>
+            <strong>{String(meeting.minutes_return_note)}</strong>
+          </article>
+        )}
+
+        <section className="secretary-meta-grid">
+          <article>
+            <span>Sitzungsleitung</span>
+            <strong>
+              {meeting.chair_first_name
+                ? String(meeting.chair_first_name)+" "+String(meeting.chair_last_name)
+                : "Noch nicht festgelegt"}
+            </strong>
+          </article>
+          <article>
+            <span>Protokollführung</span>
+            <strong>
+              {meeting.minute_taker_first_name
+                ? String(meeting.minute_taker_first_name)+" "+String(meeting.minute_taker_last_name)
+                : "Noch nicht festgelegt"}
+            </strong>
+          </article>
+          <article>
+            <span>Sitzung</span>
+            <strong>{meetingStatusLabel(meeting.status)}</strong>
+          </article>
+          <article>
+            <span>Version</span>
+            <strong>v{Number(meeting.minutes_version ?? 1)}</strong>
+          </article>
+        </section>
+
+        {(!officersComplete || !meetingComplete) && minutesStatus==="draft" && (
+          <div className="minutes-readiness">
+            {!officersComplete && <span>⚠ Sitzungsleitung und Protokollführung fehlen noch.</span>}
+            {!meetingComplete && <span>⚠ Die Sitzung ist noch nicht abgeschlossen.</span>}
+            <Link href={`/sitzungen/${id}`} className="mini-button">Sitzung öffnen</Link>
+          </div>
+        )}
+
+        {canWrite && minutesStatus==="draft" && (
+          <article className="panel secretary-editor">
+            <div className="panel-head">
+              <div>
+                <span className="eyebrow">Protokolltext</span>
+                <h2>Einleitung & Abschluss</h2>
+              </div>
+              <span>TOP-Ergebnisse werden automatisch aus dem Sitzungsmodus übernommen.</span>
+            </div>
+            <form action={updateMeetingMinutesTextAction} className="form-stack">
+              <input type="hidden" name="meetingId" value={id} />
+              <label>
+                Einleitung / allgemeine Feststellungen
+                <textarea
+                  name="minutesIntro"
+                  rows={5}
+                  defaultValue={String(meeting.minutes_intro ?? "")}
+                  placeholder="z. B. Begrüßung, Feststellung der Beschlussfähigkeit, Hinweise zur Tagesordnung …"
+                />
+              </label>
+              <label>
+                Abschlussbemerkung
+                <textarea
+                  name="minutesClosing"
+                  rows={4}
+                  defaultValue={String(meeting.minutes_closing ?? "")}
+                  placeholder="z. B. Zusammenfassung, nächster Termin, Ende der Sitzung …"
+                />
+              </label>
+              <button className="mini-button">Protokolltext speichern</button>
+            </form>
+          </article>
+        )}
+
+        <section className="secretary-approval-panel">
+          {canWrite && minutesStatus==="draft" && (
+            <article className="panel">
+              <span className="eyebrow">Schritt 2</span>
+              <h2>Zur Prüfung einreichen</h2>
+              <p>Nach der Einreichung ist der Entwurf gesperrt, bis er freigegeben oder zur Korrektur zurückgegeben wird.</p>
+              <form action={submitMeetingMinutesAction}>
+                <input type="hidden" name="meetingId" value={id} />
+                <ConfirmSubmitButton
+                  message="Protokoll jetzt zur Prüfung einreichen? Der Entwurf wird bis zur Entscheidung gesperrt."
+                  className="primary-button"
+                >
+                  Zur Prüfung einreichen
+                </ConfirmSubmitButton>
+              </form>
+            </article>
+          )}
+
+          {minutesStatus==="review" && (
+            <article className="panel">
+              <span className="eyebrow">Prüfung</span>
+              <h2>Wartet auf Freigabe</h2>
+              <p>
+                Eingereicht {meeting.minutes_submitted_at ? formatShortDateTime(meeting.minutes_submitted_at) : ""}
+                {meeting.submitted_by_name ? " von "+String(meeting.submitted_by_name) : ""}.
+              </p>
+
+              {canApprove ? (
+                <div className="minutes-review-actions">
+                  <form action={approveMeetingMinutesAction}>
+                    <input type="hidden" name="meetingId" value={id} />
+                    <ConfirmSubmitButton
+                      message="Protokoll als geprüft und freigegeben markieren?"
+                      className="primary-button"
+                    >
+                      Protokoll freigeben
+                    </ConfirmSubmitButton>
+                  </form>
+
+                  <form action={returnMeetingMinutesAction} className="form-stack">
+                    <input type="hidden" name="meetingId" value={id} />
+                    <label>
+                      Rückgabegrund
+                      <textarea name="returnNote" rows={3} required placeholder="Was soll der Schriftführer korrigieren?" />
+                    </label>
+                    <button className="ghost-button">Zur Überarbeitung zurückgeben</button>
+                  </form>
+                </div>
+              ) : (
+                <div className="minutes-waiting">Vorsitz bzw. Vertretung prüft das eingereichte Protokoll.</div>
+              )}
+            </article>
+          )}
+
+          {minutesStatus==="approved" && (
+            <article className="panel">
+              <span className="eyebrow">Freigegeben</span>
+              <h2>Protokoll ist final</h2>
+              <p>
+                Freigegeben {meeting.minutes_approved_at ? formatShortDateTime(meeting.minutes_approved_at) : ""}
+                {meeting.approved_by_name ? " von "+String(meeting.approved_by_name) : ""}.
+              </p>
+              {canWrite && (
+                <form action={archiveMeetingMinutesAction}>
+                  <input type="hidden" name="meetingId" value={id} />
+                  <ConfirmSubmitButton
+                    message="Freigegebenes Protokoll jetzt endgültig archivieren?"
+                    className="primary-button"
+                  >
+                    Protokoll archivieren
+                  </ConfirmSubmitButton>
+                </form>
+              )}
+            </article>
+          )}
+
+          {minutesStatus==="archived" && (
+            <article className="panel">
+              <span className="eyebrow">Archiviert</span>
+              <h2>Workflow abgeschlossen</h2>
+              <p>
+                Archiviert {meeting.minutes_archived_at ? formatShortDateTime(meeting.minutes_archived_at) : ""}
+                {meeting.archived_by_name ? " von "+String(meeting.archived_by_name) : ""}.
+              </p>
+              <Link href="/archiv" className="ghost-button">Archiv öffnen</Link>
+            </article>
+          )}
+
+          <article className="panel minutes-history-panel">
+            <div className="panel-head">
+              <div><span className="eyebrow">Historie</span><h2>Protokollverlauf</h2></div>
+            </div>
+            {revisions.length===0 ? (
+              <div className="empty-state">Noch keine Freigabeversion vorhanden.</div>
+            ) : (
+              <div className="minutes-history-list">
+                {revisions.map((revision)=>(
+                  <div key={String(revision.version)+"-"+String(revision.created_at)}>
+                    <b>v{Number(revision.version)}</b>
+                    <div>
+                      <strong>{minutesStatusLabels[String(revision.status)] ?? String(revision.status)}</strong>
+                      <span>
+                        {formatShortDateTime(revision.created_at)}
+                        {revision.changed_by_name ? " · "+String(revision.changed_by_name) : ""}
+                      </span>
+                      {revision.change_note && <small>{String(revision.change_note)}</small>}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </article>
+        </section>
+      </div>
+
       <div className="minutes-toolbar no-print">
         <Link href={`/sitzungen/${id}`} className="ghost-button">← Sitzung</Link>
         <span>Zum PDF-Export im Browser „Drucken“ → „Als PDF sichern“ verwenden.</span>
       </div>
 
-      <article className="minutes-document">
+      <article className="minutes-document" id="druckansicht">
+        {minutesStatus!=="approved" && minutesStatus!=="archived" && (
+          <div className="minutes-draft-watermark">
+            {minutesStatus==="review" ? "IN PRÜFUNG" : "ENTWURF"}
+          </div>
+        )}
+
         <header className="minutes-header">
           <div className="minutes-brand">VDC</div>
           <div>
@@ -110,7 +422,26 @@ export default async function MinutesPage({
           <div><span>Beginn</span><strong>{formatDateTime(meeting.starts_at)}</strong></div>
           <div><span>Ende</span><strong>{meeting.ended_at ? formatDateTime(meeting.ended_at) : "Noch nicht beendet"}</strong></div>
           <div><span>Ort</span><strong>{meeting.location ? String(meeting.location) : "–"}</strong></div>
-          <div><span>Status</span><strong>{meetingStatusLabel(meeting.status)}</strong></div>
+          <div><span>Status</span><strong>{minutesStatusLabels[minutesStatus] ?? minutesStatus}</strong></div>
+        </section>
+
+        <section className="minutes-meta minutes-officer-meta">
+          <div>
+            <span>Sitzungsleitung</span>
+            <strong>
+              {meeting.chair_first_name
+                ? String(meeting.chair_first_name)+" "+String(meeting.chair_last_name)
+                : "–"}
+            </strong>
+          </div>
+          <div>
+            <span>Protokollführung</span>
+            <strong>
+              {meeting.minute_taker_first_name
+                ? String(meeting.minute_taker_first_name)+" "+String(meeting.minute_taker_last_name)
+                : "–"}
+            </strong>
+          </div>
         </section>
 
         <section className="minutes-section">
@@ -137,6 +468,13 @@ export default async function MinutesPage({
           </div>
         </section>
 
+        {meeting.minutes_intro && (
+          <section className="minutes-section">
+            <h2>Allgemeine Feststellungen</h2>
+            <p>{String(meeting.minutes_intro)}</p>
+          </section>
+        )}
+
         {meeting.notes && (
           <section className="minutes-section">
             <h2>Vorbereitende Notiz</h2>
@@ -156,7 +494,7 @@ export default async function MinutesPage({
                   <h3>{String(item.title)}</h3>
                 </div>
                 {item.description && <p>{String(item.description)}</p>}
-                {item.notes && <p><strong>Notiz:</strong> {String(item.notes)}</p>}
+                {item.notes && <p><strong>Ergebnis:</strong> {String(item.notes)}</p>}
 
                 {item.resolution_number && (
                   <div className="minutes-resolution">
@@ -186,9 +524,32 @@ export default async function MinutesPage({
           </div>
         </section>
 
+        {meeting.minutes_closing && (
+          <section className="minutes-section">
+            <h2>Abschluss</h2>
+            <p>{String(meeting.minutes_closing)}</p>
+          </section>
+        )}
+
         <footer className="minutes-signatures">
-          <div><span>____________________________</span><strong>Sitzungsleitung</strong></div>
-          <div><span>____________________________</span><strong>Protokollführung</strong></div>
+          <div>
+            <span>____________________________</span>
+            <strong>
+              {meeting.chair_first_name
+                ? String(meeting.chair_first_name)+" "+String(meeting.chair_last_name)
+                : "Sitzungsleitung"}
+            </strong>
+            <small>Sitzungsleitung</small>
+          </div>
+          <div>
+            <span>____________________________</span>
+            <strong>
+              {meeting.minute_taker_first_name
+                ? String(meeting.minute_taker_first_name)+" "+String(meeting.minute_taker_last_name)
+                : "Protokollführung"}
+            </strong>
+            <small>Protokollführung</small>
+          </div>
         </footer>
       </article>
     </main>
