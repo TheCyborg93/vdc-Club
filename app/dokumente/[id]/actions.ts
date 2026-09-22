@@ -96,7 +96,7 @@ export async function updateDocumentMetadataAction(formData:FormData) {
   }
 
   const before=await sql`
-    SELECT title,category,status
+    SELECT title,category,status,meeting_id::text
     FROM documents
     WHERE id=${id}::uuid
       AND deleted_at IS NULL
@@ -104,6 +104,12 @@ export async function updateDocumentMetadataAction(formData:FormData) {
   `;
 
   if (!before.length) redirect("/dokumente?error=missing");
+  if (before[0].category==="Protokoll" && before[0].meeting_id) {
+    redirect(`/dokumente/${id}?error=protocol_managed`);
+  }
+  if (category==="Protokoll" && meetingId) {
+    redirect(`/dokumente/${id}?error=protocol_managed`);
+  }
 
   await sql`
     UPDATE documents
