@@ -54,7 +54,7 @@ function formatDateTime(value:unknown) {
 
 const errors:Record<string,string>={
   missing:"Bitte alle Pflichtfelder und einen Änderungsgrund ausfüllen.",
-  votes:"Die Stimmenangaben sind ungültig oder passen nicht zu den Stimmberechtigten.",
+  votes:"Die Stimmenangaben sind ungültig. Ja, Nein und Enthaltungen müssen zusammen genau der automatisch berechneten Zahl der Stimmberechtigten entsprechen.",
   rollcall:"Bei namentlicher Abstimmung müssen die Abstimmungsdetails ausgefüllt sein.",
   person_exists:"Diese Person ist bereits als Teilnehmer eingetragen.",
   officer_remove:"Sitzungsleitung oder Protokollführung zuerst auf eine andere Person ändern.",
@@ -205,14 +205,25 @@ export default async function MeetingCorrectionPage({
         if (!row.resolution_id) return false;
         const eligible=row.eligible_voters==null ? null : Number(row.eligible_voters);
         const total=Number(row.votes_yes ?? 0)+Number(row.votes_no ?? 0)+Number(row.votes_abstain ?? 0);
-        const exclusionCount=exclusions.filter(
+        const itemExclusions=exclusions.filter(
           (entry)=>String(entry.agenda_item_id)===String(row.id),
-        ).length;
+        );
+        const exclusionCount=itemExclusions.length;
+        const expectedEligible=Math.max(0,presentVotingCount-exclusionCount);
+        const invalidExclusion=itemExclusions.some((entry)=>
+          !attendees.some((attendee)=>
+            String(attendee.member_id)===String(entry.member_id) &&
+            attendee.attendance==="present" &&
+            attendee.voting_eligible===true
+          )
+        );
         return !row.vote_method ||
           !row.decision_outcome ||
           eligible==null ||
           eligible!==total ||
+          eligible!==expectedEligible ||
           Number(row.excluded_voters ?? 0)!==exclusionCount ||
+          invalidExclusion ||
           (row.vote_method==="roll_call" && !String(row.vote_details ?? "").trim());
       })
       .map((row)=>String(row.id)),
@@ -243,6 +254,8 @@ export default async function MeetingCorrectionPage({
     ...unfinishedAgendaIds,
   ]);
   const resolutionCount=agenda.filter((row)=>row.resolution_id).length;
+  const quorumResolutionIssue=resolutionCount>0 && meeting.quorum_confirmed!==true;
+  const formalitiesNeedAttention=!formalReady || quorumResolutionIssue;
   const protocolReady=
     formalReady &&
     chairPresent &&
@@ -263,7 +276,7 @@ export default async function MeetingCorrectionPage({
     decisionWithoutResolutionCount +
     invalidVoteAgendaIds.size +
     spontaneousAgendaIds.size +
-    (resolutionCount>0 && meeting.quorum_confirmed!==true ? 1 : 0);
+    (quorumResolutionIssue && formalReady ? 1 : 0);
   const attendanceNeedsAttention=
     !chairPresent ||
     !minuteTakerPresent ||
@@ -305,9 +318,9 @@ export default async function MeetingCorrectionPage({
         </div>
 
         <nav className="meeting-correction-guide-grid" aria-label="Nachbearbeitungsbereiche">
-          <a href="#korrektur-formalia" className={!formalReady ? "has-issue" : "is-ok"}>
-            <b>{formalReady ? "✓" : "!"}</b>
-            <span><strong>Formalia</strong><small>{formalReady ? "vollständig" : "Angaben prüfen"}</small></span>
+          <a href="#korrektur-formalia" className={formalitiesNeedAttention ? "has-issue" : "is-ok"}>
+            <b>{formalitiesNeedAttention ? "!" : "✓"}</b>
+            <span><strong>Formalia</strong><small>{formalitiesNeedAttention ? "Angaben prüfen" : "vollständig"}</small></span>
           </a>
           <a href="#korrektur-teilnahme" className={attendanceNeedsAttention ? "has-issue" : "is-ok"}>
             <b>{attendanceNeedsAttention ? "!" : "✓"}</b>
@@ -330,15 +343,15 @@ export default async function MeetingCorrectionPage({
         </nav>
       </section>
 
-      <details className="panel meeting-correction-section meeting-correction-group" id="korrektur-formalia" open={!formalReady}>
+      <details className="panel meeting-correction-section meeting-correction-group" id="korrektur-formalia" open={formalitiesNeedAttention}>
         <summary className="meeting-correction-group-summary">
           <div>
             <span className="eyebrow">Sitzung</span>
             <strong>Rahmen & Protokolltexte</strong>
-            <small>{formalReady ? "Formalia vollständig" : "Formalia benötigen Aufmerksamkeit"}</small>
+            <small>{formalitiesNeedAttention ? "Formalia benötigen Aufmerksamkeit" : "Formalia vollständig"}</small>
           </div>
-          <span className={formalReady ? "correction-state is-ok" : "correction-state has-issue"}>
-            {formalReady ? "Vollständig" : "Prüfen"}
+          <span className={formalitiesNeedAttention ? "correction-state has-issue" : "correction-state is-ok"}>
+            {formalitiesNeedAttention ? "Prüfen" : "Vollständig"}
           </span>
         </summary>
 
@@ -812,8 +825,26 @@ export default async function MeetingCorrectionPage({
                     </div>
                     <label>Namentliche Details<textarea name="voteDetails" rows={2} /></label>
                     <div className="vote-input-grid">
-                      <label>Stimmberechtigt<input name="eligibleVoters" type="number" min="0" defaultValue={presentVotingCount} /></label>
-                      <label>Ausgeschlossen<input name="excludedVoters" type="number" min="0" defaultValue="0" /></label>
+                      <label>
+                        Stimmberechtigt
+                        <input
+                          name="eligibleVoters"
+                          type="number"
+                          min="0"
+                          value={Math.max(0,presentVotingCount-exclusions.filter((entry)=>String(entry.agenda_item_id)===String(item.id)).length)}
+                          readOnly
+                        />
+                      </label>
+                      <label>
+                        Ausgeschlossen
+                        <input
+                          name="excludedVoters"
+                          type="number"
+                          min="0"
+                          value={exclusions.filter((entry)=>String(entry.agenda_item_id)===String(item.id)).length}
+                          readOnly
+                        />
+                      </label>
                       <label>Ja<input name="votesYes" type="number" min="0" defaultValue="0" /></label>
                       <label>Nein<input name="votesNo" type="number" min="0" defaultValue="0" /></label>
                       <label>Enthaltung<input name="votesAbstain" type="number" min="0" defaultValue={presentVotingCount} /></label>
@@ -849,8 +880,26 @@ export default async function MeetingCorrectionPage({
                     </div>
                     <label>Namentliche Details<textarea name="voteDetails" rows={2} defaultValue={String(item.vote_details ?? "")} /></label>
                     <div className="vote-input-grid">
-                      <label>Stimmberechtigt<input name="eligibleVoters" type="number" min="0" defaultValue={Number(item.eligible_voters ?? 0)} /></label>
-                      <label>Ausgeschlossen<input name="excludedVoters" type="number" min="0" defaultValue={Number(item.excluded_voters ?? 0)} /></label>
+                      <label>
+                        Stimmberechtigt
+                        <input
+                          name="eligibleVoters"
+                          type="number"
+                          min="0"
+                          value={Math.max(0,presentVotingCount-exclusions.filter((entry)=>String(entry.agenda_item_id)===String(item.id)).length)}
+                          readOnly
+                        />
+                      </label>
+                      <label>
+                        Ausgeschlossen
+                        <input
+                          name="excludedVoters"
+                          type="number"
+                          min="0"
+                          value={exclusions.filter((entry)=>String(entry.agenda_item_id)===String(item.id)).length}
+                          readOnly
+                        />
+                      </label>
                       <label>Ja<input name="votesYes" type="number" min="0" defaultValue={Number(item.votes_yes ?? 0)} /></label>
                       <label>Nein<input name="votesNo" type="number" min="0" defaultValue={Number(item.votes_no ?? 0)} /></label>
                       <label>Enthaltung<input name="votesAbstain" type="number" min="0" defaultValue={Number(item.votes_abstain ?? 0)} /></label>
