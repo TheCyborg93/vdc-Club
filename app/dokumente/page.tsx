@@ -68,9 +68,10 @@ export default async function DocumentsPage({
   const q=(params.q ?? "").trim();
   const category=(params.category ?? "").trim();
   const status=(params.status ?? "").trim();
-  const view=["active","review","contracts","all"].includes(params.view ?? "")
+  const requestedView=["active","review","contracts","all"].includes(params.view ?? "")
     ? String(params.view)
     : "active";
+  const view=status ? "all" : requestedView;
 
   const [documents,counts,members,meetings,resolutions,financeEntries,sponsors,categories]=sql
     ? await Promise.all([
@@ -130,6 +131,7 @@ export default async function DocumentsPage({
         sql`
           SELECT
             count(*) FILTER (WHERE status<>'archived')::int AS total,
+            count(*) FILTER (WHERE status IN ('active','draft'))::int AS active_view,
             count(*) FILTER (WHERE category='Protokoll' AND status<>'archived')::int AS minutes,
             count(*) FILTER (WHERE category='Vertrag' AND status='active')::int AS contracts,
             count(*) FILTER (
@@ -148,7 +150,7 @@ export default async function DocumentsPage({
         sql`SELECT id::text,name FROM sponsors WHERE deleted_at IS NULL ORDER BY name`,
         sql`SELECT DISTINCT category FROM documents WHERE deleted_at IS NULL ORDER BY category`,
       ])
-    : [[],[{total:0,minutes:0,contracts:0,review:0,archived:0}],[],[],[],[],[],[]];
+    : [[],[{total:0,active_view:0,minutes:0,contracts:0,review:0,archived:0}],[],[],[],[],[],[]];
 
   const c=counts[0] ?? {};
 
@@ -169,7 +171,7 @@ export default async function DocumentsPage({
       {params.deleted && <div className="form-success">Dokument wurde in den Papierkorb verschoben.</div>}
 
       <nav className="document-view-tabs" aria-label="Dokumente filtern">
-        <Link href="/dokumente" className={view==="active" ? "is-active" : ""}>Aktiv <span>{Math.max(0,Number(c.total ?? 0)-Number(c.review ?? 0))}</span></Link>
+        <Link href="/dokumente" className={view==="active" ? "is-active" : ""}>Aktiv <span>{Number(c.active_view ?? 0)}</span></Link>
         <Link href="/dokumente?view=review" className={view==="review" ? "is-active is-warning" : ""}>Zu prüfen <span>{Number(c.review ?? 0)}</span></Link>
         <Link href="/dokumente?view=contracts" className={view==="contracts" ? "is-active" : ""}>Verträge <span>{Number(c.contracts ?? 0)}</span></Link>
         <Link href="/dokumente?view=all" className={view==="all" ? "is-active" : ""}>Alle <span>{Number(c.total ?? 0)}</span></Link>
