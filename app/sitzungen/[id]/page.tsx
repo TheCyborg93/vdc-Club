@@ -284,7 +284,7 @@ export default async function MeetingDetailPage({
             </b>
           </div>
 
-          {canWrite && minutesStatus!=="archived" ? (
+          {canWrite && minutesStatus==="draft" ? (
             <form action={updateMeetingOfficersAction} className="meeting-officer-form">
               <input type="hidden" name="meetingId" value={id} />
               <label>
@@ -316,7 +316,7 @@ export default async function MeetingDetailPage({
             </form>
           ) : (
             <div className="meeting-officer-readonly">
-              <span>Die Rollen können im archivierten Protokoll nicht mehr verändert werden.</span>
+              <span>Nach der Einreichung bleiben Sitzungsleitung und Protokollführung für diese Protokollversion gesperrt.</span>
             </div>
           )}
 
