@@ -7,7 +7,6 @@ import {
   addAttendeeAction,
   createResolutionFromAgendaAction,
   deleteAgendaItemAction,
-  updateAgendaNotesAction,
   updateAgendaStatusAction,
   updateAttendanceAction,
   updateMeetingDetailsAction,
@@ -389,6 +388,7 @@ export default async function MeetingDetailPage({
 
                   {meetingRunning && canWrite ? (
                     <MeetingAutoNotes
+                      key={String(preferredAgenda.id)}
                       meetingId={id}
                       agendaItemId={String(preferredAgenda.id)}
                       initialValue={preferredAgenda.notes ? String(preferredAgenda.notes) : ""}
