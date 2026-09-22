@@ -1,4 +1,25 @@
 export const vdcSportGlobalCss = {
+  ".meeting-hero": {
+    display:"flex",flexDirection:{base:"column",md:"row"},alignItems:{md:"center"},justifyContent:"space-between",
+    gap:"4",p:{base:"3.5",md:"4"},border:"1px solid",borderColor:"surface.border",borderRadius:"l4",
+    background:"linear-gradient(135deg,rgba(196,51,30,.09),rgba(255,255,255,.01))",boxShadow:"sm",
+  },
+  ".meeting-hero-side":{display:"flex",alignItems:"center",gap:"2",flexWrap:"wrap",justifyContent:{md:"flex-end"}},
+  ".meeting-summary-grid":{display:"grid",gridTemplateColumns:{base:"repeat(2,minmax(0,1fr))",lg:"repeat(4,minmax(0,1fr))"},gap:"2"},
+  ".meeting-summary-grid>article,.meeting-summary-grid>div": {
+    p:"3",border:"1px solid",borderColor:"surface.border",borderRadius:"l2",background:"surface.bg",
+    "& span,& strong,& small":{display:"block"},"& span":{color:"fg.muted",fontSize:"[9px]"},"& strong":{mt:"1",fontSize:"lg",fontWeight:"950"},"& small":{mt:"1",color:"fg.subtle",fontSize:"[9px]"},
+  },
+  ".sync-chip":{display:"inline-flex",alignItems:"center",gap:"1.5",px:"2.5",py:"1.5",border:"1px solid",borderColor:"brand.border",borderRadius:"pill",background:"brand.subtle",color:"brand.hover",fontSize:"[10px]",fontWeight:"850"},
+  ".training-status-planned":{background:"rgba(228,191,112,.10) !important",color:"status.warning !important"},
+  ".training-status-completed":{background:"rgba(143,198,162,.10) !important",color:"status.success !important"},
+  ".training-status-cancelled":{background:"rgba(228,121,114,.10) !important",color:"status.danger !important"},
+  ".training-activity-row-rich":{borderRadius:"l1",px:"2",_hover:{background:"surface.raised"}},
+  ".event-club":{background:"#c4331e"},
+  ".event-league":{background:"#e4bf70"},
+  ".event-training":{background:"#8fc6a2"},
+  ".event-tournament":{background:"#86bce8"},
+  ".event-board":{background:"#a98fd6"},
   ".team-management-list,.team-source-stack,.training-upcoming-list,.training-history-list,.training-pause-list,.training-season-list":{display:"grid",gap:"2"},
   ".team-overview-card": {
     display:"grid",gap:"3",p:"3.5",border:"1px solid",borderColor:"surface.border",borderRadius:"l3",background:"surface.bg",
