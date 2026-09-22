@@ -76,20 +76,6 @@ export async function updateMeetingDetailsAction(formData: FormData) {
       starts_at=(${startsAt}::timestamp AT TIME ZONE 'Europe/Berlin'),
       location=${location || null},
       notes=${notes || null},
-      minutes_status=CASE
-        WHEN ${status}='running' AND status='completed' AND minutes_status<>'archived' THEN 'draft'
-        ELSE minutes_status
-      END,
-      minutes_version=CASE
-        WHEN ${status}='running' AND status='completed' AND minutes_status IN ('review','approved')
-          THEN minutes_version+1
-        ELSE minutes_version
-      END,
-      minutes_return_note=CASE
-        WHEN ${status}='running' AND status='completed' AND minutes_status<>'archived'
-          THEN 'Sitzung wurde wieder geöffnet. Protokoll muss erneut geprüft werden.'
-        ELSE minutes_return_note
-      END,
       updated_at=now()
     WHERE id=${meetingId}::uuid
       AND deleted_at IS NULL
@@ -473,6 +459,20 @@ export async function updateMeetingStatusAction(formData: FormData) {
         WHEN ${status}='completed' THEN COALESCE(ended_at,now())
         WHEN ${status}='running' THEN NULL
         ELSE ended_at
+      END,
+      minutes_status=CASE
+        WHEN ${status}='running' AND status='completed' AND minutes_status<>'archived' THEN 'draft'
+        ELSE minutes_status
+      END,
+      minutes_version=CASE
+        WHEN ${status}='running' AND status='completed' AND minutes_status IN ('review','approved')
+          THEN minutes_version+1
+        ELSE minutes_version
+      END,
+      minutes_return_note=CASE
+        WHEN ${status}='running' AND status='completed' AND minutes_status<>'archived'
+          THEN 'Sitzung wurde wieder geöffnet. Protokoll muss erneut geprüft werden.'
+        ELSE minutes_return_note
       END,
       updated_at=now()
     WHERE id=${meetingId}::uuid
