@@ -154,6 +154,7 @@ export default async function MinutesPage({
         r.votes_no,
         r.votes_abstain,
         r.vote_method,
+        r.vote_details,
         r.eligible_voters,
         r.excluded_voters,
         r.decision_outcome,
@@ -631,6 +632,9 @@ export default async function MinutesPage({
                       {" "}{Number(item.votes_yes)} Ja · {Number(item.votes_no)} Nein · {Number(item.votes_abstain)} Enthaltung ·
                       {" "}<strong>{outcomeLabels[String(item.decision_outcome)] ?? "Ergebnis offen"}</strong>
                     </p>
+                    {item.vote_details && (
+                      <p><strong>Namentliche Abstimmung:</strong> {String(item.vote_details)}</p>
+                    )}
                     {item.task_title && (
                       <div className="minutes-task">
                         <strong>Folgeaufgabe:</strong> {String(item.task_title)}
@@ -651,7 +655,7 @@ export default async function MinutesPage({
                       .filter((doc)=>String(doc.agenda_item_id)===String(item.id))
                       .map((doc,index)=>(
                         <span key={String(doc.id)}>
-                          Anlage {index+1}: {String(doc.title)}
+                          Anlage {attachments.findIndex((candidate)=>String(candidate.id)===String(doc.id))+1}: {String(doc.title)}
                           {doc.original_filename ? " ("+String(doc.original_filename)+")" : ""}
                         </span>
                       ))}
