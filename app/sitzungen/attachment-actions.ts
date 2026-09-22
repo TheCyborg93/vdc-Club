@@ -40,6 +40,34 @@ function redirectWith(base:string,key:string,value:string) {
   return `${base}${separator}${encodeURIComponent(key)}=${encodeURIComponent(value)}`;
 }
 
+function json(value:unknown) {
+  return JSON.stringify(value ?? null);
+}
+
+async function correctionContext(
+  sql:any,
+  meetingId:string,
+  formData:FormData,
+  returnTo:string,
+) {
+  const rows=await sql`
+    SELECT status,minutes_status
+    FROM meetings
+    WHERE id=${meetingId}::uuid
+      AND deleted_at IS NULL
+    LIMIT 1
+  `;
+  const meeting=rows[0];
+  const isCorrection=
+    String(meeting?.status)==="completed" &&
+    String(meeting?.minutes_status)==="draft";
+  const reason=value(formData,"changeReason");
+  if (isCorrection && !reason) {
+    redirect(redirectWith(returnTo,"error","attachment_reason"));
+  }
+  return {isCorrection,reason};
+}
+
 function safeName(name:string) {
   return name
     .normalize("NFKD")
@@ -58,6 +86,7 @@ export async function uploadMeetingAttachmentAction(formData:FormData) {
   const agendaItemId=value(formData,"agendaItemId");
   const title=value(formData,"title");
   const returnTo=value(formData,"returnTo") || `/sitzungen/${meetingId}?top=${agendaItemId}`;
+  const correction=await correctionContext(sql,meetingId,formData,returnTo);
   const raw=formData.get("file");
   const file=raw instanceof File && raw.size>0 ? raw : null;
 
@@ -131,7 +160,22 @@ export async function uploadMeetingAttachmentAction(formData:FormData) {
       RETURNING id::text
     `;
 
-    await writeAudit(actor.id,"meeting.attachment_uploaded","document",String(rows[0]?.id ?? ""),{
+    const documentId=String(rows[0]?.id ?? "");
+    if (correction.isCorrection && documentId) {
+      await sql`
+        INSERT INTO meeting_change_log(
+          meeting_id,entity_type,entity_id,action,before_data,after_data,reason,changed_by
+        )
+        VALUES(
+          ${meetingId}::uuid,'attachment',${documentId}::uuid,'added_after_meeting',
+          NULL,
+          ${json({title:title || file.name,agendaItemId,originalFilename:file.name,size:file.size})}::jsonb,
+          ${correction.reason},
+          ${actor.id}::uuid
+        )
+      `;
+    }
+    await writeAudit(actor.id,"meeting.attachment_uploaded","document",documentId,{
       meetingId,agendaItemId,originalFilename:file.name,
     });
   } catch(error) {
@@ -153,6 +197,7 @@ export async function uploadMeetingGeneralAttachmentAction(formData:FormData) {
   const meetingId=value(formData,"meetingId");
   const title=value(formData,"title");
   const returnTo=value(formData,"returnTo") || `/sitzungen/${meetingId}`;
+  const correction=await correctionContext(sql,meetingId,formData,returnTo);
   const raw=formData.get("file");
   const file=raw instanceof File && raw.size>0 ? raw : null;
 
@@ -218,7 +263,22 @@ export async function uploadMeetingGeneralAttachmentAction(formData:FormData) {
       RETURNING id::text
     `;
 
-    await writeAudit(actor.id,"meeting.general_attachment_uploaded","document",String(rows[0]?.id ?? ""),{
+    const documentId=String(rows[0]?.id ?? "");
+    if (correction.isCorrection && documentId) {
+      await sql`
+        INSERT INTO meeting_change_log(
+          meeting_id,entity_type,entity_id,action,before_data,after_data,reason,changed_by
+        )
+        VALUES(
+          ${meetingId}::uuid,'attachment',${documentId}::uuid,'added_after_meeting',
+          NULL,
+          ${json({title:title || file.name,agendaItemId:null,originalFilename:file.name,size:file.size})}::jsonb,
+          ${correction.reason},
+          ${actor.id}::uuid
+        )
+      `;
+    }
+    await writeAudit(actor.id,"meeting.general_attachment_uploaded","document",documentId,{
       meetingId,originalFilename:file.name,
     });
   } catch(error) {
@@ -241,6 +301,7 @@ export async function removeMeetingGeneralAttachmentAction(formData:FormData) {
   const meetingId=value(formData,"meetingId");
   const documentId=value(formData,"documentId");
   const returnTo=value(formData,"returnTo") || `/sitzungen/${meetingId}`;
+  const correction=await correctionContext(sql,meetingId,formData,returnTo);
 
   const rows=await sql`
     UPDATE documents d
@@ -260,10 +321,22 @@ export async function removeMeetingGeneralAttachmentAction(formData:FormData) {
         m.status IN ('planned','running')
         OR (m.status='completed' AND m.minutes_status='draft')
       )
-    RETURNING d.title
+    RETURNING d.title,d.original_filename,d.file_size_bytes
   `;
 
   if (!rows.length) redirect(`${returnTo}?error=attachment_missing`);
+
+  if (correction.isCorrection) {
+    await sql`
+      INSERT INTO meeting_change_log(
+        meeting_id,entity_type,entity_id,action,before_data,after_data,reason,changed_by
+      )
+      VALUES(
+        ${meetingId}::uuid,'attachment',${documentId}::uuid,'removed_after_meeting',
+        ${json(rows[0])}::jsonb,NULL,${correction.reason},${actor.id}::uuid
+      )
+    `;
+  }
 
   await writeAudit(actor.id,"meeting.general_attachment_removed","document",documentId,{
     meetingId,title:String(rows[0].title),
@@ -285,6 +358,7 @@ export async function removeMeetingAttachmentAction(formData:FormData) {
   const agendaItemId=value(formData,"agendaItemId");
   const documentId=value(formData,"documentId");
   const returnTo=value(formData,"returnTo") || `/sitzungen/${meetingId}?top=${agendaItemId}`;
+  const correction=await correctionContext(sql,meetingId,formData,returnTo);
 
   const rows=await sql`
     UPDATE documents
@@ -307,10 +381,22 @@ export async function removeMeetingAttachmentAction(formData:FormData) {
             OR (m.status='completed' AND m.minutes_status='draft')
           )
       )
-    RETURNING title
+    RETURNING title,original_filename,file_size_bytes
   `;
 
   if (!rows.length) redirect(redirectWith(returnTo,"error","attachment_missing"));
+
+  if (correction.isCorrection) {
+    await sql`
+      INSERT INTO meeting_change_log(
+        meeting_id,entity_type,entity_id,action,before_data,after_data,reason,changed_by
+      )
+      VALUES(
+        ${meetingId}::uuid,'attachment',${documentId}::uuid,'removed_after_meeting',
+        ${json({...rows[0],agendaItemId})}::jsonb,NULL,${correction.reason},${actor.id}::uuid
+      )
+    `;
+  }
 
   await writeAudit(actor.id,"meeting.attachment_removed","document",documentId,{
     meetingId,agendaItemId,title:String(rows[0].title),
