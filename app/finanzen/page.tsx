@@ -43,10 +43,22 @@ export default async function FinancePage({
       LIMIT 8
     `,
     sql`
-      SELECT id::text,category,amount,notes
-      FROM finance_budgets
-      WHERE fiscal_year=${year}
-      ORDER BY category
+      SELECT
+        b.id::text,
+        b.category,
+        b.amount,
+        b.notes,
+        COALESCE((
+          SELECT SUM(f.amount)
+          FROM finance_entries f
+          WHERE f.status='booked'
+            AND f.entry_type='expense'
+            AND f.category=b.category
+            AND EXTRACT(YEAR FROM f.booked_on)=b.fiscal_year
+        ),0) AS spent
+      FROM finance_budgets b
+      WHERE b.fiscal_year=${year}
+      ORDER BY b.category
     `,
     sql`
       SELECT
@@ -106,8 +118,30 @@ export default async function FinancePage({
         <article className="stat-card"><span>Einnahmen</span><strong>{money(income)}</strong><small>{year}</small></article>
         <article className="stat-card"><span>Ausgaben</span><strong>{money(expense)}</strong><small>{year}</small></article>
         <article className="stat-card"><span>Saldo</span><strong className={balance<0 ? "negative" : ""}>{money(balance)}</strong><small>Einnahmen minus Ausgaben</small></article>
-        <article className="stat-card"><span>Budgetrest</span><strong>{money(budgetRemaining)}</strong><small>Plan minus Ausgaben</small></article>
+        <article className="stat-card"><span>Budgetrest</span><strong className={budgetRemaining<0 ? "negative" : ""}>{money(budgetRemaining)}</strong><small>Plan minus Ausgaben</small></article>
       </section>
+
+      {(overdueCount>0 || budgetRemaining<0) && (
+        <section className="finance-attention">
+          <div>
+            <span className="eyebrow">Handlungsbedarf</span>
+            <strong>
+              {overdueCount>0 ? overdueCount+" überfällige Beitragsfälle" : "Budget überschritten"}
+            </strong>
+            <small>
+              {overdueCount>0 && budgetRemaining<0
+                ? "Zusätzlich liegt der Gesamtaufwand über dem hinterlegten Budget."
+                : overdueCount>0
+                  ? "Offene und fällige Mitgliedsbeiträge sollten geprüft werden."
+                  : "Die gebuchten Ausgaben liegen über dem hinterlegten Gesamtbudget."}
+            </small>
+          </div>
+          <div>
+            {overdueCount>0 && <Link href="/finanzen/offene-beitraege" className="primary-button">Offene Beiträge prüfen</Link>}
+            {budgetRemaining<0 && <a href="#budget" className="ghost-button">Budget prüfen</a>}
+          </div>
+        </section>
+      )}
 
       <section className="finance-overview-links">
         <Link href="/finanzen/beitraege">
@@ -161,32 +195,47 @@ export default async function FinancePage({
           </div>
         </article>
 
-        <article className="panel">
+        <article className="panel" id="budget">
           <div className="panel-head">
             <div><span className="eyebrow">Budget</span><h2>Bereiche {year}</h2></div>
           </div>
           <div className="finance-list">
             {budgets.length===0 ? (
               <div className="empty-state">Noch keine Budgets hinterlegt.</div>
-            ) : budgets.map((item)=>(
-              <div className="budget-row" key={String(item.id)}>
-                <div>
-                  <strong>{String(item.category)}</strong>
-                  <span>{String(item.notes || "Ohne Notiz")}</span>
+            ) : budgets.map((item)=>{
+              const planned=Number(item.amount ?? 0);
+              const spent=Number(item.spent ?? 0);
+              const remaining=planned-spent;
+              const progress=planned>0 ? Math.min(100,Math.round((spent/planned)*100)) : spent>0 ? 100 : 0;
+              return (
+              <div className={"budget-row budget-progress-row "+(remaining<0 ? "is-over" : "")} key={String(item.id)}>
+                <div className="budget-progress-main">
+                  <div>
+                    <strong>{String(item.category)}</strong>
+                    <span>{String(item.notes || "Ohne Notiz")}</span>
+                  </div>
+                  <div className="budget-progress-meta">
+                    <span>{money(spent)} von {money(planned)}</span>
+                    <b className={remaining<0 ? "negative" : ""}>{money(remaining)} Rest</b>
+                  </div>
+                  <div className="budget-progress-track"><i style={{width:progress+"%"}} /></div>
                 </div>
-                <b>{money(item.amount)}</b>
               </div>
-            ))}
+              );
+            })}
           </div>
 
           {canWrite && (
-            <form action={upsertBudgetAction} className="form-stack finance-budget-form">
-              <input type="hidden" name="year" value={year} />
-              <label>Bereich<input name="category" required placeholder="z. B. Turniere" /></label>
-              <label>Betrag<input name="amount" inputMode="decimal" required /></label>
-              <label>Notiz<input name="notes" /></label>
-              <button className="primary-button">Budget speichern</button>
-            </form>
+            <details className="finance-budget-drawer">
+              <summary>Budget anlegen oder anpassen</summary>
+              <form action={upsertBudgetAction} className="form-stack finance-budget-form">
+                <input type="hidden" name="year" value={year} />
+                <label>Bereich<input name="category" required placeholder="z. B. Turniere" /></label>
+                <label>Betrag<input name="amount" inputMode="decimal" required /></label>
+                <label>Notiz<input name="notes" /></label>
+                <button className="primary-button">Budget speichern</button>
+              </form>
+            </details>
           )}
         </article>
       </section>
