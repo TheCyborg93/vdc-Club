@@ -216,17 +216,25 @@ export const vdcGlobalCss = {
     fontSize: "10px",
     fontWeight: "850",
   },
-  ".status-active, .fee-paid, .document-active, .survey-status-active": {
+  ".status-active, .status-running, .status-completed, .status-done, .fee-paid, .document-active, .survey-status-active": {
     background: "rgba(143,198,162,.10)",
     color: "status.success",
+  },
+  ".status-planned, .status-review, .status-open, .status-in_progress": {
+    background: "rgba(228,191,112,.10)",
+    color: "status.warning",
   },
   ".status-passive, .fee-open, .document-review, .survey-status-draft": {
     background: "rgba(228,191,112,.10)",
     color: "status.warning",
   },
-  ".status-inactive, .status-disabled, .fee-cancelled, .document-expired": {
+  ".status-inactive, .status-disabled, .status-cancelled, .status-blocked, .fee-cancelled, .document-expired": {
     background: "rgba(228,121,114,.10)",
     color: "status.danger",
+  },
+  ".status-archived, .status-draft": {
+    background: "surface.hover",
+    color: "fg.muted",
   },
   ".survey-status-closed": { background: "rgba(134,188,232,.10)", color: "status.info" },
   ".survey-status-archived": { background: "surface.hover", color: "fg.muted" },
