@@ -1353,13 +1353,20 @@ export async function submitMeetingMinutesAction(formData: FormData) {
         WHERE mg.meeting_id=m.id
           AND mg.attendance='invited'
       ) AS unresolved_guests,
-      (
-        SELECT count(*)::int
+      EXISTS(
+        SELECT 1
         FROM meeting_attendees ma
         WHERE ma.meeting_id=m.id
-          AND ma.member_id IN (m.chair_member_id,m.minute_taker_member_id)
+          AND ma.member_id=m.chair_member_id
           AND ma.attendance='present'
-      ) AS present_officers
+      ) AS chair_present,
+      EXISTS(
+        SELECT 1
+        FROM meeting_attendees ma
+        WHERE ma.meeting_id=m.id
+          AND ma.member_id=m.minute_taker_member_id
+          AND ma.attendance='present'
+      ) AS minute_taker_present
     FROM meetings m
     LEFT JOIN agenda_items ai ON ai.meeting_id=m.id
     LEFT JOIN resolutions r ON r.agenda_item_id=ai.id
@@ -1373,7 +1380,7 @@ export async function submitMeetingMinutesAction(formData: FormData) {
   if (!validation.formalities_complete) {
     redirect(`/sitzungen/${meetingId}/protokoll?error=protocol_formalities`);
   }
-  if (Number(validation.present_officers ?? 0)<2) {
+  if (!validation.chair_present || !validation.minute_taker_present) {
     redirect(`/sitzungen/${meetingId}/protokoll?error=protocol_officers_present`);
   }
   if (Number(validation.unresolved_attendees ?? 0)>0 || Number(validation.unresolved_guests ?? 0)>0) {
