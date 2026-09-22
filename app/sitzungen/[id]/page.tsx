@@ -26,6 +26,7 @@ import {
 import { moveToTrashAction } from "@/app/admin/papierkorb/actions";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 import { MeetingAutoNotes } from "@/components/meeting-auto-notes";
+import { MeetingStartPanel } from "@/components/meeting-start-panel";
 import {
   removeMeetingAttachmentAction,
   uploadMeetingAttachmentAction,
@@ -101,6 +102,13 @@ const errors:Record<string,string>={
   attachment_type:"Dieser Dateityp ist für Sitzungsanlagen nicht erlaubt.",
   attachment_upload:"Die Anlage konnte nicht hochgeladen werden.",
   storage:"Der private Dokumentenspeicher ist nicht konfiguriert.",
+  start_quorum:"Bitte die Beschlussfähigkeit vor dem Start bestätigen.",
+  start_preparation:"Die Vorbereitung ist noch nicht vollständig.",
+  start_attendees:"Vor dem Start muss mindestens ein Vorstandsmitglied eingeladen sein.",
+  start_agenda:"Vor dem Start muss mindestens ein Tagesordnungspunkt vorhanden sein.",
+  start_attendance:"Bitte die Anwesenheit aller eingeladenen Mitglieder festlegen.",
+  start_guest_attendance:"Bitte die Anwesenheit aller eingeladenen Gäste festlegen.",
+  start_officers_present:"Sitzungsleitung und Protokollführung müssen zum Sitzungsbeginn als anwesend markiert sein.",
 };
 
 export const dynamic="force-dynamic";
@@ -156,6 +164,7 @@ export default async function MeetingDetailPage({
     attachment?:string;
     attachment_deleted?:string;
     attendee_removed?:string;
+    started?:string;
   }>;
 }) {
   const actor=await requirePermission("meetings.read");
@@ -198,6 +207,7 @@ export default async function MeetingDetailPage({
         m.quorum_basis,
         m.formalities_note,
         m.next_meeting_at,
+        m.minutes_closing,
         e.id::text AS event_id
       FROM meetings m
       LEFT JOIN club_events e ON e.id=m.event_id
@@ -394,12 +404,32 @@ export default async function MeetingDetailPage({
     (row)=>row.resolution_id && row.announced_with_invitation===false && !String(row.decision_basis_note ?? "").trim(),
   ).length;
   const officersComplete=Boolean(meeting.chair_member_id && meeting.minute_taker_member_id);
-  const formalitiesDocumented=
+  const invitationPrepared=
     Boolean(meeting.invited_at) &&
     Boolean(String(meeting.invitation_method ?? "").trim()) &&
     meeting.invitation_timely!=null &&
-    meeting.agenda_sent_with_invitation!=null &&
-    meeting.quorum_confirmed!=null;
+    meeting.agenda_sent_with_invitation!=null;
+  const formalitiesDocumented=invitationPrepared && meeting.quorum_confirmed!=null;
+  const preparationChecks=[
+    officersComplete,
+    Boolean(meeting.invited_at),
+    Boolean(String(meeting.invitation_method ?? "").trim()),
+    meeting.invitation_timely!=null,
+    meeting.agenda_sent_with_invitation!=null,
+    attendees.length>0,
+    agenda.length>0,
+  ];
+  const preparationCheckCount=preparationChecks.filter(Boolean).length;
+  const preparationReady=preparationCheckCount===preparationChecks.length;
+  const preparationMissing=[
+    !officersComplete ? "Sitzungsleitung und Protokollführung festlegen" : null,
+    !meeting.invited_at ? "Einladungsdatum eintragen" : null,
+    !String(meeting.invitation_method ?? "").trim() ? "Einladungsweg eintragen" : null,
+    meeting.invitation_timely==null ? "Fristgerechte Einladung prüfen" : null,
+    meeting.agenda_sent_with_invitation==null ? "Tagesordnung zur Einladung prüfen" : null,
+    attendees.length===0 ? "Vorstandsmitglieder einladen" : null,
+    agenda.length===0 ? "Mindestens einen TOP anlegen" : null,
+  ].filter((item):item is string=>Boolean(item));
   const meetingEditable=["planned","cancelled"].includes(String(meeting.status));
   const meetingRunning=meeting.status==="running";
 
@@ -431,20 +461,13 @@ export default async function MeetingDetailPage({
     unresolvedGuestAttendanceCount===0 &&
     incompleteVoteCount===0 &&
     spontaneousBasisMissing===0;
-  const formalCheckCount=[
-    officersComplete,
-    Boolean(meeting.invited_at),
-    Boolean(String(meeting.invitation_method ?? "").trim()),
-    meeting.invitation_timely!=null,
-    meeting.agenda_sent_with_invitation!=null,
-    meeting.quorum_confirmed!=null,
-  ].filter(Boolean).length;
   const workflowPhase=
     meeting.status==="planned" || meeting.status==="cancelled"
       ? 1
       : meeting.status==="running"
-        ? (completionReady ? 3 : 2)
-        : 4;
+        ? 2
+        : 3;
+  const firstOpenAgenda=agenda.find((row)=>["open","active"].includes(String(row.status))) ?? null;
 
   return (
     <div className={`page-stack meeting-control-page meeting-phase-${workflowPhase}`}>
@@ -518,7 +541,7 @@ export default async function MeetingDetailPage({
       </nav>
 
       {query.error && <div className="form-error">{errors[query.error] ?? "Die Aktion konnte nicht ausgeführt werden."}</div>}
-      {(query.agenda || query.resolution || query.created || query.saved || query.status || query.officers || query.formalities || query.guest || query.exclusion || query.formal || query.attachment || query.attachment_deleted || query.attendee_removed) && <div className="form-success">Sitzung wurde aktualisiert.</div>}
+      {(query.agenda || query.resolution || query.created || query.saved || query.status || query.officers || query.formalities || query.guest || query.exclusion || query.formal || query.attachment || query.attachment_deleted || query.attendee_removed || query.started) && <div className="form-success">Sitzung wurde aktualisiert.</div>}
       {query.notes && <div className="form-success">Ergebnisnotiz wurde gespeichert.</div>}
       {query.agenda_deleted && <div className="form-success">TOP wurde gelöscht.</div>}
 
