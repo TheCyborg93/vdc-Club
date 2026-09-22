@@ -481,6 +481,131 @@ export default async function MeetingDetailPage({
         <article><span>Status</span><strong>{meetingStatusLabel(meeting.status)}</strong><small>{meeting.ended_at ? "beendet "+formatDateTime(meeting.ended_at) : "aktueller Sitzungsstand"}</small></article>
       </section>
 
+      <section className="meeting-formalities-panel">
+        <article className="panel">
+          <div className="panel-head">
+            <div>
+              <span className="eyebrow">Sitzung eröffnen</span>
+              <h2>Formale Prüfung</h2>
+            </div>
+            <span className={formalitiesDocumented ? "formal-state formal-ok" : "formal-state formal-open"}>
+              {formalitiesDocumented ? "Dokumentiert" : "Noch offen"}
+            </span>
+          </div>
+
+          {canWrite && ["planned","running"].includes(String(meeting.status)) ? (
+            <form action={updateMeetingFormalitiesAction} className="meeting-formalities-form">
+              <input type="hidden" name="meetingId" value={id} />
+
+              <div className="form-grid">
+                <label>
+                  Sitzungsart
+                  <select name="meetingMode" defaultValue={String(meeting.meeting_mode ?? "in_person")}>
+                    <option value="in_person">Präsenz</option>
+                    <option value="hybrid">Hybrid</option>
+                    <option value="online">Online</option>
+                  </select>
+                </label>
+                <label>
+                  Einladung versendet am
+                  <input name="invitedAt" type="datetime-local" defaultValue={dateTimeLocal(meeting.invited_at)} />
+                </label>
+              </div>
+
+              <div className="form-grid">
+                <label>
+                  Einladung über
+                  <input
+                    name="invitationMethod"
+                    defaultValue={meeting.invitation_method ? String(meeting.invitation_method) : ""}
+                    placeholder="z. B. WhatsApp, E-Mail, schriftlich"
+                  />
+                </label>
+                <label>
+                  Einladung fristgerecht?
+                  <select
+                    name="invitationTimely"
+                    defaultValue={meeting.invitation_timely==null ? "" : meeting.invitation_timely ? "yes" : "no"}
+                  >
+                    <option value="">Noch nicht geprüft</option>
+                    <option value="yes">Ja</option>
+                    <option value="no">Nein / Abweichung dokumentieren</option>
+                  </select>
+                </label>
+              </div>
+
+              <div className="form-grid">
+                <label>
+                  Tagesordnung mit Einladung?
+                  <select
+                    name="agendaSentWithInvitation"
+                    defaultValue={meeting.agenda_sent_with_invitation==null ? "" : meeting.agenda_sent_with_invitation ? "yes" : "no"}
+                  >
+                    <option value="">Noch nicht geprüft</option>
+                    <option value="yes">Ja</option>
+                    <option value="no">Nein / abweichend</option>
+                  </select>
+                </label>
+                <label>
+                  Beschlussfähigkeit festgestellt?
+                  <select
+                    name="quorumConfirmed"
+                    defaultValue={meeting.quorum_confirmed==null ? "" : meeting.quorum_confirmed ? "yes" : "no"}
+                  >
+                    <option value="">Noch nicht geprüft</option>
+                    <option value="yes">Ja</option>
+                    <option value="no">Nein</option>
+                  </select>
+                </label>
+              </div>
+
+              <label>
+                Grundlage / Satzungshinweis
+                <input
+                  name="quorumBasis"
+                  defaultValue={meeting.quorum_basis ? String(meeting.quorum_basis) : ""}
+                  placeholder="z. B. Satzung § … / Geschäftsordnung"
+                />
+              </label>
+
+              <label>
+                Bemerkung zur Beschlussfähigkeit
+                <textarea
+                  name="quorumNote"
+                  rows={2}
+                  defaultValue={meeting.quorum_note ? String(meeting.quorum_note) : ""}
+                  placeholder="z. B. 5 von 6 Vorstandsmitgliedern anwesend"
+                />
+              </label>
+
+              <label>
+                Formale Besonderheiten
+                <textarea
+                  name="formalitiesNote"
+                  rows={2}
+                  defaultValue={meeting.formalities_note ? String(meeting.formalities_note) : ""}
+                  placeholder="Abweichungen bei Einladung, Teilnahmeform oder sonstige Hinweise"
+                />
+              </label>
+
+              <label>
+                Nächster Sitzungstermin
+                <input name="nextMeetingAt" type="datetime-local" defaultValue={dateTimeLocal(meeting.next_meeting_at)} />
+              </label>
+
+              <button className="mini-button" type="submit">Formale Angaben speichern</button>
+            </form>
+          ) : (
+            <div className="meeting-formal-readonly">
+              <span>{meetingModeLabels[String(meeting.meeting_mode)] ?? String(meeting.meeting_mode)}</span>
+              <span>Einladung: {meeting.invitation_timely===true ? "fristgerecht" : meeting.invitation_timely===false ? "Abweichung dokumentiert" : "nicht geprüft"}</span>
+              <span>Tagesordnung: {meeting.agenda_sent_with_invitation===true ? "mit Einladung" : meeting.agenda_sent_with_invitation===false ? "abweichend" : "nicht geprüft"}</span>
+              <span>Beschlussfähig: {meeting.quorum_confirmed===true ? "Ja" : meeting.quorum_confirmed===false ? "Nein" : "nicht geprüft"}</span>
+            </div>
+          )}
+        </article>
+      </section>
+
       <section className="meeting-secretary-setup">
         <article className="panel">
           <div className="panel-head">
@@ -741,6 +866,52 @@ export default async function MeetingDetailPage({
             </>
           )}
         </article>
+
+        <aside className="meeting-check-rail">
+          <div className="meeting-check-head">
+            <span className="eyebrow">Schriftführer-Check</span>
+            <h2>Sitzungsstand</h2>
+          </div>
+
+          <div className="meeting-check-list">
+            <div className={officersComplete ? "check-ok" : "check-open"}>
+              <b>{officersComplete ? "✓" : "!"}</b>
+              <span>Leitung & Protokollführung</span>
+            </div>
+            <div className={meeting.invitation_timely!=null ? "check-ok" : "check-open"}>
+              <b>{meeting.invitation_timely!=null ? "✓" : "!"}</b>
+              <span>Einladung geprüft</span>
+            </div>
+            <div className={meeting.agenda_sent_with_invitation!=null ? "check-ok" : "check-open"}>
+              <b>{meeting.agenda_sent_with_invitation!=null ? "✓" : "!"}</b>
+              <span>Tagesordnung geprüft</span>
+            </div>
+            <div className={meeting.quorum_confirmed===true ? "check-ok" : meeting.quorum_confirmed===false ? "check-warning" : "check-open"}>
+              <b>{meeting.quorum_confirmed===true ? "✓" : "!"}</b>
+              <span>Beschlussfähigkeit {meeting.quorum_confirmed===true ? "bestätigt" : meeting.quorum_confirmed===false ? "nicht gegeben" : "offen"}</span>
+            </div>
+          </div>
+
+          <div className="meeting-check-metrics">
+            <div><span>Anwesend</span><strong>{presentCount}/{attendees.length}</strong></div>
+            <div><span>Stimmberechtigt</span><strong>{presentVoterCount}</strong></div>
+            <div><span>Gäste</span><strong>{guests.length}</strong></div>
+            <div><span>Offene TOPs</span><strong>{openAgendaCount}</strong></div>
+            <div><span>Beschlüsse</span><strong>{agenda.filter((row)=>row.resolution_id).length}</strong></div>
+            <div><span>Anlagen</span><strong>{attachments.length}</strong></div>
+          </div>
+
+          {(incompleteVoteCount>0 || spontaneousBasisMissing>0) && (
+            <div className="meeting-check-warnings">
+              {incompleteVoteCount>0 && <span>{incompleteVoteCount} Abstimmung(en) unvollständig</span>}
+              {spontaneousBasisMissing>0 && <span>{spontaneousBasisMissing} spontaner TOP ohne Begründung</span>}
+            </div>
+          )}
+
+          <Link href={`/sitzungen/${id}/protokoll`} className="ghost-button meeting-check-protocol">
+            Protokoll prüfen
+          </Link>
+        </aside>
       </section>
 
       {meetingRunning && canWrite && (
