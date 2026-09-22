@@ -44,6 +44,25 @@ const minutesStatusLabels:Record<string,string>={
   archived:"Archiviert",
 };
 
+const meetingModeLabels:Record<string,string>={
+  in_person:"Präsenz",
+  hybrid:"Hybrid",
+  online:"Online",
+};
+
+const voteMethodLabels:Record<string,string>={
+  open:"Offen",
+  show_of_hands:"Handzeichen",
+  roll_call:"Namentlich",
+  secret:"Geheim",
+  electronic:"Elektronisch",
+};
+
+const outcomeLabels:Record<string,string>={
+  accepted:"Angenommen",
+  rejected:"Abgelehnt",
+};
+
 const agendaLabels:Record<string,string>={
   open:"Offen",
   active:"In Bearbeitung",
@@ -342,13 +361,31 @@ export default async function MeetingDetailPage({
   const canWrite=hasPermission(actor.roles,"meetings.write");
   const canResolve=hasPermission(actor.roles,"resolutions.write");
   const canCreateTasks=hasPermission(actor.roles,"tasks.write");
+  const canDocumentsWrite=hasPermission(actor.roles,"documents.write");
   const minutesStatus=String(meeting.minutes_status ?? "draft");
 
   const invitedIds=new Set(attendees.map((row)=>String(row.member_id)));
   const availableMembers=members.filter((row)=>!invitedIds.has(String(row.id)));
   const presentCount=attendees.filter((row)=>row.attendance==="present").length;
+  const presentVoterCount=attendees.filter(
+    (row)=>row.attendance==="present" && row.voting_eligible===true,
+  ).length;
   const unresolvedAttendanceCount=attendees.filter((row)=>row.attendance==="invited").length;
   const openAgendaCount=agenda.filter((row)=>["open","active"].includes(String(row.status))).length;
+  const incompleteVoteCount=agenda.filter((row)=>{
+    if (!row.resolution_id) return false;
+    const eligible=row.eligible_voters==null ? null : Number(row.eligible_voters);
+    const total=Number(row.votes_yes ?? 0)+Number(row.votes_no ?? 0)+Number(row.votes_abstain ?? 0);
+    return !row.vote_method || !row.decision_outcome || eligible==null || eligible!==total;
+  }).length;
+  const spontaneousBasisMissing=agenda.filter(
+    (row)=>row.resolution_id && row.announced_with_invitation===false && !String(row.decision_basis_note ?? "").trim(),
+  ).length;
+  const officersComplete=Boolean(meeting.chair_member_id && meeting.minute_taker_member_id);
+  const formalitiesDocumented=
+    meeting.invitation_timely!=null &&
+    meeting.agenda_sent_with_invitation!=null &&
+    meeting.quorum_confirmed!=null;
   const meetingEditable=["planned","cancelled"].includes(String(meeting.status));
   const meetingRunning=meeting.status==="running";
 
@@ -364,6 +401,21 @@ export default async function MeetingDetailPage({
     : -1;
   const previousAgenda=activeIndex>0 ? agenda[activeIndex-1] : null;
   const nextAgenda=activeIndex>=0 && activeIndex<agenda.length-1 ? agenda[activeIndex+1] : null;
+  const preferredExclusions=preferredAgenda
+    ? exclusions.filter((row)=>String(row.agenda_item_id)===String(preferredAgenda.id))
+    : [];
+  const preferredAttachments=preferredAgenda
+    ? attachments.filter((row)=>String(row.agenda_item_id)===String(preferredAgenda.id))
+    : [];
+  const eligibleForCurrentVote=Math.max(0,presentVoterCount-preferredExclusions.length);
+  const completionReady=
+    officersComplete &&
+    formalitiesDocumented &&
+    (agenda.filter((row)=>row.resolution_id).length===0 || meeting.quorum_confirmed===true) &&
+    openAgendaCount===0 &&
+    unresolvedAttendanceCount===0 &&
+    incompleteVoteCount===0 &&
+    spontaneousBasisMissing===0;
 
   return (
     <div className="page-stack meeting-control-page">
@@ -418,7 +470,7 @@ export default async function MeetingDetailPage({
       </section>
 
       {query.error && <div className="form-error">{errors[query.error] ?? "Die Aktion konnte nicht ausgeführt werden."}</div>}
-      {(query.agenda || query.resolution || query.created || query.saved || query.status || query.officers) && <div className="form-success">Sitzung wurde aktualisiert.</div>}
+      {(query.agenda || query.resolution || query.created || query.saved || query.status || query.officers || query.formalities || query.guest || query.exclusion || query.formal || query.attachment || query.attachment_deleted) && <div className="form-success">Sitzung wurde aktualisiert.</div>}
       {query.notes && <div className="form-success">Ergebnisnotiz wurde gespeichert.</div>}
       {query.agenda_deleted && <div className="form-success">TOP wurde gelöscht.</div>}
 
