@@ -2,7 +2,7 @@ export const vdcContentGlobalCss = {
   ".guide-heading":{display:"flex",flexDirection:{base:"column",md:"row"},justifyContent:"space-between",alignItems:{md:"end"},gap:"3"},
   ".guide-role-card,.guide-access-note,.guide-auto-sync,.survey-anonymous-note":{p:"3",border:"1px solid",borderColor:"brand.border",borderRadius:"l2",background:"brand.subtle",color:"fg.muted",fontSize:"xs",lineHeight:"1.5"},
   ".guide-intro,.guide-install-grid,.guide-grid":{display:"grid",gridTemplateColumns:{base:"1fr",lg:"repeat(2,minmax(0,1fr))"},gap:"3"},
-  ".guide-flow,.guide-workflow-steps":{display:"grid",gap:"2"},
+  ".guide-flow,.guide-workflow-steps,.guide-survey-workflow":{display:"grid",gap:"2"},
   ".guide-flow>div,.guide-workflow-steps>div,.guide-card":{p:"3",border:"1px solid",borderColor:"surface.border",borderRadius:"l2",background:"surface.raised"},
   ".guide-card-head":{display:"flex",justifyContent:"space-between",gap:"3",alignItems:"start","& h2,& h3":{fontSize:"sm",fontWeight:"900"}},
   ".guide-capabilities":{display:"flex",gap:"1.5",flexWrap:"wrap","& span":{px:"2",py:"1",borderRadius:"pill",background:"surface.hover",color:"fg.muted",fontSize:"[9px]"}},
