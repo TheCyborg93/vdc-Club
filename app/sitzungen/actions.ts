@@ -1307,6 +1307,24 @@ export async function submitMeetingMinutesAction(formData: FormData) {
            OR r.eligible_voters IS NULL
            OR r.decision_outcome IS NULL
            OR r.eligible_voters<>(r.votes_yes+r.votes_no+r.votes_abstain)
+           OR r.excluded_voters<>(
+             SELECT count(*)::int
+             FROM agenda_vote_exclusions ave
+             WHERE ave.agenda_item_id=ai.id
+           )
+           OR EXISTS(
+             SELECT 1
+             FROM agenda_vote_exclusions ave
+             LEFT JOIN meeting_attendees ma
+               ON ma.meeting_id=m.id
+              AND ma.member_id=ave.member_id
+             WHERE ave.agenda_item_id=ai.id
+               AND (
+                 ma.member_id IS NULL
+                 OR ma.attendance<>'present'
+                 OR ma.voting_eligible IS NOT TRUE
+               )
+           )
            OR (r.vote_method='roll_call' AND NULLIF(trim(r.vote_details),'') IS NULL)
       )::int AS invalid_votes,
       count(DISTINCT r.id) FILTER (
