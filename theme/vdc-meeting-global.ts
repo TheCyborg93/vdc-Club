@@ -139,7 +139,7 @@ export const vdcMeetingGlobalCss = {
   },
   ".meeting-formalities-form input,.meeting-formalities-form select,.meeting-formalities-form textarea,.meeting-officer-form input,.meeting-officer-form select,.meeting-officer-form textarea,.meeting-agenda-add-form input,.meeting-agenda-add-form select,.meeting-agenda-add-form textarea,.meeting-general-attachment-upload input,.meeting-attachment-upload input,.vote-exclusion-form input,.vote-exclusion-form select,.vote-exclusion-form textarea,.meeting-live-inline-form input,.meeting-live-inline-form select,.meeting-live-inline-form textarea,.meeting-close-form input,.meeting-close-form select,.meeting-close-form textarea": {
     width: "full",
-    minHeight: "10",
+    minHeight: { base: "[44px]", md: "10" },
     p: "2.5",
     border: "1px solid",
     borderColor: "surface.border",
