@@ -15,7 +15,7 @@ const nav=css({
 const itemStyle=css({
   display:"grid",
   placeItems:"center",
-  minH:"9",
+  minH:{base:"[44px]",md:"9"},
   px:"2",
   borderRadius:"l1",
   color:"fg.muted",
