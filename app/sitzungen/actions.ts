@@ -609,12 +609,15 @@ export async function updateMeetingStatusAction(formData: FormData) {
 
   const current=String(before.status);
   const transitions:Record<string,string[]>={
-    planned:["running","cancelled"],
+    planned:["cancelled"],
     cancelled:["planned"],
     running:["completed"],
     completed:["running"],
   };
 
+  if (current==="planned" && status==="running") {
+    redirect(`/sitzungen/${meetingId}?error=start_preparation`);
+  }
   if (status!==current && !(transitions[current] ?? []).includes(status)) {
     redirect(`/sitzungen/${meetingId}?error=invalid_transition`);
   }
