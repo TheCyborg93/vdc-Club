@@ -192,7 +192,7 @@ export async function updateDocumentStatusAction(formData: FormData) {
   const id=value(formData,"id");
   const status=value(formData,"status");
 
-  if (!id || !["active","review","archived","expired"].includes(status)) {
+  if (!id || !["draft","active","review","archived","expired"].includes(status)) {
     redirect("/dokumente?error=invalid");
   }
 
