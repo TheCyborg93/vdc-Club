@@ -82,6 +82,7 @@ const errors:Record<string,string>={
   meeting_locked:"Diese Änderung ist im aktuellen Sitzungsstatus nicht möglich.",
   open_agenda:"Die Sitzung kann noch nicht beendet werden. Offene oder aktive TOPs müssen zuerst erledigt oder vertagt werden.",
   attendance_open:"Die Sitzung kann noch nicht beendet werden. Bei allen eingeladenen Personen muss die Anwesenheit geklärt sein.",
+  guest_attendance_open:"Die Sitzung kann noch nicht beendet werden. Bei allen eingeladenen Gästen muss die Anwesenheit geklärt sein.",
   invalid_transition:"Dieser Statuswechsel ist nicht zulässig.",
   minutes_archived:"Die Sitzung kann nicht wieder geöffnet werden, weil das Protokoll bereits archiviert ist.",
   forbidden:"Diese Aktion ist für deine Rolle nicht freigegeben.",
@@ -377,6 +378,7 @@ export default async function MeetingDetailPage({
     (row)=>row.attendance==="present" && row.voting_eligible===true,
   ).length;
   const unresolvedAttendanceCount=attendees.filter((row)=>row.attendance==="invited").length;
+  const unresolvedGuestAttendanceCount=guests.filter((row)=>row.attendance==="invited").length;
   const openAgendaCount=agenda.filter((row)=>["open","active"].includes(String(row.status))).length;
   const incompleteVoteCount=agenda.filter((row)=>{
     if (!row.resolution_id) return false;
@@ -424,6 +426,7 @@ export default async function MeetingDetailPage({
     (agenda.filter((row)=>row.resolution_id).length===0 || meeting.quorum_confirmed===true) &&
     openAgendaCount===0 &&
     unresolvedAttendanceCount===0 &&
+    unresolvedGuestAttendanceCount===0 &&
     incompleteVoteCount===0 &&
     spontaneousBasisMissing===0;
   const formalCheckCount=[
@@ -1161,7 +1164,10 @@ export default async function MeetingDetailPage({
           <div className="meeting-check-metrics">
             <div><span>Anwesend</span><strong>{presentCount}/{attendees.length}</strong></div>
             <div><span>Stimmberechtigt</span><strong>{presentVoterCount}</strong></div>
-            <div><span>Gäste</span><strong>{guests.length}</strong></div>
+            <div>
+              <span>Gäste</span>
+              <strong>{guests.filter((row)=>row.attendance==="present").length}/{guests.length}</strong>
+            </div>
             <div><span>Offene TOPs</span><strong>{openAgendaCount}</strong></div>
             <div><span>Beschlüsse</span><strong>{agenda.filter((row)=>row.resolution_id).length}</strong></div>
             <div><span>Anlagen</span><strong>{attachments.length}</strong></div>
@@ -1203,7 +1209,11 @@ export default async function MeetingDetailPage({
             </div>
             <div className={unresolvedAttendanceCount===0 ? "is-ok" : "is-open"}>
               <b>{unresolvedAttendanceCount===0 ? "✓" : "!"}</b>
-              <span>Anwesenheit vollständig</span>
+              <span>Mitglieder-Anwesenheit vollständig</span>
+            </div>
+            <div className={unresolvedGuestAttendanceCount===0 ? "is-ok" : "is-open"}>
+              <b>{unresolvedGuestAttendanceCount===0 ? "✓" : "!"}</b>
+              <span>Gast-Anwesenheit vollständig</span>
             </div>
             <div className={openAgendaCount===0 ? "is-ok" : "is-open"}>
               <b>{openAgendaCount===0 ? "✓" : "!"}</b>
