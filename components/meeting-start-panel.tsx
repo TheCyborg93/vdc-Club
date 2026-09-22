@@ -1,19 +1,7 @@
 import { startMeetingAction } from "@/app/sitzungen/actions";
 
-type Attendee = {
-  member_id: unknown;
-  first_name: unknown;
-  last_name: unknown;
-  attendance: unknown;
-  voting_eligible: unknown;
-};
-
-type Guest = {
-  id: unknown;
-  name: unknown;
-  organization: unknown;
-  attendance: unknown;
-};
+type Attendee = Record<string, any>;
+type Guest = Record<string, any>;
 
 export function MeetingStartPanel({
   meetingId,
