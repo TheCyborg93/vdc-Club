@@ -4,6 +4,7 @@ import { badge, button, card, input } from "./theme/vdc-recipes";
 import { vdcGlobalCss } from "./theme/vdc-global";
 import { vdcMeetingGlobalCss } from "./theme/vdc-meeting-global";
 import { vdcMinutesGlobalCss } from "./theme/vdc-minutes-global";
+import { vdcFinanceGlobalCss } from "./theme/vdc-finance-global";
 
 export default defineConfig({
   preflight: true,
@@ -29,7 +30,7 @@ export default defineConfig({
       },
     },
   ],
-  globalCss: { ...vdcGlobalCss, ...vdcMeetingGlobalCss, ...vdcMinutesGlobalCss },
+  globalCss: { ...vdcGlobalCss, ...vdcMeetingGlobalCss, ...vdcMinutesGlobalCss, ...vdcFinanceGlobalCss },
   theme: {
     extend: {
       tokens: vdcTokens,
