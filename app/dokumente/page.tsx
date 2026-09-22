@@ -58,6 +58,7 @@ export default async function DocumentsPage({
     q?:string;
     category?:string;
     status?:string;
+    view?:string;
   }>;
 }) {
   const actor=await requirePermission("documents.read");
@@ -67,6 +68,9 @@ export default async function DocumentsPage({
   const q=(params.q ?? "").trim();
   const category=(params.category ?? "").trim();
   const status=(params.status ?? "").trim();
+  const view=["active","review","contracts","all"].includes(params.view ?? "")
+    ? String(params.view)
+    : "active";
 
   const [documents,counts,members,meetings,resolutions,financeEntries,sponsors,categories]=sql
     ? await Promise.all([
@@ -93,6 +97,26 @@ export default async function DocumentsPage({
             AND (${q}='' OR d.title ILIKE '%' || ${q} || '%' OR COALESCE(d.notes,'') ILIKE '%' || ${q} || '%')
             AND (${category}='' OR d.category=${category})
             AND (${status}='' OR d.status=${status})
+            AND (
+              ${view}='all'
+              OR (
+                ${view}='active'
+                AND d.status IN ('active','draft')
+              )
+              OR (
+                ${view}='review'
+                AND (
+                  d.status='review'
+                  OR (d.review_on IS NOT NULL AND d.review_on<=CURRENT_DATE+interval '30 days')
+                  OR (d.valid_until IS NOT NULL AND d.valid_until<=CURRENT_DATE+interval '30 days')
+                )
+              )
+              OR (
+                ${view}='contracts'
+                AND d.category='Vertrag'
+                AND d.status='active'
+              )
+            )
           ORDER BY
             CASE
               WHEN d.status='review' THEN 0
@@ -144,6 +168,13 @@ export default async function DocumentsPage({
       {params.uploaded && <div className="form-success">Datei wurde sicher hochgeladen und im Dokumentenregister gespeichert.</div>}
       {params.deleted && <div className="form-success">Dokument wurde in den Papierkorb verschoben.</div>}
 
+      <nav className="document-view-tabs" aria-label="Dokumente filtern">
+        <Link href="/dokumente" className={view==="active" ? "is-active" : ""}>Aktiv <span>{Math.max(0,Number(c.total ?? 0)-Number(c.review ?? 0))}</span></Link>
+        <Link href="/dokumente?view=review" className={view==="review" ? "is-active is-warning" : ""}>Zu prüfen <span>{Number(c.review ?? 0)}</span></Link>
+        <Link href="/dokumente?view=contracts" className={view==="contracts" ? "is-active" : ""}>Verträge <span>{Number(c.contracts ?? 0)}</span></Link>
+        <Link href="/dokumente?view=all" className={view==="all" ? "is-active" : ""}>Alle <span>{Number(c.total ?? 0)}</span></Link>
+      </nav>
+
       <section className="stat-grid">
         <article className="stat-card"><span>Dokumente</span><strong>{Number(c.total ?? 0)}</strong><small>aktive Ablage</small></article>
         <article className="stat-card"><span>Protokolle</span><strong>{Number(c.minutes ?? 0)}</strong><small>registriert</small></article>
@@ -153,6 +184,7 @@ export default async function DocumentsPage({
 
       <article className="panel document-filter-panel">
         <form method="get" className="document-filter-form">
+          <input type="hidden" name="view" value={view} />
           <label>Suche<input name="q" defaultValue={q} placeholder="Titel oder Notiz" /></label>
           <label>Kategorie
             <select name="category" defaultValue={category}>
@@ -170,11 +202,11 @@ export default async function DocumentsPage({
             </select>
           </label>
           <button className="mini-button">Filtern</button>
-          {(q || category || status) && <Link href="/dokumente" className="mini-button">Zurücksetzen</Link>}
+          {(q || category || status) && <Link href={view==="active" ? "/dokumente" : "/dokumente?view="+view} className="mini-button">Zurücksetzen</Link>}
         </form>
       </article>
 
-      <section className={canWrite ? "management-grid" : "management-grid single"}>
+      <section className="management-grid document-management-grid">
         <article className="panel">
           <div className="panel-head">
             <div><span className="eyebrow">Ablage</span><h2>Dokumentenregister</h2></div>
@@ -288,8 +320,11 @@ export default async function DocumentsPage({
         </article>
 
         {canWrite && (
-          <article className="panel sticky-panel">
-            <div className="panel-head"><div><span className="eyebrow">Neu</span><h2>Dokument registrieren</h2></div></div>
+          <details className="panel document-create-drawer">
+            <summary>
+              <div><span className="eyebrow">Neu</span><strong>Dokument registrieren</strong></div>
+              <b>+</b>
+            </summary>
             <form action={createDocumentAction} className="form-stack" encType="multipart/form-data">
               <label>Titel<input name="title" required /></label>
               <label>Kategorie
@@ -356,7 +391,7 @@ export default async function DocumentsPage({
               <label>Notiz<textarea name="notes" rows={3} /></label>
               <button className="primary-button">Dokument speichern</button>
             </form>
-          </article>
+          </details>
         )}
       </section>
     </div>
