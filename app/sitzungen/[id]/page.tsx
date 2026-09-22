@@ -10,7 +10,6 @@ import {
   removeAttendeeAction,
   carryForwardAgendaItemAction,
   carryForwardTaskAction,
-  createResolutionFromAgendaAction,
   deleteAgendaItemAction,
   deleteMeetingGuestAction,
   deleteVoteExclusionAction,
@@ -30,6 +29,7 @@ import { MeetingStartPanel } from "@/components/meeting-start-panel";
 import { MeetingLiveOptions } from "@/components/meeting-live-options";
 import { MeetingAgendaPlanner } from "@/components/meeting-agenda-planner";
 import { MeetingFocusMode } from "@/components/meeting-focus-mode";
+import { MeetingResolutionDialog } from "@/components/meeting-resolution-dialog";
 import {
   removeMeetingAttachmentAction,
   removeMeetingGeneralAttachmentAction,
