@@ -444,13 +444,16 @@ export async function permanentlyDeleteTrashItemAction(formData:FormData) {
     await sql`DELETE FROM tasks WHERE id=${id}::uuid AND deleted_at IS NOT NULL`;
   } else if (type==="document") {
     const rows=await sql`
-      SELECT storage_type,storage_ref,title
+      SELECT storage_type,storage_ref,title,category,meeting_id::text
       FROM documents
       WHERE id=${id}::uuid AND deleted_at IS NOT NULL
       LIMIT 1
     `;
     const doc=rows[0];
     if (!doc) redirect("/admin/papierkorb?error=missing");
+    if (doc.category==="Protokoll" && doc.meeting_id) {
+      redirect("/admin/papierkorb?error=protected");
+    }
 
     const versionFiles=await sql`
       SELECT storage_ref
