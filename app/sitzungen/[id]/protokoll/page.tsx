@@ -465,50 +465,94 @@ export default async function MinutesPage({
           )}
 
           {minutesStatus==="review" && (
-            <article className="panel">
-              <span className="eyebrow">Prüfung</span>
-              <h2>Wartet auf Freigabe</h2>
-              <p>
-                Eingereicht {meeting.minutes_submitted_at ? formatShortDateTime(meeting.minutes_submitted_at) : ""}
-                {meeting.submitted_by_name ? " von "+String(meeting.submitted_by_name) : ""}.
-              </p>
+            <article className="panel minutes-review-panel">
+              <div className="minutes-review-head">
+                <div>
+                  <span className="eyebrow">Prüfung</span>
+                  <h2>Protokoll zur Freigabe</h2>
+                  <p>
+                    Eingereicht {meeting.minutes_submitted_at ? formatShortDateTime(meeting.minutes_submitted_at) : ""}
+                    {meeting.submitted_by_name ? " von "+String(meeting.submitted_by_name) : ""}.
+                  </p>
+                </div>
+                <span className="minutes-status minutes-review">In Prüfung</span>
+              </div>
+
+              <div className="minutes-review-checklist">
+                <div><span>Formalia</span><strong>✓ Vollständig</strong></div>
+                <div><span>Teilnahme</span><strong>{present.length} anwesend</strong></div>
+                <div><span>TOPs</span><strong>{agenda.length} geprüft</strong></div>
+                <div><span>Beschlüsse</span><strong>{resolutionCount}</strong></div>
+                <div><span>Anlagen</span><strong>{attachments.length}</strong></div>
+              </div>
+
+              <a href="#protokoll-vorschau" className="ghost-button minutes-review-preview">
+                Finale Fassung ansehen
+              </a>
 
               {canApprove ? (
-                <div className="minutes-review-actions">
-                  <form action={approveMeetingMinutesAction}>
-                    <input type="hidden" name="meetingId" value={id} />
-                    <ConfirmSubmitButton
-                      message="Protokoll als geprüft und freigegeben markieren?"
-                      className="primary-button"
-                    >
-                      Freigeben & archivieren
-                    </ConfirmSubmitButton>
-                  </form>
+                <div className="minutes-review-decision">
+                  <div className="minutes-review-primary">
+                    <div>
+                      <strong>Alles korrekt?</strong>
+                      <span>Mit der Freigabe wird diese Version automatisch archiviert und für weitere Änderungen gesperrt.</span>
+                    </div>
+                    <form action={approveMeetingMinutesAction}>
+                      <input type="hidden" name="meetingId" value={id} />
+                      <ConfirmSubmitButton
+                        message="Protokoll als geprüft freigeben und automatisch archivieren?"
+                        className="primary-button"
+                      >
+                        Freigeben & archivieren
+                      </ConfirmSubmitButton>
+                    </form>
+                  </div>
 
-                  <form action={returnMeetingMinutesAction} className="form-stack">
-                    <input type="hidden" name="meetingId" value={id} />
-                    <label>
-                      Rückgabegrund
-                      <textarea name="returnNote" rows={3} required placeholder="Was soll der Schriftführer korrigieren?" />
-                    </label>
-                    <button className="ghost-button">Zur Überarbeitung zurückgeben</button>
-                  </form>
+                  <details className="minutes-return-drawer">
+                    <summary>
+                      <div>
+                        <strong>Korrektur erforderlich?</strong>
+                        <span>Protokoll an die Protokollführung zurückgeben</span>
+                      </div>
+                      <b>+</b>
+                    </summary>
+                    <form action={returnMeetingMinutesAction} className="form-stack">
+                      <input type="hidden" name="meetingId" value={id} />
+                      <label>
+                        Rückgabegrund
+                        <textarea
+                          name="returnNote"
+                          rows={3}
+                          required
+                          placeholder="Was soll konkret korrigiert werden?"
+                        />
+                      </label>
+                      <button className="ghost-button">Zur Überarbeitung zurückgeben</button>
+                    </form>
+                  </details>
                 </div>
               ) : (
-                <div className="minutes-waiting">Vorsitz bzw. Vertretung prüft das eingereichte Protokoll.</div>
+                <div className="minutes-waiting">
+                  Das Protokoll wartet auf Freigabe durch eine berechtigte Vorstandsrolle.
+                </div>
               )}
             </article>
           )}
 
           {minutesStatus==="archived" && (
-            <article className="panel">
-              <span className="eyebrow">Archiviert</span>
-              <h2>Workflow abgeschlossen</h2>
-              <p>
-                Archiviert {meeting.minutes_archived_at ? formatShortDateTime(meeting.minutes_archived_at) : ""}
-                {meeting.archived_by_name ? " von "+String(meeting.archived_by_name) : ""}.
-              </p>
-              <Link href="/archiv" className="ghost-button">Archiv öffnen</Link>
+            <article className="panel minutes-archive-complete">
+              <div>
+                <span className="eyebrow">Abgeschlossen</span>
+                <h2>Freigegeben & archiviert</h2>
+                <p>
+                  Archiviert {meeting.minutes_archived_at ? formatShortDateTime(meeting.minutes_archived_at) : ""}
+                  {meeting.archived_by_name ? " von "+String(meeting.archived_by_name) : ""}.
+                </p>
+              </div>
+              <div className="minutes-archive-actions">
+                <a href="#protokoll-vorschau" className="primary-button">Protokoll ansehen</a>
+                <Link href="/archiv" className="ghost-button">Archiv öffnen</Link>
+              </div>
             </article>
           )}
 
