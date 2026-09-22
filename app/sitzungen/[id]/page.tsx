@@ -15,6 +15,7 @@ import {
   deleteMeetingGuestAction,
   deleteVoteExclusionAction,
   updateAgendaFormalAction,
+  updateAgendaPreparationAction,
   updateAgendaStatusAction,
   updateAttendanceAction,
   updateMeetingDetailsAction,
@@ -27,6 +28,7 @@ import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 import { MeetingAutoNotes } from "@/components/meeting-auto-notes";
 import { MeetingStartPanel } from "@/components/meeting-start-panel";
 import { MeetingLiveOptions } from "@/components/meeting-live-options";
+import { MeetingAgendaPlanner } from "@/components/meeting-agenda-planner";
 import {
   removeMeetingAttachmentAction,
   uploadMeetingAttachmentAction,
@@ -59,6 +61,12 @@ const outcomeLabels:Record<string,string>={
   rejected:"Abgelehnt",
 };
 
+const agendaTypeLabels:Record<string,string>={
+  information:"Information",
+  consultation:"Beratung",
+  decision:"Beschluss",
+};
+
 const agendaLabels:Record<string,string>={
   open:"Offen",
   active:"In Bearbeitung",
@@ -84,6 +92,7 @@ const errors:Record<string,string>={
   formalities_open:"Einladung, Tagesordnung und Beschlussfähigkeit müssen vollständig dokumentiert sein.",
   not_quorate_for_resolutions:"Beschlüsse können nur bei dokumentierter Beschlussfähigkeit abgeschlossen werden.",
   vote_incomplete:"Mindestens eine Abstimmung ist formal unvollständig oder die Stimmenzahl passt nicht.",
+  decision_missing_vote:"Mindestens ein Beschluss-TOP wurde ohne Abstimmung abgeschlossen.",
   vote_mismatch:"Ja, Nein und Enthaltungen müssen zusammen genau der Zahl der Stimmberechtigten entsprechen.",
   roll_call_details:"Bei einer namentlichen Abstimmung müssen Namen und jeweilige Stimmen dokumentiert werden.",
   spontaneous_basis:"Bei einem nicht mit der Einladung angekündigten TOP ist vor einem Beschluss eine Begründung erforderlich.",
@@ -216,6 +225,9 @@ export default async function MeetingDetailPage({
         ai.description,
         ai.notes,
         ai.status,
+        ai.agenda_type,
+        ai.result_code,
+        ai.created_at,
         ai.announced_with_invitation,
         ai.decision_basis_note,
         ai.carried_from_agenda_item_id::text,
@@ -383,6 +395,9 @@ export default async function MeetingDetailPage({
   const unresolvedAttendanceCount=attendees.filter((row)=>row.attendance==="invited").length;
   const unresolvedGuestAttendanceCount=guests.filter((row)=>row.attendance==="invited").length;
   const openAgendaCount=agenda.filter((row)=>["open","active"].includes(String(row.status))).length;
+  const missingDecisionVoteCount=agenda.filter(
+    (row)=>row.agenda_type==="decision" && row.status==="done" && !row.resolution_id,
+  ).length;
   const incompleteVoteCount=agenda.filter((row)=>{
     if (!row.resolution_id) return false;
     const eligible=row.eligible_voters==null ? null : Number(row.eligible_voters);
@@ -452,6 +467,7 @@ export default async function MeetingDetailPage({
     openAgendaCount===0 &&
     unresolvedAttendanceCount===0 &&
     unresolvedGuestAttendanceCount===0 &&
+    missingDecisionVoteCount===0 &&
     incompleteVoteCount===0 &&
     spontaneousBasisMissing===0;
   const workflowPhase=
@@ -786,6 +802,9 @@ export default async function MeetingDetailPage({
                 <div>
                   <span className="eyebrow">TOP {Number(preferredAgenda.position)}</span>
                   <h2>{String(preferredAgenda.title)}</h2>
+                  <span className={"agenda-type-chip agenda-type-"+String(preferredAgenda.agenda_type ?? "consultation")}>
+                    {agendaTypeLabels[String(preferredAgenda.agenda_type)] ?? "Beratung"}
+                  </span>
                 </div>
                 <div className="meeting-focus-status">
                   <span>Status</span>
@@ -1244,6 +1263,10 @@ export default async function MeetingDetailPage({
                 <b>{openAgendaCount===0 ? "✓" : "!"}</b>
                 <span>Alle TOPs erledigt/vertagt</span>
               </div>
+              <div className={missingDecisionVoteCount===0 ? "is-ok" : "is-open"}>
+                <b>{missingDecisionVoteCount===0 ? "✓" : "!"}</b>
+                <span>Beschluss-TOPs abgestimmt</span>
+              </div>
               <div className={incompleteVoteCount===0 ? "is-ok" : "is-open"}>
                 <b>{incompleteVoteCount===0 ? "✓" : "!"}</b>
                 <span>Abstimmungen vollständig</span>
@@ -1324,6 +1347,52 @@ export default async function MeetingDetailPage({
               </article>
             ))}
           </div>
+        </section>
+      )}
+
+      {["planned","cancelled"].includes(String(meeting.status)) && (
+        <section className="panel meeting-prep-agenda">
+          <div className="panel-head">
+            <div>
+              <span className="eyebrow">Tagesordnung</span>
+              <h2>TOPs planen</h2>
+            </div>
+            <span className="count-chip">{agenda.length}</span>
+          </div>
+
+          <MeetingAgendaPlanner
+            meetingId={id}
+            initialItems={agenda}
+            canWrite={canWrite && meeting.status==="planned"}
+          />
+
+          {canWrite && meeting.status==="planned" && (
+            <form action={addAgendaItemAction} className="meeting-agenda-add-form">
+              <input type="hidden" name="meetingId" value={id} />
+              <label>
+                Titel
+                <input name="title" required placeholder="z. B. Sponsoring" />
+              </label>
+              <label>
+                Typ
+                <select name="agendaType" defaultValue="consultation">
+                  <option value="information">Information</option>
+                  <option value="consultation">Beratung</option>
+                  <option value="decision">Beschluss</option>
+                </select>
+              </label>
+              <label className="wide">
+                Sachverhalt / Vorbereitung
+                <textarea name="description" rows={2} placeholder="Optional" />
+              </label>
+              <div className="meeting-agenda-add-footer wide">
+                <small>
+                  Vor Versand der Einladung = angekündigt. Danach ergänzte TOPs werden automatisch als nachträglich markiert.
+                </small>
+                <button className="primary-button" type="submit">TOP hinzufügen</button>
+              </div>
+            </form>
+          )}
         </section>
       )}
 
@@ -1434,23 +1503,6 @@ export default async function MeetingDetailPage({
             </form>
           )}
         </article>
-
-        {canWrite && meeting.status==="planned" && (
-          <article className="panel">
-            <div className="panel-head">
-              <div><span className="eyebrow">Tagesordnung</span><h2>TOP hinzufügen</h2></div>
-            </div>
-            <form action={addAgendaItemAction} className="form-stack">
-              <input type="hidden" name="meetingId" value={id} />
-              <label>Titel<input name="title" required /></label>
-              <label>Sachverhalt / Vorbereitung<textarea name="description" rows={3} /></label>
-              <small className="form-hint">
-                Vor Versand der Einladung = angekündigt. Danach hinzugefügte TOPs werden automatisch als nachträglich markiert.
-              </small>
-              <button className="primary-button" type="submit">TOP hinzufügen</button>
-            </form>
-          </article>
-        )}
 
         <details className="meeting-prep-more">
           <summary>
