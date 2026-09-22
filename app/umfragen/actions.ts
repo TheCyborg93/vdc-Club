@@ -311,6 +311,29 @@ export async function updateSurveyStatusAction(formData: FormData) {
     redirect("/umfragen?error=invalid");
   }
 
+  const stateRows=await sql`
+    SELECT id::text,title,status,ends_at
+    FROM surveys
+    WHERE id=${id}::uuid
+    LIMIT 1
+  `;
+  const state=stateRows[0];
+  if (!state) redirect("/umfragen?error=not_found");
+
+  const current=String(state.status);
+  const allowedTransitions:Record<string,string[]>={
+    draft:["active","archived"],
+    active:["closed","archived"],
+    closed:["active","archived"],
+    archived:[],
+  };
+  if (!(allowedTransitions[current] ?? []).includes(next)) {
+    redirect(`/umfragen/${id}?error=invalid_transition`);
+  }
+  if (next==="active" && state.ends_at && new Date(String(state.ends_at)).getTime()<=Date.now()) {
+    redirect(`/umfragen/${id}?error=deadline_passed`);
+  }
+
   await sql`
     UPDATE surveys
     SET
@@ -324,7 +347,11 @@ export async function updateSurveyStatusAction(formData: FormData) {
     WHERE id=${id}::uuid
   `;
 
-  await writeAudit(actor.id, "survey.status_changed", "survey", id, { status: next });
+  await writeAudit(actor.id, "survey.status_changed", "survey", id, {
+    title:String(state.title ?? ""),
+    before:current,
+    after:next,
+  });
 
   revalidatePath("/umfragen");
   revalidatePath(`/umfragen/${id}`);
