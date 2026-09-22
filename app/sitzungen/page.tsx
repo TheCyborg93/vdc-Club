@@ -81,10 +81,10 @@ function MeetingCard({meeting}:{meeting:Record<string,unknown>}) {
       <div className="meeting-overview-readiness">
         <div>
           <span>Vorbereitung</span>
-          <strong>{ready}/7</strong>
+          <strong>{ready}/8</strong>
         </div>
         <div className="meeting-mini-progress" aria-hidden="true">
-          <i style={{width:`${Math.round((ready/7)*100)}%`}} />
+          <i style={{width:`${Math.round((ready/8)*100)}%`}} />
         </div>
       </div>
 
@@ -232,7 +232,7 @@ export default async function MeetingsPage({
               <span>{modeLabels[String(focus.meeting_mode)] ?? "Präsenz"}</span>
               <span>{Number(focus.agenda_count ?? 0)} TOPs</span>
               <span>{Number(focus.attendee_count ?? 0)} Personen</span>
-              <span>{readiness(focus)}/7 Vorbereitung</span>
+              <span>{readiness(focus)}/8 Vorbereitung</span>
             </div>
           </div>
           <div className="meeting-focus-overview-actions">
