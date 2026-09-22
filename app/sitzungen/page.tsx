@@ -48,7 +48,8 @@ function readiness(row:Record<string,unknown>) {
     Boolean(String(row.invitation_method ?? "").trim()),
     row.invitation_timely!=null,
     row.agenda_sent_with_invitation!=null,
-    row.quorum_confirmed!=null,
+    Number(row.attendee_count ?? 0)>0,
+    Number(row.agenda_count ?? 0)>0,
   ].filter(Boolean).length;
 }
 
