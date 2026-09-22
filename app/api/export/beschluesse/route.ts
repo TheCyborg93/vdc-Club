@@ -14,7 +14,7 @@ export async function GET() {
   const rows=await sql`
     SELECT
       r.resolution_number,r.title,r.decision_text,
-      r.vote_method,r.eligible_voters,r.excluded_voters,r.decision_outcome,
+      r.vote_method,r.vote_details,r.eligible_voters,r.excluded_voters,r.decision_outcome,
       r.votes_yes,r.votes_no,r.votes_abstain,
       r.status,r.decided_at,r.implemented_at,r.implementation_notes,m.title AS meeting_title,
       t.title AS task_title,t.status AS task_status,t.due_date,
@@ -35,10 +35,10 @@ export async function GET() {
   `;
 
   const csv=toCsv(
-    ["Nummer","Titel","Beschlusstext","Abstimmungsart","Stimmberechtigt","Ausgeschlossen","Abstimmungsergebnis","Ja","Nein","Enthaltung","Status","Beschlossen am","Umgesetzt am","Umsetzungsnotiz","Sitzung","Folgeaufgabe","Aufgabenstatus","Frist","Verantwortlich"],
+    ["Nummer","Titel","Beschlusstext","Abstimmungsart","Abstimmungsdetails","Stimmberechtigt","Ausgeschlossen","Abstimmungsergebnis","Ja","Nein","Enthaltung","Status","Beschlossen am","Umgesetzt am","Umsetzungsnotiz","Sitzung","Folgeaufgabe","Aufgabenstatus","Frist","Verantwortlich"],
     rows.map((row)=>[
       row.resolution_number,row.title,row.decision_text,
-      row.vote_method,row.eligible_voters,row.excluded_voters,row.decision_outcome,
+      row.vote_method,row.vote_details,row.eligible_voters,row.excluded_voters,row.decision_outcome,
       row.votes_yes,row.votes_no,row.votes_abstain,
       row.status,row.decided_at,row.implemented_at,row.implementation_notes,row.meeting_title,row.task_title,row.task_status,row.due_date,
       row.owner_first_name ? String(row.owner_first_name)+" "+String(row.owner_last_name ?? "") : "",
