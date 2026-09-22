@@ -98,7 +98,7 @@ export const vdcGlobalCss = {
     alignItems: "center",
     justifyContent: "center",
     gap: "2",
-    minHeight: "9",
+    minHeight: { base: "[44px]", md: "9" },
     paddingInline: "3",
     borderRadius: "l1",
     border: "1px solid",
@@ -124,7 +124,7 @@ export const vdcGlobalCss = {
     color: "fg",
   },
   ".light-button": { borderColor: "warmWhite", background: "warmWhite", color: "ink" },
-  ".mini-button": { minHeight: "8", paddingInline: "2.5", fontSize: "xs" },
+  ".mini-button": { minHeight: { base: "[44px]", md: "8" }, paddingInline: "2.5", fontSize: "xs" },
   ".text-link, .back-link": { color: "brand.hover", fontSize: "xs", fontWeight: "850" },
   ".text-link:hover, .back-link:hover": { textDecoration: "underline" },
 
