@@ -1335,10 +1335,12 @@ export async function approveMeetingMinutesAction(formData: FormData) {
   const rows=await sql`
     UPDATE meetings
     SET
-      minutes_status='approved',
+      minutes_status='archived',
       minutes_return_note=NULL,
       minutes_approved_at=now(),
       minutes_approved_by=${actor.id}::uuid,
+      minutes_archived_at=now(),
+      minutes_archived_by=${actor.id}::uuid,
       updated_at=now()
     WHERE id=${meetingId}::uuid
       AND minutes_status='review'
@@ -1356,30 +1358,33 @@ export async function approveMeetingMinutesAction(formData: FormData) {
     VALUES (
       ${meetingId}::uuid,
       ${Number(meeting.minutes_version ?? 1)}::int,
-      'approved',
+      'archived',
       ${meeting.minutes_intro ?? null},
       ${meeting.minutes_closing ?? null},
       ${actor.id}::uuid,
-      'Protokoll freigegeben'
+      'Protokoll freigegeben und automatisch archiviert'
     )
   `;
 
   await sql`
     UPDATE documents
     SET
-      status='active',
-      notes='Freigegebenes Sitzungsprotokoll.',
+      status='archived',
+      archived_at=now(),
+      archived_by=${actor.id}::uuid,
+      notes='Freigegebenes Sitzungsprotokoll · automatisch archiviert.',
       updated_at=now()
     WHERE meeting_id=${meetingId}::uuid
       AND category='Protokoll'
       AND deleted_at IS NULL
   `;
 
-  await writeAudit(actor.id,"meeting.minutes_approved","meeting",meetingId,{});
+  await writeAudit(actor.id,"meeting.minutes_approved_and_archived","meeting",meetingId,{});
   revalidatePath(`/sitzungen/${meetingId}`);
   revalidatePath(`/sitzungen/${meetingId}/protokoll`);
   revalidatePath("/dokumente");
-  redirect(`/sitzungen/${meetingId}/protokoll?approved=1`);
+  revalidatePath("/archiv");
+  redirect(`/sitzungen/${meetingId}/protokoll?archived=1`);
 }
 
 export async function archiveMeetingMinutesAction(formData: FormData) {
