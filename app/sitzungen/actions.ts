@@ -76,6 +76,20 @@ export async function updateMeetingDetailsAction(formData: FormData) {
       starts_at=(${startsAt}::timestamp AT TIME ZONE 'Europe/Berlin'),
       location=${location || null},
       notes=${notes || null},
+      minutes_status=CASE
+        WHEN ${status}='running' AND status='completed' AND minutes_status<>'archived' THEN 'draft'
+        ELSE minutes_status
+      END,
+      minutes_version=CASE
+        WHEN ${status}='running' AND status='completed' AND minutes_status IN ('review','approved')
+          THEN minutes_version+1
+        ELSE minutes_version
+      END,
+      minutes_return_note=CASE
+        WHEN ${status}='running' AND status='completed' AND minutes_status<>'archived'
+          THEN 'Sitzung wurde wieder geöffnet. Protokoll muss erneut geprüft werden.'
+        ELSE minutes_return_note
+      END,
       updated_at=now()
     WHERE id=${meetingId}::uuid
       AND deleted_at IS NULL
@@ -404,7 +418,7 @@ export async function updateMeetingStatusAction(formData: FormData) {
     : "planned";
 
   const beforeRows=await sql`
-    SELECT id::text,title,status,starts_at,event_id::text
+    SELECT id::text,title,status,starts_at,event_id::text,minutes_status
     FROM meetings
     WHERE id=${meetingId}::uuid
       AND deleted_at IS NULL
@@ -423,6 +437,10 @@ export async function updateMeetingStatusAction(formData: FormData) {
 
   if (status!==current && !(transitions[current] ?? []).includes(status)) {
     redirect(`/sitzungen/${meetingId}?error=invalid_transition`);
+  }
+
+  if (current==="completed" && status==="running" && String(before.minutes_status)==="archived") {
+    redirect(`/sitzungen/${meetingId}?error=minutes_archived`);
   }
 
   if (status==="completed") {
