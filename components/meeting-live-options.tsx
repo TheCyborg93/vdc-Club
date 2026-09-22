@@ -97,6 +97,11 @@ export function MeetingLiveOptions({
           <form action={addAgendaItemAction} className="meeting-live-inline-form">
             <input type="hidden" name="meetingId" value={meetingId} />
             <input name="title" required placeholder="Titel des neuen TOPs" />
+            <select name="agendaType" defaultValue="consultation" aria-label="TOP-Typ">
+              <option value="information">Information</option>
+              <option value="consultation">Beratung</option>
+              <option value="decision">Beschluss</option>
+            </select>
             <input name="description" placeholder="Sachverhalt / kurze Vorbereitung" />
             <button className="mini-button">TOP hinzufügen</button>
           </form>
