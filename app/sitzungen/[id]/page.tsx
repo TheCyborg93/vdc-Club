@@ -49,6 +49,8 @@ const errors:Record<string,string>={
   open_agenda:"Die Sitzung kann noch nicht beendet werden. Offene oder aktive TOPs müssen zuerst erledigt oder vertagt werden.",
   attendance_open:"Die Sitzung kann noch nicht beendet werden. Bei allen eingeladenen Personen muss die Anwesenheit geklärt sein.",
   invalid_transition:"Dieser Statuswechsel ist nicht zulässig.",
+  minutes_archived:"Die Sitzung kann nicht wieder geöffnet werden, weil das Protokoll bereits archiviert ist.",
+  forbidden:"Diese Aktion ist für deine Rolle nicht freigegeben.",
 };
 
 export const dynamic="force-dynamic";
