@@ -485,17 +485,14 @@ export default async function MeetingDetailPage({
         </div>
 
         <div className="meeting-control-tools">
-          <Link href={`/sitzungen/${id}/protokoll`} className="ghost-button">
-            Schriftführer · {minutesStatusLabels[minutesStatus] ?? minutesStatus}
-          </Link>
           <b className={`status-badge status-${meeting.status}`}>{meetingStatusLabel(meeting.status)}</b>
 
           {canWrite && meeting.status==="planned" && (
-            <form action={updateMeetingStatusAction}>
-              <input type="hidden" name="meetingId" value={id} />
-              <input type="hidden" name="status" value="running" />
-              <button className="primary-button">Sitzung starten</button>
-            </form>
+            <a href="#sitzung-starten" className="primary-button">Sitzung starten</a>
+          )}
+
+          {canWrite && meeting.status==="running" && (
+            <a href="#abschluss" className="primary-button">Sitzung beenden</a>
           )}
 
           {canWrite && meeting.status==="cancelled" && (
@@ -506,37 +503,45 @@ export default async function MeetingDetailPage({
             </form>
           )}
 
-          {canWrite && meeting.status==="completed" && (
-            <form action={updateMeetingStatusAction}>
-              <input type="hidden" name="meetingId" value={id} />
-              <input type="hidden" name="status" value="running" />
-              <ConfirmSubmitButton
-                message="Sitzung wieder öffnen? Das Ende wird zurückgesetzt und die Sitzung kann weiter bearbeitet werden."
-                className="mini-button"
-              >
-                Wieder öffnen
-              </ConfirmSubmitButton>
-            </form>
+          {meeting.status==="completed" && (
+            <Link href={`/sitzungen/${id}/protokoll`} className="primary-button">Protokoll öffnen</Link>
+          )}
+
+          {canWrite && meeting.status==="completed" && minutesStatus!=="archived" && (
+            <details className="meeting-hero-more">
+              <summary className="mini-button">•••</summary>
+              <div>
+                <form action={updateMeetingStatusAction}>
+                  <input type="hidden" name="meetingId" value={id} />
+                  <input type="hidden" name="status" value="running" />
+                  <ConfirmSubmitButton
+                    message="Sitzung wieder öffnen? Das Ende wird zurückgesetzt und das Protokoll muss erneut geprüft werden."
+                    className="mini-button"
+                  >
+                    Sitzung wieder öffnen
+                  </ConfirmSubmitButton>
+                </form>
+              </div>
+            </details>
           )}
         </div>
       </section>
 
-      <nav className="meeting-workflow-bar" aria-label="Sitzungsablauf">
+      <nav className="meeting-workflow-bar meeting-workflow-three" aria-label="Sitzungsablauf">
         <a href="#vorbereitung" className={workflowPhase===1 ? "is-current" : workflowPhase>1 ? "is-done" : ""}>
           <b>1</b>
-          <span><strong>Vorbereitung</strong><small>Formalia & Personen</small></span>
+          <span><strong>Vorbereitung</strong><small>Daten, Einladung, Personen, TOPs</small></span>
         </a>
-        <a href="#live" className={workflowPhase===2 ? "is-current" : workflowPhase>2 ? "is-done" : ""}>
+        <a
+          href={meeting.status==="planned" ? "#sitzung-starten" : "#live"}
+          className={workflowPhase===2 ? "is-current" : workflowPhase>2 ? "is-done" : ""}
+        >
           <b>2</b>
-          <span><strong>Live-Sitzung</strong><small>TOPs & Beschlüsse</small></span>
+          <span><strong>Sitzung</strong><small>Anwesenheit, TOPs & Beschlüsse</small></span>
         </a>
-        <a href="#abschluss" className={workflowPhase===3 ? "is-current" : workflowPhase>3 ? "is-done" : ""}>
+        <Link href={`/sitzungen/${id}/protokoll`} className={workflowPhase===3 ? "is-current" : ""}>
           <b>3</b>
-          <span><strong>Abschluss</strong><small>Vollständigkeit prüfen</small></span>
-        </a>
-        <Link href={`/sitzungen/${id}/protokoll`} className={workflowPhase===4 ? "is-current" : ""}>
-          <b>4</b>
-          <span><strong>Protokoll</strong><small>Prüfung & Archiv</small></span>
+          <span><strong>Protokoll</strong><small>Prüfen, freigeben, archivieren</small></span>
         </Link>
       </nav>
 
@@ -546,26 +551,60 @@ export default async function MeetingDetailPage({
       {query.agenda_deleted && <div className="form-success">TOP wurde gelöscht.</div>}
 
       <section className="meeting-control-stats">
-        <article className={formalCheckCount===4 ? "is-ready" : "needs-attention"}>
-          <span>Formalia</span>
-          <strong>{formalCheckCount}/6</strong>
-          <small>{formalCheckCount===6 ? "vollständig" : "noch ergänzen"}</small>
-        </article>
-        <article className={openAgendaCount===0 ? "is-ready" : ""}>
-          <span>Tagesordnung</span>
-          <strong>{agenda.length}</strong>
-          <small>{openAgendaCount} offen</small>
-        </article>
-        <article className={unresolvedAttendanceCount===0 && attendees.length>0 ? "is-ready" : ""}>
-          <span>Teilnahme</span>
-          <strong>{presentCount}/{attendees.length}</strong>
-          <small>{presentVoterCount} stimmberechtigt anwesend</small>
-        </article>
-        <article>
-          <span>Beschlüsse</span>
-          <strong>{agenda.filter((row)=>row.resolution_id).length}</strong>
-          <small>{incompleteVoteCount ? incompleteVoteCount+" unvollständig" : "formal geprüft"}</small>
-        </article>
+        {workflowPhase===1 ? (
+          <>
+            <article className={preparationReady ? "is-ready" : "needs-attention"}>
+              <span>Vorbereitung</span>
+              <strong>{preparationCheckCount}/7</strong>
+              <small>{preparationReady ? "bereit zum Start" : "noch ergänzen"}</small>
+            </article>
+            <article className={attendees.length>0 ? "is-ready" : ""}>
+              <span>Eingeladen</span>
+              <strong>{attendees.length}</strong>
+              <small>{attendees.filter((row)=>row.voting_eligible===true).length} stimmberechtigt</small>
+            </article>
+            <article className={agenda.length>0 ? "is-ready" : ""}>
+              <span>Tagesordnung</span>
+              <strong>{agenda.length}</strong>
+              <small>{carryovers.length} offene Punkte verfügbar</small>
+            </article>
+            <article>
+              <span>Gäste</span>
+              <strong>{guests.length}</strong>
+              <small>optional</small>
+            </article>
+          </>
+        ) : workflowPhase===2 ? (
+          <>
+            <article className={meeting.quorum_confirmed===true ? "is-ready" : "needs-attention"}>
+              <span>Beschlussfähig</span>
+              <strong>{meeting.quorum_confirmed===true ? "Ja" : "Nein"}</strong>
+              <small>Sitzungsbeginn dokumentiert</small>
+            </article>
+            <article>
+              <span>Anwesend</span>
+              <strong>{presentCount}/{attendees.length}</strong>
+              <small>{presentVoterCount} stimmberechtigt</small>
+            </article>
+            <article className={openAgendaCount===0 ? "is-ready" : ""}>
+              <span>TOPs</span>
+              <strong>{openAgendaCount}</strong>
+              <small>noch offen</small>
+            </article>
+            <article>
+              <span>Beschlüsse</span>
+              <strong>{agenda.filter((row)=>row.resolution_id).length}</strong>
+              <small>{attachments.length} Anlagen</small>
+            </article>
+          </>
+        ) : (
+          <>
+            <article className="is-ready"><span>Sitzung</span><strong>Beendet</strong><small>{formatDateTime(meeting.ended_at)}</small></article>
+            <article><span>TOPs</span><strong>{agenda.length}</strong><small>{agenda.filter((row)=>row.status==="deferred").length} vertagt</small></article>
+            <article><span>Beschlüsse</span><strong>{agenda.filter((row)=>row.resolution_id).length}</strong><small>{attachments.length} Anlagen</small></article>
+            <article><span>Protokoll</span><strong>{minutesStatusLabels[minutesStatus] ?? minutesStatus}</strong><small>nächster Arbeitsschritt</small></article>
+          </>
+        )}
       </section>
 
       <section className="meeting-formalities-panel" id="vorbereitung">
