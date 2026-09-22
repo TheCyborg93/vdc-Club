@@ -20,6 +20,12 @@ const meetingModeLabels:Record<string,string>={
   online:"Online",
 };
 
+const agendaTypeLabels:Record<string,string>={
+  information:"Information",
+  consultation:"Beratung",
+  decision:"Beschluss",
+};
+
 const voteMethodLabels:Record<string,string>={
   open:"Offen",
   show_of_hands:"Handzeichen",
@@ -145,6 +151,7 @@ export default async function MinutesPage({
         ai.description,
         ai.notes,
         ai.status,
+        ai.agenda_type,
         ai.announced_with_invitation,
         ai.decision_basis_note,
         r.resolution_number,
@@ -429,7 +436,7 @@ export default async function MinutesPage({
                       message="Protokoll als geprüft und freigegeben markieren?"
                       className="primary-button"
                     >
-                      Protokoll freigeben
+                      Freigeben & archivieren
                     </ConfirmSubmitButton>
                   </form>
 
@@ -651,6 +658,9 @@ export default async function MinutesPage({
                 <div className="minutes-top-title">
                   <span>TOP {String(item.position).padStart(2, "0")}</span>
                   <h3>{String(item.title)}</h3>
+                  <b className="minutes-agenda-type">
+                    {agendaTypeLabels[String(item.agenda_type)] ?? "Beratung"}
+                  </b>
                   {!item.announced_with_invitation && <b className="minutes-spontaneous">nachträglich ergänzt</b>}
                 </div>
                 {item.description && <p>{String(item.description)}</p>}
