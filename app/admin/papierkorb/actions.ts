@@ -72,13 +72,16 @@ export async function moveToTrashAction(formData:FormData) {
   if (type==="document") {
     const actor=await requirePermission("documents.write");
     const rows=await sql`
-      SELECT id::text,title,category
+      SELECT id::text,title,category,meeting_id::text
       FROM documents
       WHERE id=${id}::uuid AND deleted_at IS NULL
       LIMIT 1
     `;
     const doc=rows[0];
     if (!doc) redirect("/dokumente?error=missing");
+    if (doc.category==="Protokoll" && doc.meeting_id) {
+      redirect("/archiv?error=protocol_locked");
+    }
 
     await sql`
       UPDATE documents
