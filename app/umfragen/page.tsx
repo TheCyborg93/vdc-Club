@@ -25,12 +25,15 @@ function formatDate(value: unknown) {
 export default async function SurveysPage({
   searchParams,
 }: {
-  searchParams: Promise<{deleted?:string}>;
+  searchParams: Promise<{deleted?:string;view?:string}>;
 }) {
   const user = await requirePermission("surveys.read");
   const query = await searchParams;
   const sql = getDb();
   const canWrite = hasPermission(user.roles, "surveys.write");
+  const view=["active","draft","closed","all"].includes(query.view ?? "")
+    ? String(query.view)
+    : "active";
 
   const surveys = sql ? await sql`
     SELECT
@@ -55,7 +58,20 @@ export default async function SurveysPage({
 
   const active = surveys.filter((survey) => survey.status === "active").length;
   const drafts = surveys.filter((survey) => survey.status === "draft").length;
+  const closed = surveys.filter((survey) => ["closed","archived"].includes(String(survey.status))).length;
+  const overdueActive = surveys.filter(
+    (survey) =>
+      survey.status==="active" &&
+      survey.ends_at &&
+      new Date(String(survey.ends_at)).getTime()<=Date.now(),
+  ).length;
   const responses = surveys.reduce((sum, survey) => sum + Number(survey.responses ?? 0), 0);
+  const visibleSurveys=surveys.filter((survey)=>{
+    if (view==="all") return true;
+    if (view==="active") return survey.status==="active";
+    if (view==="draft") return survey.status==="draft";
+    return ["closed","archived"].includes(String(survey.status));
+  });
 
   return (
     <div className="page-stack">
@@ -77,15 +93,42 @@ export default async function SurveysPage({
 
       {query.deleted && <div className="form-success">Umfrage wurde endgültig gelöscht.</div>}
 
+      <nav className="survey-view-tabs" aria-label="Umfragen filtern">
+        <Link href="/umfragen" className={view==="active" ? "is-active" : ""}>
+          Aktiv <span>{active}</span>
+        </Link>
+        <Link href="/umfragen?view=draft" className={view==="draft" ? "is-active" : ""}>
+          Entwürfe <span>{drafts}</span>
+        </Link>
+        <Link href="/umfragen?view=closed" className={view==="closed" ? "is-active" : ""}>
+          Beendet <span>{closed}</span>
+        </Link>
+        <Link href="/umfragen?view=all" className={view==="all" ? "is-active" : ""}>
+          Alle <span>{surveys.length}</span>
+        </Link>
+      </nav>
+
+      {overdueActive>0 && (
+        <div className="survey-overdue-banner">
+          <strong>{overdueActive} aktive Umfrage(n) mit abgelaufener Frist</strong>
+          <span>Diese Umfragen nehmen öffentlich bereits keine Antworten mehr an und sollten formal beendet werden.</span>
+        </div>
+      )}
+
       <article className="panel">
         <div className="panel-head">
           <div><span className="eyebrow">Übersicht</span><h2>Alle Umfragen</h2></div>
         </div>
 
         <div className="survey-list">
-          {surveys.length === 0 ? (
-            <div className="empty-state">Noch keine Umfrage vorhanden.</div>
-          ) : surveys.map((survey) => (
+          {visibleSurveys.length === 0 ? (
+            <div className="empty-state">Keine Umfrage in dieser Ansicht.</div>
+          ) : visibleSurveys.map((survey) => { 
+            const deadlinePassed=
+              survey.status==="active" &&
+              Boolean(survey.ends_at) &&
+              new Date(String(survey.ends_at)).getTime()<=Date.now();
+            return (
             <Link href={`/umfragen/${survey.id}`} className="survey-list-row" key={String(survey.id)}>
               <div className="survey-list-main">
                 <span>{String(survey.topic)} · {String(survey.target_group)}</span>
@@ -95,6 +138,7 @@ export default async function SurveysPage({
                 </small>
               </div>
               <div className="survey-list-meta">
+                {deadlinePassed && <span className="survey-deadline-chip">Frist abgelaufen</span>}
                 <span className={`survey-status survey-status-${survey.status}`}>
                   {statusLabels[String(survey.status)] ?? String(survey.status)}
                 </span>
@@ -102,7 +146,8 @@ export default async function SurveysPage({
               </div>
               <b>›</b>
             </Link>
-          ))}
+            );
+          })}
         </div>
       </article>
     </div>
