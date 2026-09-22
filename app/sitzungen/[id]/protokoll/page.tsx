@@ -199,11 +199,12 @@ export default async function MinutesPage({
       LIMIT 20
     `,
     sql`
-      SELECT id::text,name,organization,note
+      SELECT id::text,name,organization,note,attendance
       FROM meeting_guests
       WHERE meeting_id=${id}::uuid
-        AND attendance='present'
-      ORDER BY name
+      ORDER BY
+        CASE attendance WHEN 'present' THEN 0 WHEN 'absent' THEN 1 ELSE 2 END,
+        name
     `,
     sql`
       SELECT
@@ -236,6 +237,7 @@ export default async function MinutesPage({
   const excused = attendees.filter((row) => row.attendance === "excused");
   const absent = attendees.filter((row) => ["absent", "invited"].includes(String(row.attendance)));
   const votingPresent=present.filter((row)=>row.voting_eligible===true);
+  const presentGuests=guests.filter((row)=>row.attendance==="present");
   const generalAttachments=attachments.filter((doc)=>!doc.agenda_item_id);
 
   const canWrite=hasPermission(actor.roles,"meetings.write");
@@ -253,6 +255,56 @@ export default async function MinutesPage({
     meeting.agenda_sent_with_invitation!=null &&
     meeting.quorum_confirmed!=null &&
     officersComplete;
+
+  const chairPresent=present.some((row)=>String(row.member_id)===String(meeting.chair_member_id));
+  const minuteTakerPresent=present.some((row)=>String(row.member_id)===String(meeting.minute_taker_member_id));
+  const unresolvedAttendeeCount=attendees.filter((row)=>row.attendance==="invited").length;
+  const unresolvedGuestCount=guests.filter((row)=>row.attendance==="invited").length;
+  const unfinishedAgendaCount=agenda.filter((row)=>!["done","deferred"].includes(String(row.status))).length;
+  const decisionWithoutResolutionCount=agenda.filter(
+    (row)=>row.agenda_type==="decision" && row.status==="done" && !row.resolution_number,
+  ).length;
+  const invalidVoteCount=agenda.filter((row)=>{
+    if (!row.resolution_number) return false;
+    const eligible=row.eligible_voters==null ? null : Number(row.eligible_voters);
+    const voteTotal=Number(row.votes_yes ?? 0)+Number(row.votes_no ?? 0)+Number(row.votes_abstain ?? 0);
+    const exclusionCount=exclusions.filter(
+      (entry)=>String(entry.agenda_item_id)===String(row.id),
+    ).length;
+    return !row.vote_method ||
+      !row.decision_outcome ||
+      eligible==null ||
+      eligible!==voteTotal ||
+      Number(row.excluded_voters ?? 0)!==exclusionCount ||
+      (row.vote_method==="roll_call" && !String(row.vote_details ?? "").trim());
+  }).length;
+  const spontaneousWithoutBasisCount=agenda.filter(
+    (row)=>row.resolution_number &&
+      row.announced_with_invitation===false &&
+      !String(row.decision_basis_note ?? "").trim(),
+  ).length;
+  const protocolReady=
+    formalReady &&
+    chairPresent &&
+    minuteTakerPresent &&
+    unresolvedAttendeeCount===0 &&
+    unresolvedGuestCount===0 &&
+    unfinishedAgendaCount===0 &&
+    decisionWithoutResolutionCount===0 &&
+    invalidVoteCount===0 &&
+    spontaneousWithoutBasisCount===0 &&
+    (resolutionCount===0 || meeting.quorum_confirmed===true);
+  const protocolIssues=[
+    !formalReady ? "Formalia zu Einladung, Rollen oder Beschlussfähigkeit vervollständigen." : null,
+    !chairPresent || !minuteTakerPresent ? "Sitzungsleitung und Protokollführung müssen als anwesend dokumentiert sein." : null,
+    unresolvedAttendeeCount>0 ? `${unresolvedAttendeeCount} Teilnehmerstatus noch ungeklärt.` : null,
+    unresolvedGuestCount>0 ? `${unresolvedGuestCount} Gaststatus noch ungeklärt.` : null,
+    unfinishedAgendaCount>0 ? `${unfinishedAgendaCount} TOP(s) noch nicht erledigt oder vertagt.` : null,
+    decisionWithoutResolutionCount>0 ? `${decisionWithoutResolutionCount} Beschluss-TOP(s) ohne dokumentierte Abstimmung.` : null,
+    invalidVoteCount>0 ? `${invalidVoteCount} Abstimmung(en) formal unvollständig.` : null,
+    spontaneousWithoutBasisCount>0 ? `${spontaneousWithoutBasisCount} spontaner Beschluss-TOP ohne Begründung.` : null,
+    resolutionCount>0 && meeting.quorum_confirmed!==true ? "Beschlüsse benötigen bestätigte Beschlussfähigkeit." : null,
+  ].filter((item):item is string=>Boolean(item));
 
   return (
     <main className="minutes-page secretary-workspace-page minutes-page-v2">
@@ -273,6 +325,7 @@ export default async function MinutesPage({
         </section>
 
         {query.error && <div className="form-error">{errors[query.error] ?? "Die Aktion konnte nicht ausgeführt werden."}</div>}
+        {query.completed && <div className="form-success">Sitzung beendet. Das Protokoll ist automatisch vorbereitet und kann jetzt geprüft werden.</div>}
         {query.saved && <div className="form-success">Protokolltext wurde gespeichert.</div>}
         {query.submitted && <div className="form-success">Das Protokoll wurde zur Prüfung eingereicht.</div>}
         {query.returned && <div className="form-success">Das Protokoll wurde zur Überarbeitung zurückgegeben.</div>}
@@ -281,13 +334,13 @@ export default async function MinutesPage({
 
         <section className="minutes-workflow">
           {[
-            ["draft","1","Entwurf","Schriftführer bearbeitet"],
+            ["draft","1","Entwurf","Nachbearbeitung & Kontrolle"],
             ["review","2","Prüfung","Vorsitz prüft"],
-            ["approved","3","Freigegeben","finale Fassung"],
-            ["archived","4","Archiv","abgeschlossen"],
+            ["archived","3","Freigegeben","automatisch archiviert"],
           ].map(([key,number,label,sub])=>{
-            const order=["draft","review","approved","archived"];
-            const activeIndex=order.indexOf(minutesStatus);
+            const order=["draft","review","archived"];
+            const workflowStatus=minutesStatus==="approved" ? "archived" : minutesStatus;
+            const activeIndex=order.indexOf(workflowStatus);
             const itemIndex=order.indexOf(key);
             return (
               <div className={"minutes-workflow-step "+(itemIndex<activeIndex ? "is-done" : itemIndex===activeIndex ? "is-current" : "")} key={key}>
@@ -341,7 +394,7 @@ export default async function MinutesPage({
           <article>
             <span>Teilnahme</span>
             <strong>{present.length}</strong>
-            <small>{votingPresent.length} stimmberechtigt · {guests.length} Gäste</small>
+            <small>{votingPresent.length} stimmberechtigt · {presentGuests.length} Gäste</small>
           </article>
           <article>
             <span>TOPs</span>
@@ -355,11 +408,19 @@ export default async function MinutesPage({
           </article>
         </section>
 
-        {(!officersComplete || !meetingComplete) && minutesStatus==="draft" && (
+        {minutesStatus==="draft" && (
           <div className="minutes-readiness">
-            {!officersComplete && <span>⚠ Sitzungsleitung und Protokollführung fehlen noch.</span>}
-            {!meetingComplete && <span>⚠ Die Sitzung ist noch nicht abgeschlossen.</span>}
-            <Link href={`/sitzungen/${id}`} className="mini-button">Sitzung öffnen</Link>
+            {protocolReady ? (
+              <span>✓ Vollständig geprüft: Das Protokoll kann zur Freigabe eingereicht werden.</span>
+            ) : (
+              <div>
+                <strong>Vor der Einreichung noch prüfen:</strong>
+                {protocolIssues.map((issue)=><span key={issue}>⚠ {issue}</span>)}
+              </div>
+            )}
+            {!protocolReady && canWrite && (
+              <Link href={`/sitzungen/${id}/korrektur`} className="mini-button">Nachbearbeitung öffnen</Link>
+            )}
           </div>
         )}
 
@@ -384,15 +445,22 @@ export default async function MinutesPage({
               <span className="eyebrow">Schritt 2</span>
               <h2>Zur Prüfung einreichen</h2>
               <p>Nach der Einreichung ist der Entwurf gesperrt, bis er freigegeben oder zur Korrektur zurückgegeben wird.</p>
-              <form action={submitMeetingMinutesAction}>
-                <input type="hidden" name="meetingId" value={id} />
-                <ConfirmSubmitButton
-                  message="Protokoll jetzt zur Prüfung einreichen? Der Entwurf wird bis zur Entscheidung gesperrt."
-                  className="primary-button"
-                >
-                  Zur Prüfung einreichen
-                </ConfirmSubmitButton>
-              </form>
+              {protocolReady ? (
+                <form action={submitMeetingMinutesAction}>
+                  <input type="hidden" name="meetingId" value={id} />
+                  <ConfirmSubmitButton
+                    message="Protokoll jetzt zur Prüfung einreichen? Der Entwurf wird bis zur Entscheidung gesperrt."
+                    className="primary-button"
+                  >
+                    Zur Prüfung einreichen
+                  </ConfirmSubmitButton>
+                </form>
+              ) : (
+                <div className="minutes-review-actions">
+                  <button className="primary-button" type="button" disabled>Zur Prüfung einreichen</button>
+                  <Link href={`/sitzungen/${id}/korrektur`} className="ghost-button">Fehlende Angaben bearbeiten</Link>
+                </div>
+              )}
             </article>
           )}
 
@@ -574,11 +642,11 @@ export default async function MinutesPage({
           </div>
         </section>
 
-        {guests.length>0 && (
+        {presentGuests.length>0 && (
           <section className="minutes-section">
             <h2>Gäste</h2>
             <div className="minutes-guest-list">
-              {guests.map((guest)=>(
+              {presentGuests.map((guest)=>(
                 <p key={String(guest.id)}>
                   <strong>{String(guest.name)}</strong>
                   {guest.organization ? " · "+String(guest.organization) : ""}
