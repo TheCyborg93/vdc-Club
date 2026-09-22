@@ -1239,6 +1239,7 @@ export async function updateMeetingOfficersAction(formData: FormData) {
       updated_at=now()
     WHERE id=${meetingId}::uuid
       AND deleted_at IS NULL
+      AND status='planned'
       AND minutes_status='draft'
     RETURNING id::text
   `;
@@ -1256,32 +1257,10 @@ export async function updateMeetingOfficersAction(formData: FormData) {
 }
 
 export async function updateMeetingMinutesTextAction(formData: FormData) {
-  const actor=await requirePermission("meetings.write");
-  const sql=getDb();
-  if (!sql) redirect("/sitzungen?error=database");
-
+  await requirePermission("meetings.write");
   const meetingId=value(formData,"meetingId");
-  const intro=value(formData,"minutesIntro");
-  const closing=value(formData,"minutesClosing");
-
-  const rows=await sql`
-    UPDATE meetings
-    SET
-      minutes_intro=${intro || null},
-      minutes_closing=${closing || null},
-      updated_at=now()
-    WHERE id=${meetingId}::uuid
-      AND deleted_at IS NULL
-      AND minutes_status='draft'
-    RETURNING id::text
-  `;
-
-  if (!rows.length) redirect(`/sitzungen/${meetingId}/protokoll?error=minutes_locked`);
-
-  await writeAudit(actor.id,"meeting.minutes_text_updated","meeting",meetingId,{});
-  revalidatePath(`/sitzungen/${meetingId}`);
-  revalidatePath(`/sitzungen/${meetingId}/protokoll`);
-  redirect(`/sitzungen/${meetingId}/protokoll?saved=1`);
+  if (!meetingId) redirect("/sitzungen?error=missing");
+  redirect(`/sitzungen/${meetingId}/korrektur`);
 }
 
 export async function submitMeetingMinutesAction(formData: FormData) {
