@@ -265,7 +265,11 @@ export async function getNotifications(
     rows.push(...await sql`
       SELECT
         'resolution:' || r.id::text AS key,
-        'Beschluss offen: ' || COALESCE(r.resolution_number || ' · ','') || r.title AS title,
+        CASE
+          WHEN t.due_date<CURRENT_DATE
+            THEN 'Beschluss überfällig: ' || COALESCE(r.resolution_number || ' · ','') || r.title
+          ELSE 'Beschluss offen: ' || COALESCE(r.resolution_number || ' · ','') || r.title
+        END AS title,
         CASE
           WHEN t.due_date<CURRENT_DATE THEN 'Folgeaufgabe überfällig'
           WHEN t.due_date IS NOT NULL THEN 'Frist ' || to_char(t.due_date,'DD.MM.YYYY')
@@ -273,6 +277,10 @@ export async function getNotifications(
           ELSE 'Umsetzung läuft'
         END AS detail,
         CASE
+          WHEN t.due_date<CURRENT_DATE AND r.resolution_number IS NOT NULL
+            THEN '/beschluesse?view=overdue&q=' || r.resolution_number
+          WHEN t.due_date<CURRENT_DATE
+            THEN '/beschluesse?view=overdue'
           WHEN r.resolution_number IS NOT NULL
             THEN '/beschluesse?q=' || r.resolution_number
           ELSE '/beschluesse'
@@ -290,6 +298,7 @@ export async function getNotifications(
        AND t.status<>'cancelled'
        AND t.deleted_at IS NULL
       WHERE r.status IN ('open','in_progress')
+        AND COALESCE(r.decision_outcome,'accepted')<>'rejected'
         AND (
           t.owner_member_id=${user.memberId || null}::uuid
           OR ${hasPermission(user.roles,"resolutions.write")}
