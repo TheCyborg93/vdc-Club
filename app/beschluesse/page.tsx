@@ -175,9 +175,9 @@ export default async function ResolutionsPage({
         sql`
           SELECT
             count(*)::int AS total,
-            count(*) FILTER (WHERE status='implemented')::int AS implemented,
-            count(*) FILTER (WHERE status='in_progress')::int AS progress,
-            count(*) FILTER (WHERE status='open')::int AS open,
+            count(*) FILTER (WHERE status='implemented' AND COALESCE(decision_outcome,'accepted')<>'rejected')::int AS implemented,
+            count(*) FILTER (WHERE status='in_progress' AND COALESCE(decision_outcome,'accepted')<>'rejected')::int AS progress,
+            count(*) FILTER (WHERE status='open' AND COALESCE(decision_outcome,'accepted')<>'rejected')::int AS open,
             count(*) FILTER (
               WHERE status='withdrawn' AND COALESCE(decision_outcome,'accepted')<>'rejected'
             )::int AS withdrawn,
