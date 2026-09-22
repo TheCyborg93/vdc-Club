@@ -109,7 +109,11 @@ export default async function ResolutionsPage({
               r.title ILIKE '%' || ${q} || '%' OR
               r.decision_text ILIKE '%' || ${q} || '%' OR
               COALESCE(r.implementation_notes,'') ILIKE '%' || ${q} || '%')
-            AND (${status}='' OR r.status=${status})
+            AND (
+              ${status}=''
+              OR (${status}='rejected' AND r.decision_outcome='rejected')
+              OR (${status}<>'rejected' AND r.status=${status} AND COALESCE(r.decision_outcome,'accepted')<>'rejected')
+            )
             AND (${yearNum}::int IS NULL OR EXTRACT(YEAR FROM r.decided_at)::int=${yearNum}::int)
           ORDER BY r.decided_at DESC,r.resolution_number DESC
         `,
@@ -119,8 +123,10 @@ export default async function ResolutionsPage({
             count(*) FILTER (WHERE status='implemented')::int AS implemented,
             count(*) FILTER (WHERE status='in_progress')::int AS progress,
             count(*) FILTER (WHERE status='open')::int AS open,
-            count(*) FILTER (WHERE status='withdrawn')::int AS withdrawn,
-            count(*) FILTER (WHERE status='rejected')::int AS rejected
+            count(*) FILTER (
+              WHERE status='withdrawn' AND COALESCE(decision_outcome,'accepted')<>'rejected'
+            )::int AS withdrawn,
+            count(*) FILTER (WHERE decision_outcome='rejected')::int AS rejected
           FROM resolutions
           WHERE
             (${q}='' OR
@@ -187,6 +193,11 @@ export default async function ResolutionsPage({
           <span>Offen</span>
           <strong>{Number(count.open ?? 0)}</strong>
           <small>noch ohne Abschluss</small>
+        </article>
+        <article className="stat-card">
+          <span>Abgelehnt</span>
+          <strong>{Number(count.rejected ?? 0)}</strong>
+          <small>historisch dokumentiert</small>
         </article>
       </section>
 
@@ -257,8 +268,10 @@ export default async function ResolutionsPage({
                     </Link>
                   )}
                 </div>
-                <b className={"resolution-status resolution-status-"+String(resolution.status)}>
-                  {statusLabels[String(resolution.status)] ?? String(resolution.status)}
+                <b className={"resolution-status resolution-status-"+(resolution.decision_outcome==="rejected" ? "rejected" : String(resolution.status))}>
+                  {resolution.decision_outcome==="rejected"
+                    ? "Abgelehnt"
+                    : statusLabels[String(resolution.status)] ?? String(resolution.status)}
                 </b>
               </div>
 
@@ -306,7 +319,7 @@ export default async function ResolutionsPage({
                     <Link href="/aufgaben" className="mini-button">Aufgaben öffnen</Link>
                   </div>
                 </div>
-              ) : canCreateTasks && !["implemented","withdrawn","rejected"].includes(String(resolution.status)) ? (
+              ) : canCreateTasks && resolution.decision_outcome!=="rejected" && !["implemented","withdrawn"].includes(String(resolution.status)) ? (
                 <details className="resolution-task-create">
                   <summary>Folgeaufgabe anlegen</summary>
                   <form action={createResolutionTaskAction} className="form-stack">
@@ -346,7 +359,7 @@ export default async function ResolutionsPage({
                 </details>
               ) : null}
 
-              {canWrite && resolution.status!=="rejected" && (
+              {canWrite && resolution.decision_outcome!=="rejected" && (
                 <details className="resolution-implementation-edit">
                   <summary>Umsetzungsnotiz bearbeiten</summary>
                   <form action={updateResolutionImplementationAction} className="form-stack">
@@ -369,7 +382,7 @@ export default async function ResolutionsPage({
                 </details>
               )}
 
-              {canWrite && !["withdrawn","rejected"].includes(String(resolution.status)) && (
+              {canWrite && resolution.decision_outcome!=="rejected" && resolution.status!=="withdrawn" && (
                 <div className="resolution-actions">
                   {resolution.status!=="open" && (
                     <form action={updateResolutionStatusAction}>
