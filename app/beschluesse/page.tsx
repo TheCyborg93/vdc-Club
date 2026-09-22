@@ -113,7 +113,14 @@ export default async function ResolutionsPage({
           ) t ON true
           LEFT JOIN members owner ON owner.id=t.owner_member_id
           WHERE
-            (${q}='' OR
+            NOT (
+              r.meeting_id IS NULL
+              AND r.agenda_item_id IS NULL
+              AND r.vote_method IS NULL
+              AND r.decision_outcome IS NULL
+              AND r.eligible_voters IS NULL
+            )
+            AND (${q}='' OR
               COALESCE(r.resolution_number,'') ILIKE '%' || ${q} || '%' OR
               r.title ILIKE '%' || ${q} || '%' OR
               r.decision_text ILIKE '%' || ${q} || '%' OR
@@ -138,7 +145,14 @@ export default async function ResolutionsPage({
             count(*) FILTER (WHERE decision_outcome='rejected')::int AS rejected
           FROM resolutions
           WHERE
-            (${q}='' OR
+            NOT (
+              meeting_id IS NULL
+              AND agenda_item_id IS NULL
+              AND vote_method IS NULL
+              AND decision_outcome IS NULL
+              AND eligible_voters IS NULL
+            )
+            AND (${q}='' OR
               COALESCE(resolution_number,'') ILIKE '%' || ${q} || '%' OR
               title ILIKE '%' || ${q} || '%' OR
               decision_text ILIKE '%' || ${q} || '%' OR
@@ -154,6 +168,13 @@ export default async function ResolutionsPage({
         sql`
           SELECT DISTINCT EXTRACT(YEAR FROM decided_at)::int AS year
           FROM resolutions
+          WHERE NOT (
+              meeting_id IS NULL
+              AND agenda_item_id IS NULL
+              AND vote_method IS NULL
+              AND decision_outcome IS NULL
+              AND eligible_voters IS NULL
+            )
           ORDER BY year DESC
         `,
       ])
