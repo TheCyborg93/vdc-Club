@@ -2,6 +2,7 @@ import { defineConfig } from "@pandacss/dev";
 import { vdcSemanticTokens, vdcTokens } from "./theme/vdc-tokens";
 import { badge, button, card, input } from "./theme/vdc-recipes";
 import { vdcGlobalCss } from "./theme/vdc-global";
+import { vdcMeetingGlobalCss } from "./theme/vdc-meeting-global";
 
 export default defineConfig({
   preflight: true,
@@ -27,7 +28,7 @@ export default defineConfig({
       },
     },
   ],
-  globalCss: vdcGlobalCss,
+  globalCss: { ...vdcGlobalCss, ...vdcMeetingGlobalCss },
   theme: {
     extend: {
       tokens: vdcTokens,
