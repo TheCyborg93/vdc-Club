@@ -587,6 +587,7 @@ export async function createResolutionFromAgendaAction(formData: FormData) {
   const voteMethod=["open","show_of_hands","roll_call","secret","electronic"].includes(voteMethodRaw)
     ? voteMethodRaw
     : "open";
+  const voteDetails=value(formData,"voteDetails");
   const decisionOutcomeRaw=value(formData,"decisionOutcome");
   const decisionOutcome=["accepted","rejected"].includes(decisionOutcomeRaw)
     ? decisionOutcomeRaw
@@ -601,6 +602,9 @@ export async function createResolutionFromAgendaAction(formData: FormData) {
 
   if (!meetingId || !agendaItemId || !title || !decisionText || !decisionOutcome) {
     redirect(`/sitzungen/${meetingId}?top=${agendaItemId}&error=resolution`);
+  }
+  if (voteMethod==="roll_call" && !voteDetails) {
+    redirect(`/sitzungen/${meetingId}?top=${agendaItemId}&error=roll_call_details`);
   }
 
   const safeYes=Number.isFinite(yes) && yes>=0 ? yes : 0;
@@ -663,6 +667,7 @@ export async function createResolutionFromAgendaAction(formData: FormData) {
         votes_no,
         votes_abstain,
         vote_method,
+        vote_details,
         eligible_voters,
         excluded_voters,
         decision_outcome,
@@ -679,6 +684,7 @@ export async function createResolutionFromAgendaAction(formData: FormData) {
         ${safeNo},
         ${safeAbstain},
         ${voteMethod},
+        ${voteDetails || null},
         ${safeEligible},
         ${excludedVoters},
         ${decisionOutcome},
@@ -735,6 +741,7 @@ export async function createResolutionFromAgendaAction(formData: FormData) {
     agendaItemId,
     title,
     voteMethod,
+    voteDetails:voteDetails || null,
     eligibleVoters:safeEligible,
     excludedVoters,
     decisionOutcome,
