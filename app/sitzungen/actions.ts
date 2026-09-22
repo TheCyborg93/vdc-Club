@@ -756,7 +756,11 @@ export async function updateMeetingStatusAction(formData: FormData) {
     redirect(`/sitzungen/${meetingId}?error=invalid_transition`);
   }
 
-  if (current==="completed" && status==="running" && String(before.minutes_status)==="archived") {
+  if (
+    current==="completed" &&
+    status==="running" &&
+    ["approved","archived"].includes(String(before.minutes_status))
+  ) {
     redirect(`/sitzungen/${meetingId}?error=minutes_archived`);
   }
 
