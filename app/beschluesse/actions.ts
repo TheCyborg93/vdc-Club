@@ -114,6 +114,7 @@ export async function updateResolutionImplementationAction(formData: FormData) {
     UPDATE resolutions
     SET implementation_notes=${implementationNotes || null}
     WHERE id=${id}::uuid
+      AND COALESCE(decision_outcome,'accepted')<>'rejected'
     RETURNING title
   `;
 
@@ -162,7 +163,6 @@ export async function createResolutionTaskAction(formData: FormData) {
       SELECT 1 FROM resolutions r
       WHERE r.id=${resolutionId}::uuid
         AND COALESCE(r.decision_outcome,'accepted')='accepted'
-        AND r.decision_outcome='accepted'
     )
     AND NOT EXISTS (
       SELECT 1
