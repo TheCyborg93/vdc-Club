@@ -256,6 +256,19 @@ export async function restoreDocumentAction(formData: FormData) {
   const id=value(formData,"id");
   if (!id) redirect("/archiv?error=invalid");
 
+  const documentRows=await sql`
+    SELECT id::text,title,category,meeting_id::text
+    FROM documents
+    WHERE id=${id}::uuid
+      AND deleted_at IS NULL
+    LIMIT 1
+  `;
+  const document=documentRows[0];
+  if (!document) redirect("/archiv?error=missing");
+  if (document.category==="Protokoll" && document.meeting_id) {
+    redirect("/archiv?error=protocol_locked");
+  }
+
   const rows=await sql`
     UPDATE documents
     SET status='active',archived_at=NULL,archived_by=NULL
