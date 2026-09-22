@@ -62,6 +62,7 @@ export default async function TasksPage({
             t.created_at,
             t.source_type,
             t.source_id::text,
+            t.owner_member_id::text,
             m.first_name,
             m.last_name,
             r.resolution_number,
@@ -219,16 +220,7 @@ export default async function TasksPage({
                             Verantwortlich
                             <select
                               name="ownerMemberId"
-                              defaultValue={
-                                task.first_name
-                                  ? String(
-                                      members.find((member)=>
-                                        String(member.first_name)===String(task.first_name) &&
-                                        String(member.last_name)===String(task.last_name)
-                                      )?.id ?? ""
-                                    )
-                                  : ""
-                              }
+                              defaultValue={task.owner_member_id ? String(task.owner_member_id) : ""}
                             >
                               <option value="">Noch offen</option>
                               {members.map((member)=>(
