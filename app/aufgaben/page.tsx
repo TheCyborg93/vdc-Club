@@ -3,6 +3,7 @@ import { getDb } from "@/lib/db";
 import { hasPermission, requirePermission } from "@/lib/permissions";
 import {
   createTaskAction,
+  updateTaskDetailsAction,
   updateTaskStatusAction,
 } from "@/app/aufgaben/actions";
 import { moveToTrashAction } from "@/app/admin/papierkorb/actions";
@@ -41,7 +42,7 @@ function formatDate(value: unknown) {
 export default async function TasksPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; created?: string; deleted?: string }>;
+  searchParams: Promise<{ error?: string; created?: string; deleted?: string; saved?:string }>;
 }) {
   const actor = await requirePermission("tasks.read");
   const sql = getDb();
@@ -121,6 +122,7 @@ export default async function TasksPage({
       {params.error && <div className="form-error">{errors[params.error] ?? "Die Aktion konnte nicht ausgeführt werden."}</div>}
       {params.created && <div className="form-success">Aufgabe wurde angelegt.</div>}
       {params.deleted && <div className="form-success">Aufgabe wurde in den Papierkorb verschoben.</div>}
+      {params.saved && <div className="form-success">Aufgabe wurde aktualisiert.</div>}
 
       <section className="stat-grid">
         <article className="stat-card"><span>Offen</span><strong>{Number(count.open ?? 0)}</strong><small>noch nicht begonnen</small></article>
@@ -199,6 +201,72 @@ export default async function TasksPage({
                       <span>{task.first_name ? `${task.first_name} ${task.last_name}` : "Nicht zugewiesen"}</span>
                       <span>{formatDate(task.due_date)}</span>
                     </div>
+
+                    {canWrite && (
+                      <details className="task-edit-drawer">
+                        <summary>Aufgabe bearbeiten</summary>
+                        <form action={updateTaskDetailsAction} className="task-edit-form">
+                          <input type="hidden" name="id" value={String(task.id)} />
+                          <label>
+                            Titel
+                            <input name="title" defaultValue={String(task.title)} required />
+                          </label>
+                          <label>
+                            Bereich
+                            <input name="category" defaultValue={String(task.category ?? "")} />
+                          </label>
+                          <label>
+                            Verantwortlich
+                            <select
+                              name="ownerMemberId"
+                              defaultValue={
+                                task.first_name
+                                  ? String(
+                                      members.find((member)=>
+                                        String(member.first_name)===String(task.first_name) &&
+                                        String(member.last_name)===String(task.last_name)
+                                      )?.id ?? ""
+                                    )
+                                  : ""
+                              }
+                            >
+                              <option value="">Noch offen</option>
+                              {members.map((member)=>(
+                                <option key={String(member.id)} value={String(member.id)}>
+                                  {String(member.first_name)} {String(member.last_name)}
+                                </option>
+                              ))}
+                            </select>
+                          </label>
+                          <label>
+                            Priorität
+                            <select name="priority" defaultValue={String(task.priority)}>
+                              <option value="low">Niedrig</option>
+                              <option value="medium">Mittel</option>
+                              <option value="high">Hoch</option>
+                              <option value="urgent">Dringend</option>
+                            </select>
+                          </label>
+                          <label>
+                            Frist
+                            <input
+                              name="dueDate"
+                              type="date"
+                              defaultValue={task.due_date ? String(task.due_date).slice(0,10) : ""}
+                            />
+                          </label>
+                          <label className="task-edit-description">
+                            Beschreibung
+                            <textarea
+                              name="description"
+                              rows={3}
+                              defaultValue={String(task.description ?? "")}
+                            />
+                          </label>
+                          <button className="mini-button">Änderungen speichern</button>
+                        </form>
+                      </details>
+                    )}
 
                     {canWrite && (
                       <div className="task-actions">
