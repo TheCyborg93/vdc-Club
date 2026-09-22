@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState, useTransition } from "react";
+import { useEffect, useRef, useState } from "react";
 import { saveAgendaNotesInlineAction } from "@/app/sitzungen/actions";
 
 export function MeetingAutoNotes({
@@ -13,20 +13,31 @@ export function MeetingAutoNotes({
   initialValue:string;
 }) {
   const [value,setValue]=useState(initialValue);
-  const [state,setState]=useState<"idle"|"dirty"|"saved"|"error">("idle");
-  const [pending,startTransition]=useTransition();
+  const [state,setState]=useState<"idle"|"dirty"|"saving"|"saved"|"error">("idle");
   const first=useRef(true);
+  const latestValue=useRef(initialValue);
+  const saveSequence=useRef(0);
+  const saveChain=useRef<Promise<void>>(Promise.resolve());
 
   useEffect(()=>{
+    latestValue.current=value;
     if (first.current) {
       first.current=false;
       return;
     }
 
     setState("dirty");
+    const sequence=++saveSequence.current;
+    const snapshot=value;
+
     const timer=window.setTimeout(()=>{
-      startTransition(async ()=>{
-        const result=await saveAgendaNotesInlineAction(meetingId,agendaItemId,value);
+      saveChain.current=saveChain.current.then(async ()=>{
+        setState("saving");
+        const result=await saveAgendaNotesInlineAction(meetingId,agendaItemId,snapshot);
+
+        if (sequence!==saveSequence.current || snapshot!==latestValue.current) {
+          return;
+        }
         setState(result.ok ? "saved" : "error");
       });
     },800);
@@ -62,9 +73,11 @@ export function MeetingAutoNotes({
         placeholder="Diskussion, Ergebnis und wichtige Hinweise festhalten …"
       />
       <div className={"meeting-autosave-state state-"+state}>
-        {pending || state==="dirty"
-          ? "Speichert …"
-          : state==="saved"
+        {state==="dirty"
+          ? "Änderung wartet …"
+          : state==="saving"
+            ? "Speichert …"
+            : state==="saved"
             ? "✓ Gespeichert"
             : state==="error"
               ? "Speichern fehlgeschlagen"
