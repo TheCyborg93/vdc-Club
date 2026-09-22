@@ -327,7 +327,7 @@ export const vdcMinutesGlobalCss = {
   },
   ".meeting-correction-form input,.meeting-correction-form select,.meeting-correction-form textarea,.meeting-correction-add-form input,.meeting-correction-add-form select,.meeting-correction-add-form textarea,.resolution-correction-form input,.resolution-correction-form select,.resolution-correction-form textarea": {
     width: "full",
-    minHeight: "10",
+    minHeight: { base: "[44px]", md: "10" },
     p: "2.5",
     border: "1px solid",
     borderColor: "surface.border",
