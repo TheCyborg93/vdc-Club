@@ -208,6 +208,60 @@ export async function addAgendaItemAction(formData: FormData) {
   redirect(`/sitzungen/${meetingId}?agenda=1`);
 }
 
+export async function updateAgendaPreparationAction(formData:FormData) {
+  const actor=await requirePermission("meetings.write");
+  const sql=getDb();
+  if (!sql) redirect("/sitzungen?error=database");
+
+  const meetingId=value(formData,"meetingId");
+  const agendaItemId=value(formData,"agendaItemId");
+  const title=value(formData,"title");
+  const description=value(formData,"description");
+  const agendaTypeRaw=value(formData,"agendaType");
+  const agendaType=["information","consultation","decision"].includes(agendaTypeRaw)
+    ? agendaTypeRaw
+    : "consultation";
+
+  if (!meetingId || !agendaItemId || !title) {
+    redirect(`/sitzungen/${meetingId}?error=missing`);
+  }
+
+  const beforeRows=await sql`
+    SELECT title,description,agenda_type
+    FROM agenda_items
+    WHERE id=${agendaItemId}::uuid
+      AND meeting_id=${meetingId}::uuid
+    LIMIT 1
+  `;
+  const before=beforeRows[0];
+
+  const rows=await sql`
+    UPDATE agenda_items ai
+    SET
+      title=${title},
+      description=${description || null},
+      agenda_type=${agendaType},
+      updated_at=now()
+    FROM meetings m
+    WHERE ai.id=${agendaItemId}::uuid
+      AND ai.meeting_id=${meetingId}::uuid
+      AND m.id=ai.meeting_id
+      AND m.deleted_at IS NULL
+      AND m.status='planned'
+    RETURNING ai.id::text
+  `;
+
+  if (!rows.length) redirect(`/sitzungen/${meetingId}?error=meeting_locked`);
+
+  await writeAudit(actor.id,"agenda.preparation_updated","agenda_item",agendaItemId,{
+    before:before ?? null,
+    after:{title,description:description || null,agendaType},
+  });
+
+  revalidatePath(`/sitzungen/${meetingId}`);
+  redirect(`/sitzungen/${meetingId}?agenda=1`);
+}
+
 export async function updateAgendaStatusAction(formData: FormData) {
   const actor=await requirePermission("meetings.write");
   const sql=getDb();
@@ -230,7 +284,19 @@ export async function updateAgendaStatusAction(formData: FormData) {
 
   const rows=await sql`
     UPDATE agenda_items
-    SET status=${status}
+    SET
+      status=${status},
+      result_code=CASE
+        WHEN ${status}='done' THEN COALESCE(result_code,'completed')
+        WHEN ${status}='deferred' THEN 'deferred'
+        WHEN ${status} IN ('open','active') THEN NULL
+        ELSE result_code
+      END,
+      completed_at=CASE
+        WHEN ${status} IN ('done','deferred') THEN now()
+        ELSE NULL
+      END,
+      updated_at=now()
     WHERE id=${agendaItemId}::uuid
       AND meeting_id=${meetingId}::uuid
       AND EXISTS (
@@ -705,6 +771,11 @@ export async function updateMeetingStatusAction(formData: FormData) {
         m.quorum_confirmed,
         count(ai.id) FILTER (WHERE ai.status IN ('open','active'))::int AS open_agenda,
         count(r.id)::int AS resolution_count,
+        count(ai.id) FILTER (
+          WHERE ai.agenda_type='decision'
+            AND ai.status='done'
+            AND r.id IS NULL
+        )::int AS decision_without_resolution,
         count(r.id) FILTER (
           WHERE r.vote_method IS NULL
              OR r.eligible_voters IS NULL
@@ -761,6 +832,9 @@ export async function updateMeetingStatusAction(formData: FormData) {
     }
     if (Number(check.unresolved_guest_attendance ?? 0)>0) {
       redirect(`/sitzungen/${meetingId}?error=guest_attendance_open`);
+    }
+    if (Number(check.decision_without_resolution ?? 0)>0) {
+      redirect(`/sitzungen/${meetingId}?error=decision_missing_vote`);
     }
     if (Number(check.incomplete_votes ?? 0)>0) {
       redirect(`/sitzungen/${meetingId}?error=vote_incomplete`);
