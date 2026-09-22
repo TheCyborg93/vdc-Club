@@ -752,7 +752,8 @@ export default async function MeetingDetailPage({
         </section>
       )}
 
-      <section className="meeting-session-shell" id="live">
+      {meetingRunning && (
+        <section className="meeting-session-shell" id="live">
         <aside className="meeting-top-rail">
           <div className="meeting-top-rail-head">
             <div><span className="eyebrow">Tagesordnung</span><h2>TOPs ({agenda.length})</h2></div>
@@ -822,7 +823,16 @@ export default async function MeetingDetailPage({
                   ) : null}
                 </section>
 
-                <section className="meeting-focus-section meeting-top-formal-block">
+                <details className="meeting-top-more">
+                  <summary>
+                    <span>Weitere TOP-Optionen</span>
+                    <small>
+                      {preferredAttachments.length} Anlagen · {preferredExclusions.length} Ausschlüsse
+                      {!preferredAgenda.announced_with_invitation ? " · spontaner TOP" : ""}
+                    </small>
+                  </summary>
+                  <div className="meeting-top-more-body">
+                    <section className="meeting-focus-section meeting-top-formal-block">
                   <div className="meeting-section-head">
                     <span>Formaler TOP-Status</span>
                     <b className={preferredAgenda.announced_with_invitation ? "top-announced" : "top-spontaneous"}>
@@ -969,6 +979,9 @@ export default async function MeetingDetailPage({
                   )}
                 </section>
 
+                    </div>
+                </details>
+
                 <section className="meeting-focus-section">
                   <div className="meeting-section-head">
                     <span>Beschluss</span>
@@ -1012,14 +1025,17 @@ export default async function MeetingDetailPage({
                   </form>
                 )}
 
-                {canWrite && ["planned","running"].includes(String(meeting.status)) && !preferredAgenda.resolution_id && (
-                  <form action={deleteAgendaItemAction} className="meeting-top-delete">
-                    <input type="hidden" name="meetingId" value={id} />
-                    <input type="hidden" name="agendaItemId" value={String(preferredAgenda.id)} />
-                    <ConfirmSubmitButton message={"TOP „"+String(preferredAgenda.title)+"“ wirklich löschen?"}>
-                      TOP löschen
-                    </ConfirmSubmitButton>
-                  </form>
+                {canWrite && !preferredAgenda.resolution_id && (
+                  <details className="meeting-top-danger-more">
+                    <summary>••• Weitere Aktionen</summary>
+                    <form action={deleteAgendaItemAction} className="meeting-top-delete">
+                      <input type="hidden" name="meetingId" value={id} />
+                      <input type="hidden" name="agendaItemId" value={String(preferredAgenda.id)} />
+                      <ConfirmSubmitButton message={"TOP „"+String(preferredAgenda.title)+"“ wirklich löschen?"}>
+                        TOP löschen
+                      </ConfirmSubmitButton>
+                    </form>
+                  </details>
                 )}
               </div>
 
@@ -1170,22 +1186,10 @@ export default async function MeetingDetailPage({
             <h2>Sitzungsstand</h2>
           </div>
 
-          <div className="meeting-check-list">
-            <div className={officersComplete ? "check-ok" : "check-open"}>
-              <b>{officersComplete ? "✓" : "!"}</b>
-              <span>Leitung & Protokollführung</span>
-            </div>
-            <div className={meeting.invitation_timely!=null ? "check-ok" : "check-open"}>
-              <b>{meeting.invitation_timely!=null ? "✓" : "!"}</b>
-              <span>Einladung geprüft</span>
-            </div>
-            <div className={meeting.agenda_sent_with_invitation!=null ? "check-ok" : "check-open"}>
-              <b>{meeting.agenda_sent_with_invitation!=null ? "✓" : "!"}</b>
-              <span>Tagesordnung geprüft</span>
-            </div>
-            <div className={meeting.quorum_confirmed===true ? "check-ok" : meeting.quorum_confirmed===false ? "check-warning" : "check-open"}>
+          <div className="meeting-live-status">
+            <div className={meeting.quorum_confirmed===true ? "check-ok" : "check-warning"}>
               <b>{meeting.quorum_confirmed===true ? "✓" : "!"}</b>
-              <span>Beschlussfähigkeit {meeting.quorum_confirmed===true ? "bestätigt" : meeting.quorum_confirmed===false ? "nicht gegeben" : "offen"}</span>
+              <span>{meeting.quorum_confirmed===true ? "Beschlussfähig" : "Nicht beschlussfähig"}</span>
             </div>
           </div>
 
@@ -1208,11 +1212,9 @@ export default async function MeetingDetailPage({
             </div>
           )}
 
-          <Link href={`/sitzungen/${id}/protokoll`} className="ghost-button meeting-check-protocol">
-            Protokoll prüfen
-          </Link>
         </aside>
-      </section>
+        </section>
+      )}
 
       {meetingRunning && canWrite && (
         <section className="meeting-close-check" id="abschluss">
