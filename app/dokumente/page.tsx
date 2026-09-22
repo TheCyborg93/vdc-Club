@@ -56,7 +56,7 @@ const secondaryLink = css({
   alignItems: "center",
   justifyContent: "center",
   gap: "2",
-  minH: "10",
+  minH: { base: "[44px]", md: "10" },
   px: "4",
   border: "1px solid",
   borderColor: "surface.border",
@@ -85,7 +85,7 @@ const tab = css({
   alignItems: "center",
   justifyContent: "space-between",
   gap: "2",
-  minH: "9",
+  minH: { base: "[44px]", md: "9" },
   px: "3",
   borderRadius: "l1",
   color: "fg.muted",
@@ -147,7 +147,7 @@ const eyebrow = css({ color: "brand.hover", fontSize: "[9px]", fontWeight: "900"
 const list = css({ display: "grid", gap: "2" });
 const docCard = css({
   display: "grid",
-  gridTemplateColumns: { base: "1fr", md: "[44px] minmax(0,1fr) auto" },
+  gridTemplateColumns: { base: "[40px] minmax(0,1fr)", md: "[44px] minmax(0,1fr) auto" },
   gap: "3",
   alignItems: "start",
   p: "3",
@@ -181,6 +181,7 @@ const chip = css({ px: "2", py: "1", borderRadius: "pill", background: "surface.
 const links = css({ display: "flex", gap: "1.5", mt: "2", flexWrap: "wrap", "& span": { px: "2", py: "1", borderRadius: "pill", background: "surface.bg", color: "fg.muted", fontSize: "[9px]" } });
 const actions = css({
   display: "flex",
+  gridColumn: { base: "1 / -1", md: "auto" },
   flexDirection: { base: "row", md: "column" },
   alignItems: { md: "stretch" },
   gap: "1.5",
@@ -188,7 +189,7 @@ const actions = css({
   minW: { md: "[145px]" },
   "& form": { display: "flex", gap: "1", flexWrap: "wrap" },
   "& select": {
-    minH: "8",
+    minH: { base: "[44px]", md: "8" },
     px: "2",
     border: "1px solid",
     borderColor: "surface.border",
@@ -202,7 +203,7 @@ const actionLink = css({
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
-  minH: "8",
+  minH: { base: "[44px]", md: "8" },
   px: "2.5",
   border: "1px solid",
   borderColor: "surface.border",
