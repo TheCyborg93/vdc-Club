@@ -14,6 +14,25 @@ import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 
 export const dynamic = "force-dynamic";
 
+const meetingModeLabels:Record<string,string>={
+  in_person:"Präsenz",
+  hybrid:"Hybrid",
+  online:"Online",
+};
+
+const voteMethodLabels:Record<string,string>={
+  open:"Offen",
+  show_of_hands:"Handzeichen",
+  roll_call:"Namentlich",
+  secret:"Geheim",
+  electronic:"Elektronisch",
+};
+
+const outcomeLabels:Record<string,string>={
+  accepted:"Angenommen",
+  rejected:"Abgelehnt",
+};
+
 const minutesStatusLabels:Record<string,string>={
   draft:"Entwurf",
   review:"In Prüfung",
@@ -71,10 +90,21 @@ export default async function MinutesPage({
   const { id } = await params;
   const query=await searchParams;
 
-  const [meetingRows, attendees, agenda, revisions] = await Promise.all([
+  const [
+    meetingRows,
+    attendees,
+    agenda,
+    revisions,
+    guests,
+    exclusions,
+    attachments,
+  ] = await Promise.all([
     sql`
       SELECT
-        m.id::text,m.title,m.starts_at,m.ended_at,m.location,m.status,m.notes,
+        m.id::text,m.title,m.starts_at,m.opened_at,m.ended_at,m.location,m.status,m.notes,
+        m.meeting_mode,m.invited_at,m.invitation_method,m.invitation_timely,
+        m.agenda_sent_with_invitation,m.quorum_confirmed,m.quorum_note,m.quorum_basis,
+        m.formalities_note,m.next_meeting_at,
         m.minutes_intro,m.minutes_closing,m.minutes_status,m.minutes_return_note,
         m.minutes_submitted_at,m.minutes_approved_at,m.minutes_archived_at,
         m.minutes_version,
@@ -98,7 +128,7 @@ export default async function MinutesPage({
       LIMIT 1
     `,
     sql`
-      SELECT ma.attendance, m.first_name, m.last_name
+      SELECT ma.member_id::text,ma.attendance,ma.voting_eligible,m.first_name,m.last_name
       FROM meeting_attendees ma
       JOIN members m ON m.id = ma.member_id
       WHERE ma.meeting_id = ${id}::uuid
@@ -109,17 +139,24 @@ export default async function MinutesPage({
     `,
     sql`
       SELECT
+        ai.id::text,
         ai.position,
         ai.title,
         ai.description,
         ai.notes,
         ai.status,
+        ai.announced_with_invitation,
+        ai.decision_basis_note,
         r.resolution_number,
         r.title AS resolution_title,
         r.decision_text,
         r.votes_yes,
         r.votes_no,
         r.votes_abstain,
+        r.vote_method,
+        r.eligible_voters,
+        r.excluded_voters,
+        r.decision_outcome,
         r.status AS resolution_status,
         t.title AS task_title,
         t.status AS task_status,
@@ -147,7 +184,37 @@ export default async function MinutesPage({
       ORDER BY r.version DESC,r.created_at DESC
       LIMIT 20
     `,
+    sql`
+      SELECT id::text,name,organization,note
+      FROM meeting_guests
+      WHERE meeting_id=${id}::uuid
+        AND attendance='present'
+      ORDER BY name
+    `,
+    sql`
+      SELECT
+        ave.id::text,
+        ave.agenda_item_id::text,
+        ave.reason,
+        COALESCE(m.first_name || ' ' || m.last_name,ave.person_name) AS person_name
+      FROM agenda_vote_exclusions ave
+      LEFT JOIN members m ON m.id=ave.member_id
+      JOIN agenda_items ai ON ai.id=ave.agenda_item_id
+      WHERE ai.meeting_id=${id}::uuid
+      ORDER BY ave.created_at
+    `,
+    sql`
+      SELECT id::text,agenda_item_id::text,title,original_filename
+      FROM documents
+      WHERE meeting_id=${id}::uuid
+        AND agenda_item_id IS NOT NULL
+        AND category='Sitzungsanlage'
+        AND deleted_at IS NULL
+      ORDER BY created_at
+    `,
   ]);
+
+
 
   const meeting = meetingRows[0];
   if (!meeting) notFound();
@@ -155,6 +222,7 @@ export default async function MinutesPage({
   const present = attendees.filter((row) => row.attendance === "present");
   const excused = attendees.filter((row) => row.attendance === "excused");
   const absent = attendees.filter((row) => ["absent", "invited"].includes(String(row.attendance)));
+  const votingPresent=present.filter((row)=>row.voting_eligible===true);
 
   const canWrite=hasPermission(actor.roles,"meetings.write");
   const canApprove=actor.roles.some((role)=>["chair","vice_chair","board","admin"].includes(role));
