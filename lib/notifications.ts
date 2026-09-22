@@ -184,6 +184,32 @@ export async function getNotifications(
     `);
   }
 
+  if (hasPermission(user.roles,"meetings.read") && user.memberId) {
+    rows.push(...await sql`
+      SELECT
+        'minutes-draft:' || m.id::text || ':' || m.minutes_version::text || ':' ||
+          COALESCE(md5(m.minutes_return_note),'draft') AS key,
+        CASE
+          WHEN m.minutes_return_note IS NOT NULL
+            THEN 'Protokoll überarbeiten: ' || m.title
+          ELSE 'Protokoll fertigstellen: ' || m.title
+        END AS title,
+        CASE
+          WHEN m.minutes_return_note IS NOT NULL
+            THEN 'Rückgabe: ' || m.minutes_return_note
+          ELSE 'Sitzung beendet · Protokoll kann geprüft und eingereicht werden'
+        END AS detail,
+        '/sitzungen/' || m.id::text || '/protokoll' AS href,
+        CASE WHEN m.minutes_return_note IS NOT NULL THEN 'warning' ELSE 'info' END AS severity,
+        COALESCE(m.ended_at,m.updated_at) AS sort_at
+      FROM meetings m
+      WHERE m.status='completed'
+        AND m.minutes_status='draft'
+        AND m.deleted_at IS NULL
+        AND m.minute_taker_member_id=${user.memberId}::uuid
+    `);
+  }
+
   if (hasPermission(user.roles,"documents.read")) {
     rows.push(...await sql`
       SELECT
@@ -195,6 +221,8 @@ export async function getNotifications(
           ELSE 'Dokument prüfen: ' || title
         END AS title,
         CASE
+          WHEN category='Protokoll' AND status='review'
+            THEN 'Vorstandssitzung · wartet auf Freigabe'
           WHEN status='review'
             THEN 'Zur Prüfung markiert'
           WHEN valid_until IS NOT NULL AND valid_until<CURRENT_DATE
@@ -205,7 +233,11 @@ export async function getNotifications(
             THEN 'Gültig bis ' || to_char(valid_until,'DD.MM.YYYY')
           ELSE 'Prüfung erforderlich'
         END AS detail,
-        '/dokumente/' || id::text AS href,
+        CASE
+          WHEN category='Protokoll' AND meeting_id IS NOT NULL
+            THEN '/sitzungen/' || meeting_id::text || '/protokoll'
+          ELSE '/dokumente/' || id::text
+        END AS href,
         CASE
           WHEN (valid_until IS NOT NULL AND valid_until<CURRENT_DATE)
             OR (review_on IS NOT NULL AND review_on<CURRENT_DATE)
@@ -216,6 +248,11 @@ export async function getNotifications(
       FROM documents
       WHERE status IN ('active','review')
         AND deleted_at IS NULL
+        AND (
+          category<>'Protokoll'
+          OR status<>'review'
+          OR ${user.roles.some((role)=>["chair","vice_chair","board","admin"].includes(role))}
+        )
         AND (
           status='review'
           OR (review_on IS NOT NULL AND review_on<=CURRENT_DATE+interval '30 days')
