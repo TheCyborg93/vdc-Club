@@ -214,7 +214,6 @@ export default async function MinutesPage({
       SELECT id::text,agenda_item_id::text,title,original_filename
       FROM documents
       WHERE meeting_id=${id}::uuid
-        AND agenda_item_id IS NOT NULL
         AND category='Sitzungsanlage'
         AND deleted_at IS NULL
       ORDER BY created_at
@@ -230,6 +229,7 @@ export default async function MinutesPage({
   const excused = attendees.filter((row) => row.attendance === "excused");
   const absent = attendees.filter((row) => ["absent", "invited"].includes(String(row.attendance)));
   const votingPresent=present.filter((row)=>row.voting_eligible===true);
+  const generalAttachments=attachments.filter((doc)=>!doc.agenda_item_id);
 
   const canWrite=hasPermission(actor.roles,"meetings.write");
   const canApprove=actor.roles.some((role)=>["chair","vice_chair","board","admin"].includes(role));
@@ -700,6 +700,20 @@ export default async function MinutesPage({
             ))}
           </div>
         </section>
+
+        {generalAttachments.length>0 && (
+          <section className="minutes-section">
+            <h2>Allgemeine Sitzungsanlagen</h2>
+            <div className="minutes-attachments">
+              {generalAttachments.map((doc,index)=>(
+                <span key={String(doc.id)}>
+                  Anlage {index+1}: {String(doc.title)}
+                  {doc.original_filename ? " ("+String(doc.original_filename)+")" : ""}
+                </span>
+              ))}
+            </div>
+          </section>
+        )}
 
         {meeting.minutes_closing && (
           <section className="minutes-section">
