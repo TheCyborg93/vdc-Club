@@ -31,6 +31,13 @@ export async function GET() {
       LIMIT 1
     ) t ON true
     LEFT JOIN members owner ON owner.id=t.owner_member_id
+    WHERE NOT (
+      r.meeting_id IS NULL
+      AND r.agenda_item_id IS NULL
+      AND r.vote_method IS NULL
+      AND r.decision_outcome IS NULL
+      AND r.eligible_voters IS NULL
+    )
     ORDER BY r.decided_at DESC
   `;
 
