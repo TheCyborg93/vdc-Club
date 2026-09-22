@@ -60,7 +60,7 @@ export const vdcClubGlobalCss = {
   ".sponsor-expired":{background:"rgba(228,191,112,.10)",color:"status.warning"},
   ".sponsor-meta":{display:"flex",gap:"1.5",flexWrap:"wrap","& span":{px:"2",py:"1",borderRadius:"pill",background:"surface.hover",color:"fg.muted",fontSize:"[9px]"}},
   ".sponsor-benefits":{display:"grid",gap:"1.5","& li":{color:"fg.muted",fontSize:"xs"}},
-  ".sponsor-status-form":{display:"flex",gap:"1.5",flexWrap:"wrap","& select":{minHeight:"8",px:"2",border:"1px solid",borderColor:"surface.border",borderRadius:"l1",background:"surface.bg",color:"fg"}},
+  ".sponsor-status-form":{display:"flex",gap:"1.5",flexWrap:"wrap","& select":{minHeight:{base:"[44px]",md:"8"},px:"2",border:"1px solid",borderColor:"surface.border",borderRadius:"l1",background:"surface.bg",color:"fg"}},
 
   ".archive-grid":{display:"grid",gridTemplateColumns:{base:"1fr",xl:"repeat(2,minmax(0,1fr))"},gap:"3"},
   ".archive-list,.archive-mini-list":{display:"grid"},
