@@ -57,6 +57,7 @@ export default async function ResolutionsPage({
     q?:string;
     status?:string;
     year?:string;
+    view?:string;
   }>;
 }) {
   const actor=await requirePermission("resolutions.read");
@@ -98,6 +99,7 @@ export default async function ResolutionsPage({
             t.title AS task_title,
             t.status AS task_status,
             t.due_date AS task_due_date,
+            (t.due_date<CURRENT_DATE AND t.status IN ('open','in_progress','blocked')) AS task_overdue,
             owner.first_name AS owner_first_name,
             owner.last_name AS owner_last_name
           FROM resolutions r
@@ -132,8 +134,39 @@ export default async function ResolutionsPage({
               OR (${status}='rejected' AND r.decision_outcome='rejected')
               OR (${status}<>'rejected' AND r.status=${status} AND COALESCE(r.decision_outcome,'accepted')<>'rejected')
             )
+            AND (
+              ${view}='all'
+              OR (
+                ${view}='active'
+                AND COALESCE(r.decision_outcome,'accepted')<>'rejected'
+                AND r.status IN ('open','in_progress')
+              )
+              OR (
+                ${view}='overdue'
+                AND COALESCE(r.decision_outcome,'accepted')<>'rejected'
+                AND r.status IN ('open','in_progress')
+                AND t.due_date<CURRENT_DATE
+                AND t.status IN ('open','in_progress','blocked')
+              )
+              OR (
+                ${view}='implemented'
+                AND (
+                  r.status IN ('implemented','withdrawn')
+                  OR r.decision_outcome='rejected'
+                )
+              )
+            )
             AND (${yearNum}::int IS NULL OR EXTRACT(YEAR FROM r.decided_at)::int=${yearNum}::int)
-          ORDER BY r.decided_at DESC,r.resolution_number DESC
+          ORDER BY
+            CASE
+              WHEN t.due_date<CURRENT_DATE AND t.status IN ('open','in_progress','blocked') THEN 0
+              WHEN r.status='in_progress' THEN 1
+              WHEN r.status='open' THEN 2
+              ELSE 3
+            END,
+            t.due_date NULLS LAST,
+            r.decided_at DESC,
+            r.resolution_number DESC
         `,
         sql`
           SELECT
@@ -144,7 +177,20 @@ export default async function ResolutionsPage({
             count(*) FILTER (
               WHERE status='withdrawn' AND COALESCE(decision_outcome,'accepted')<>'rejected'
             )::int AS withdrawn,
-            count(*) FILTER (WHERE decision_outcome='rejected')::int AS rejected
+            count(*) FILTER (WHERE decision_outcome='rejected')::int AS rejected,
+            count(*) FILTER (
+              WHERE COALESCE(decision_outcome,'accepted')<>'rejected'
+                AND status IN ('open','in_progress')
+                AND EXISTS (
+                  SELECT 1
+                  FROM tasks tx
+                  WHERE tx.source_type='resolution'
+                    AND tx.source_id=resolutions.id
+                    AND tx.deleted_at IS NULL
+                    AND tx.status IN ('open','in_progress','blocked')
+                    AND tx.due_date<CURRENT_DATE
+                )
+            )::int AS overdue
           FROM resolutions
           WHERE
             NOT (
@@ -180,7 +226,7 @@ export default async function ResolutionsPage({
           ORDER BY year DESC
         `,
       ])
-    : [[],[{total:0,implemented:0,progress:0,open:0,withdrawn:0,rejected:0}],[],[]];
+    : [[],[{total:0,implemented:0,progress:0,open:0,withdrawn:0,rejected:0,overdue:0}],[],[]];
 
   const count=counts[0] ?? {};
   const canWrite=hasPermission(actor.roles,"resolutions.write");
