@@ -6,3 +6,7 @@ export * from "@/components/ui/input";
 export * from "@/components/ui/motion-surface";
 export * from "@/components/ui/rive-mark";
 export * from "@/components/ui/tabs";
+export * from "@/components/ui/action-bar";
+export * from "@/components/ui/empty-state";
+export * from "@/components/ui/page-header";
+export * from "@/components/ui/stat";
