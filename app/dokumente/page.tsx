@@ -75,12 +75,14 @@ export default async function DocumentsPage({
             d.original_filename,d.file_size_bytes,d.mime_type,d.uploaded_at,d.current_version_number,
             m.first_name,m.last_name,
             mt.id::text AS meeting_id,mt.title AS meeting_title,
+            ai.position AS agenda_position,ai.title AS agenda_title,
             r.resolution_number,r.title AS resolution_title,
             f.description AS finance_description,
             s.name AS sponsor_name
           FROM documents d
           LEFT JOIN members m ON m.id=d.member_id
           LEFT JOIN meetings mt ON mt.id=d.meeting_id
+          LEFT JOIN agenda_items ai ON ai.id=d.agenda_item_id
           LEFT JOIN resolutions r ON r.id=d.resolution_id
           LEFT JOIN finance_entries f ON f.id=d.finance_entry_id
           LEFT JOIN sponsors s ON s.id=d.sponsor_id
@@ -210,6 +212,11 @@ export default async function DocumentsPage({
                   </div>
                   <div className="document-links">
                     {doc.meeting_title && <span>Sitzung: {String(doc.meeting_title)}</span>}
+                    {doc.agenda_title && (
+                      <span>
+                        TOP {doc.agenda_position ? String(doc.agenda_position) : "–"}: {String(doc.agenda_title)}
+                      </span>
+                    )}
                     {doc.resolution_number && <span>Beschluss: {String(doc.resolution_number)}</span>}
                     {doc.first_name && <span>Mitglied: {String(doc.first_name)} {String(doc.last_name)}</span>}
                     {doc.sponsor_name && <span>Sponsor: {String(doc.sponsor_name)}</span>}
