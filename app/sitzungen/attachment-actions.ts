@@ -79,7 +79,10 @@ export async function uploadMeetingAttachmentAction(formData:FormData) {
     WHERE ai.id=${agendaItemId}::uuid
       AND ai.meeting_id=${meetingId}::uuid
       AND m.deleted_at IS NULL
-      AND m.status IN ('planned','running')
+      AND (
+        m.status IN ('planned','running')
+        OR (m.status='completed' AND m.minutes_status='draft')
+      )
     LIMIT 1
   `;
   if (!valid.length) redirect(`/sitzungen/${meetingId}?error=meeting_locked`);
@@ -136,6 +139,137 @@ export async function uploadMeetingAttachmentAction(formData:FormData) {
   redirect(`/sitzungen/${meetingId}?top=${agendaItemId}&attachment=1`);
 }
 
+export async function uploadMeetingGeneralAttachmentAction(formData:FormData) {
+  const actor=await requirePermission("documents.write");
+  const sql=getDb();
+  if (!sql) redirect("/sitzungen?error=database");
+
+  const meetingId=value(formData,"meetingId");
+  const title=value(formData,"title");
+  const returnTo=value(formData,"returnTo") || `/sitzungen/${meetingId}`;
+  const raw=formData.get("file");
+  const file=raw instanceof File && raw.size>0 ? raw : null;
+
+  if (!meetingId || !file) redirect(`${returnTo}?error=attachment_missing`);
+  if (file.size>MAX_ATTACHMENT_SIZE) redirect(`${returnTo}?error=attachment_size`);
+
+  const extension=ext(file.name);
+  const allowedMime=allowed[extension];
+  const mime=(file.type || "application/octet-stream").toLowerCase();
+  if (!allowedMime || !allowedMime.includes(mime)) {
+    redirect(`${returnTo}?error=attachment_type`);
+  }
+  if (!isDocumentStorageConfigured()) redirect(`${returnTo}?error=storage`);
+
+  const valid=await sql`
+    SELECT id::text
+    FROM meetings
+    WHERE id=${meetingId}::uuid
+      AND deleted_at IS NULL
+      AND (
+        status IN ('planned','running')
+        OR (status='completed' AND minutes_status='draft')
+      )
+    LIMIT 1
+  `;
+  if (!valid.length) redirect(`${returnTo}?error=meeting_locked`);
+
+  const bytes=new Uint8Array(await file.arrayBuffer());
+  const now=new Date();
+  const year=now.getUTCFullYear();
+  const month=String(now.getUTCMonth()+1).padStart(2,"0");
+  const key=`documents/meeting-attachments/${year}/${month}/${randomUUID()}-${safeName(file.name)}`;
+
+  try {
+    await uploadDocumentObject({key,body:bytes,contentType:mime});
+  } catch {
+    redirect(`${returnTo}?error=attachment_upload`);
+  }
+
+  try {
+    const rows=await sql`
+      INSERT INTO documents(
+        title,category,storage_type,storage_ref,mime_type,status,
+        document_date,meeting_id,agenda_item_id,
+        original_filename,file_size_bytes,uploaded_by,uploaded_at,checksum_sha256
+      )
+      VALUES(
+        ${title || file.name},
+        'Sitzungsanlage',
+        'upload',
+        ${key},
+        ${mime},
+        'active',
+        CURRENT_DATE,
+        ${meetingId}::uuid,
+        NULL,
+        ${file.name},
+        ${file.size},
+        ${actor.id}::uuid,
+        now(),
+        ${createHash("sha256").update(bytes).digest("hex")}
+      )
+      RETURNING id::text
+    `;
+
+    await writeAudit(actor.id,"meeting.general_attachment_uploaded","document",String(rows[0]?.id ?? ""),{
+      meetingId,originalFilename:file.name,
+    });
+  } catch(error) {
+    try { await deleteDocumentObject(key); } catch {}
+    throw error;
+  }
+
+  revalidatePath(`/sitzungen/${meetingId}`);
+  revalidatePath(`/sitzungen/${meetingId}/protokoll`);
+  revalidatePath(`/sitzungen/${meetingId}/korrektur`);
+  revalidatePath("/dokumente");
+  redirect(`${returnTo}?attachment=1`);
+}
+
+export async function removeMeetingGeneralAttachmentAction(formData:FormData) {
+  const actor=await requirePermission("documents.write");
+  const sql=getDb();
+  if (!sql) redirect("/sitzungen?error=database");
+
+  const meetingId=value(formData,"meetingId");
+  const documentId=value(formData,"documentId");
+  const returnTo=value(formData,"returnTo") || `/sitzungen/${meetingId}`;
+
+  const rows=await sql`
+    UPDATE documents d
+    SET
+      deleted_at=now(),
+      deleted_by=${actor.id}::uuid,
+      delete_reason='Allgemeine Sitzungsanlage entfernt.'
+    FROM meetings m
+    WHERE d.id=${documentId}::uuid
+      AND d.meeting_id=${meetingId}::uuid
+      AND d.agenda_item_id IS NULL
+      AND d.category='Sitzungsanlage'
+      AND d.deleted_at IS NULL
+      AND m.id=d.meeting_id
+      AND m.deleted_at IS NULL
+      AND (
+        m.status IN ('planned','running')
+        OR (m.status='completed' AND m.minutes_status='draft')
+      )
+    RETURNING d.title
+  `;
+
+  if (!rows.length) redirect(`${returnTo}?error=attachment_missing`);
+
+  await writeAudit(actor.id,"meeting.general_attachment_removed","document",documentId,{
+    meetingId,title:String(rows[0].title),
+  });
+
+  revalidatePath(`/sitzungen/${meetingId}`);
+  revalidatePath(`/sitzungen/${meetingId}/protokoll`);
+  revalidatePath(`/sitzungen/${meetingId}/korrektur`);
+  revalidatePath("/dokumente");
+  redirect(`${returnTo}?attachment_deleted=1`);
+}
+
 export async function removeMeetingAttachmentAction(formData:FormData) {
   const actor=await requirePermission("documents.write");
   const sql=getDb();
@@ -156,6 +290,16 @@ export async function removeMeetingAttachmentAction(formData:FormData) {
       AND agenda_item_id=${agendaItemId}::uuid
       AND category='Sitzungsanlage'
       AND deleted_at IS NULL
+      AND EXISTS (
+        SELECT 1
+        FROM meetings m
+        WHERE m.id=documents.meeting_id
+          AND m.deleted_at IS NULL
+          AND (
+            m.status IN ('planned','running')
+            OR (m.status='completed' AND m.minutes_status='draft')
+          )
+      )
     RETURNING title
   `;
 
