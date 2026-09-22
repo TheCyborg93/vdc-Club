@@ -8,7 +8,6 @@ import {
   archiveMeetingMinutesAction,
   returnMeetingMinutesAction,
   submitMeetingMinutesAction,
-  updateMeetingMinutesTextAction,
 } from "@/app/sitzungen/actions";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 
@@ -358,47 +357,18 @@ export default async function MinutesPage({
         )}
 
         {canWrite && minutesStatus==="draft" && (
-          <details className="secretary-editor-drawer" id="nachbearbeiten">
-            <summary>
-              <div>
-                <span className="eyebrow">Optional</span>
-                <strong>Protokoll nachbearbeiten</strong>
-                <small>Nur Einleitung und Abschluss ergänzen – TOPs, Teilnahme und Beschlüsse kommen automatisch aus der Sitzung.</small>
-              </div>
-              <b>+</b>
-            </summary>
-            <article className="panel secretary-editor">
-            <div className="panel-head">
-              <div>
-                <span className="eyebrow">Protokolltext</span>
-                <h2>Einleitung & Abschluss</h2>
-              </div>
-              <span>TOP-Ergebnisse werden automatisch aus dem Sitzungsmodus übernommen.</span>
+          <section className="minutes-correction-entry">
+            <div>
+              <span className="eyebrow">Nachbearbeitung</span>
+              <strong>Etwas aus der Sitzung korrigieren?</strong>
+              <small>
+                Formalia, Teilnahme, Gäste, TOP-Ergebnisse, Beschlüsse, Zeiten sowie Einleitung und Abschluss können vor der Einreichung korrigiert werden. Jede Änderung wird protokolliert.
+              </small>
             </div>
-            <form action={updateMeetingMinutesTextAction} className="form-stack">
-              <input type="hidden" name="meetingId" value={id} />
-              <label>
-                Einleitung / allgemeine Feststellungen
-                <textarea
-                  name="minutesIntro"
-                  rows={5}
-                  defaultValue={String(meeting.minutes_intro ?? "")}
-                  placeholder="z. B. Begrüßung, Feststellung der Beschlussfähigkeit, Hinweise zur Tagesordnung …"
-                />
-              </label>
-              <label>
-                Abschlussbemerkung
-                <textarea
-                  name="minutesClosing"
-                  rows={4}
-                  defaultValue={String(meeting.minutes_closing ?? "")}
-                  placeholder="z. B. Zusammenfassung, nächster Termin, Ende der Sitzung …"
-                />
-              </label>
-              <button className="mini-button">Protokolltext speichern</button>
-            </form>
-            </article>
-          </details>
+            <Link href={`/sitzungen/${id}/korrektur`} className="ghost-button">
+              Nachbearbeiten
+            </Link>
+          </section>
         )}
 
         <section className="secretary-approval-panel">
