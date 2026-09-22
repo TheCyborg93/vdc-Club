@@ -726,6 +726,7 @@ export async function updateMeetingStatusAction(formData: FormData) {
   const statusRaw=value(formData,"status");
   const minutesClosing=value(formData,"minutesClosing");
   const nextMeetingAt=value(formData,"nextMeetingAt");
+  const createNextMeeting=formData.get("createNextMeeting")==="on";
   const status=["planned","running","completed","cancelled"].includes(statusRaw)
     ? statusRaw
     : "planned";
@@ -913,11 +914,96 @@ export async function updateMeetingStatusAction(formData: FormData) {
     `;
   }
 
+  if (status==="completed" && createNextMeeting && nextMeetingAt) {
+    await sql`
+      WITH board_members AS (
+        SELECT DISTINCT au.member_id
+        FROM app_users au
+        JOIN user_roles ur ON ur.user_id=au.id
+        JOIN members m ON m.id=au.member_id
+        WHERE au.status='active'
+          AND m.status='active'
+          AND au.member_id IS NOT NULL
+          AND ur.role_key IN (
+            'chair','vice_chair','treasurer','media_director',
+            'sport_director','secretary','board'
+          )
+      ),
+      detected_roles AS (
+        SELECT
+          (
+            SELECT au.member_id
+            FROM app_users au
+            JOIN user_roles ur ON ur.user_id=au.id
+            JOIN members m ON m.id=au.member_id
+            WHERE au.status='active'
+              AND m.status='active'
+              AND ur.role_key='chair'
+            ORDER BY au.display_name
+            LIMIT 1
+          ) AS chair_member_id,
+          (
+            SELECT au.member_id
+            FROM app_users au
+            JOIN user_roles ur ON ur.user_id=au.id
+            JOIN members m ON m.id=au.member_id
+            WHERE au.status='active'
+              AND m.status='active'
+              AND ur.role_key='secretary'
+            ORDER BY au.display_name
+            LIMIT 1
+          ) AS minute_taker_member_id
+      ),
+      existing AS (
+        SELECT id
+        FROM meetings
+        WHERE deleted_at IS NULL
+          AND status IN ('planned','running')
+          AND starts_at=(${nextMeetingAt}::timestamp AT TIME ZONE 'Europe/Berlin')
+        LIMIT 1
+      ),
+      new_event AS (
+        INSERT INTO club_events (
+          title,event_type,starts_at,location,source,description
+        )
+        SELECT
+          'Vorstandssitzung',
+          'board',
+          (${nextMeetingAt}::timestamp AT TIME ZONE 'Europe/Berlin'),
+          NULL,
+          'club',
+          'Automatisch aus der vorherigen Vorstandssitzung angelegt.'
+        WHERE NOT EXISTS (SELECT 1 FROM existing)
+        RETURNING id,title,starts_at,location
+      ),
+      new_meeting AS (
+        INSERT INTO meetings (
+          event_id,title,starts_at,location,status,
+          chair_member_id,minute_taker_member_id
+        )
+        SELECT
+          ne.id,ne.title,ne.starts_at,ne.location,'planned',
+          dr.chair_member_id,dr.minute_taker_member_id
+        FROM new_event ne
+        CROSS JOIN detected_roles dr
+        RETURNING id
+      )
+      INSERT INTO meeting_attendees (
+        meeting_id,member_id,attendance,voting_eligible
+      )
+      SELECT nm.id,bm.member_id,'invited',true
+      FROM new_meeting nm
+      CROSS JOIN board_members bm
+      ON CONFLICT (meeting_id,member_id) DO NOTHING
+    `;
+  }
+
   await writeAudit(actor.id,"meeting.status_changed","meeting",meetingId,{
     title:String(before.title ?? ""),
     before:current,
     after:status,
     protocolRegistered:status==="completed",
+    nextMeetingCreated:status==="completed" && createNextMeeting && Boolean(nextMeetingAt),
   });
 
   revalidatePath(`/sitzungen/${meetingId}`);
