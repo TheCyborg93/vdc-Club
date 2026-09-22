@@ -1065,12 +1065,14 @@ export default async function MeetingDetailPage({
                 <div className="meeting-action-center">
                   {meetingRunning && canWrite && !preferredAgenda.resolution_id && !["done","deferred"].includes(String(preferredAgenda.status)) && (
                     <>
-                      <form action={updateAgendaStatusAction}>
-                        <input type="hidden" name="meetingId" value={id} />
-                        <input type="hidden" name="agendaItemId" value={String(preferredAgenda.id)} />
-                        <input type="hidden" name="status" value="done" />
-                        <button className="meeting-action success">TOP erledigen</button>
-                      </form>
+                      {preferredAgenda.agenda_type!=="decision" && (
+                        <form action={updateAgendaStatusAction}>
+                          <input type="hidden" name="meetingId" value={id} />
+                          <input type="hidden" name="agendaItemId" value={String(preferredAgenda.id)} />
+                          <input type="hidden" name="status" value="done" />
+                          <button className="meeting-action success">TOP erledigen</button>
+                        </form>
+                      )}
                       <form action={updateAgendaStatusAction}>
                         <input type="hidden" name="meetingId" value={id} />
                         <input type="hidden" name="agendaItemId" value={String(preferredAgenda.id)} />
@@ -1080,109 +1082,18 @@ export default async function MeetingDetailPage({
                     </>
                   )}
 
-                  {canResolve && meetingRunning && !preferredAgenda.resolution_id && (
-                    <details className="meeting-resolution-drawer">
-                      <summary className="meeting-action danger">Beschluss erfassen</summary>
-                      <div className="resolution-drawer-panel">
-                        <div className="resolution-drawer-head">
-                          <div>
-                            <span className="eyebrow">TOP {Number(preferredAgenda.position)}</span>
-                            <h3>Beschluss erfassen</h3>
-                          </div>
-                          <span>Erneut auf „Beschluss erfassen“ klicken zum Schließen.</span>
-                        </div>
-                        <form action={createResolutionFromAgendaAction} className="form-stack">
-                          <input type="hidden" name="meetingId" value={id} />
-                          <input type="hidden" name="agendaItemId" value={String(preferredAgenda.id)} />
-                          <label>Titel<input name="title" defaultValue={String(preferredAgenda.title)} required /></label>
-                          <label>
-                            Antrag / exakter Beschlusstext
-                            <textarea
-                              name="decisionText"
-                              rows={4}
-                              required
-                              placeholder="Der Vorstand beschließt …"
-                            />
-                          </label>
-
-                          <div className="form-grid">
-                            <label>
-                              Abstimmungsart
-                              <select name="voteMethod" defaultValue="show_of_hands">
-                                <option value="show_of_hands">Handzeichen</option>
-                                <option value="open">Offen</option>
-                                <option value="roll_call">Namentlich</option>
-                                <option value="secret">Geheim</option>
-                                <option value="electronic">Elektronisch</option>
-                              </select>
-                            </label>
-                            <label>
-                              Ergebnis
-                              <select name="decisionOutcome" defaultValue="" required>
-                                <option value="" disabled>Ergebnis auswählen</option>
-                                <option value="accepted">Angenommen</option>
-                                <option value="rejected">Abgelehnt</option>
-                              </select>
-                            </label>
-                          </div>
-
-                          <label>
-                            Namentliche Stimmen / Abstimmungsdetails
-                            <textarea
-                              name="voteDetails"
-                              rows={3}
-                              placeholder="Nur bei namentlicher Abstimmung erforderlich, z. B. Max Mustermann: Ja · Erika Beispiel: Enthaltung"
-                            />
-                          </label>
-
-                          <div className="vote-formal-summary">
-                            <label>
-                              Stimmberechtigte bei diesem TOP
-                              <input
-                                name="eligibleVoters"
-                                type="number"
-                                min="0"
-                                defaultValue={eligibleForCurrentVote}
-                                required
-                              />
-                            </label>
-                            <span>
-                              {presentVoterCount} anwesend stimmberechtigt · {preferredExclusions.length} ausgeschlossen
-                            </span>
-                          </div>
-
-                          <div className="vote-input-grid">
-                            <label>Ja<input name="votesYes" type="number" min="0" defaultValue="0" /></label>
-                            <label>Nein<input name="votesNo" type="number" min="0" defaultValue="0" /></label>
-                            <label>Enthaltung<input name="votesAbstain" type="number" min="0" defaultValue="0" /></label>
-                          </div>
-
-                          {canCreateTasks && (
-                            <>
-                              <label className="checkbox-row">
-                                <input type="checkbox" name="createTask" />
-                                <span>Direkt Folgeaufgabe erzeugen</span>
-                              </label>
-                              <div className="form-grid">
-                                <label>Verantwortlich
-                                  <select name="taskOwner" defaultValue="">
-                                    <option value="">Noch offen</option>
-                                    {members.map((member)=>(
-                                      <option key={String(member.id)} value={String(member.id)}>
-                                        {String(member.first_name)} {String(member.last_name)}
-                                      </option>
-                                    ))}
-                                  </select>
-                                </label>
-                                <label>Frist<input name="taskDueDate" type="date" /></label>
-                              </div>
-                            </>
-                          )}
-
-                          <button className="primary-button" type="submit">Beschluss speichern</button>
-                        </form>
-                      </div>
-                    </details>
+                  {canResolve && meetingRunning && !preferredAgenda.resolution_id && preferredAgenda.agenda_type==="decision" && (
+                    <MeetingResolutionDialog
+                      meetingId={id}
+                      agendaItemId={String(preferredAgenda.id)}
+                      agendaPosition={Number(preferredAgenda.position)}
+                      title={String(preferredAgenda.title)}
+                      eligibleVoters={eligibleForCurrentVote}
+                      presentVoterCount={presentVoterCount}
+                      excludedCount={preferredExclusions.length}
+                      members={members}
+                      canCreateTasks={canCreateTasks}
+                    />
                   )}
                 </div>
 
