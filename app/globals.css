@@ -777,3 +777,13 @@ button,a{font:inherit}button{cursor:pointer}a{color:inherit;text-decoration:none
 .meeting-agenda-add-form{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(150px,.6fr);gap:8px;margin-top:13px;padding-top:13px;border-top:1px solid var(--line)}.meeting-agenda-add-form .wide{grid-column:1/-1}.meeting-agenda-add-footer{display:flex;justify-content:space-between;align-items:center;gap:12px}.meeting-agenda-add-footer small{max-width:620px;color:var(--muted);font-size:clamp(7px,.46vw,9px);line-height:1.45}
 .meeting-note-templates{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:7px}.meeting-note-templates button{border:1px solid var(--line);border-radius:8px;padding:5px 7px;background:rgba(255,255,255,.015);color:#94a9a4;font-size:clamp(7px,.46vw,9px);cursor:pointer}.meeting-note-templates button:hover{border-color:rgba(68,224,176,.17);color:var(--accent);background:rgba(68,224,176,.025)}
 @media(max-width:720px){.meeting-agenda-plan-list>article{grid-template-columns:20px 32px minmax(0,1fr)}.agenda-plan-actions{grid-column:3;justify-content:flex-start}.agenda-plan-editor{position:fixed;left:8px;right:8px;top:92px;width:auto;max-height:72vh;overflow:auto}.meeting-agenda-add-form{grid-template-columns:1fr}.meeting-agenda-add-form .wide{grid-column:auto}.meeting-agenda-add-footer{align-items:stretch;flex-direction:column}.meeting-agenda-add-footer .primary-button{width:100%}}
+
+
+/* Live meeting focus mode */
+body.meeting-focus-mode .sidebar{display:none!important}
+body.meeting-focus-mode .topbar{display:none!important}
+body.meeting-focus-mode .content-shell{margin-left:0!important}
+body.meeting-focus-mode .page-content{max-width:none;padding:18px 22px 26px}
+body.meeting-focus-mode .meeting-control-page{max-width:1780px;margin:0 auto}
+body.meeting-focus-mode .meeting-control-hero{position:sticky;top:0;z-index:18;background:rgba(9,18,16,.94);backdrop-filter:blur(18px)}
+@media(max-width:720px){body.meeting-focus-mode .page-content{padding:8px 8px 18px}body.meeting-focus-mode .meeting-control-hero{position:static}}
