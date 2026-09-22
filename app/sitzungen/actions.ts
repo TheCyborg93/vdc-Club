@@ -863,7 +863,7 @@ export async function updateMeetingStatusAction(formData: FormData) {
         ELSE minutes_status
       END,
       minutes_version=CASE
-        WHEN ${status}='running' AND status='completed' AND minutes_status IN ('review','approved')
+        WHEN ${status}='running' AND status='completed' AND minutes_status='review'
           THEN minutes_version+1
         ELSE minutes_version
       END,
@@ -897,10 +897,10 @@ export async function updateMeetingStatusAction(formData: FormData) {
         'Protokoll',
         'internal',
         '/sitzungen/' || m.id::text || '/protokoll',
-        'review',
+        'draft',
         (m.starts_at AT TIME ZONE 'Europe/Berlin')::date,
         m.id,
-        'Automatisch beim Beenden der Sitzung registriert · Freigabe noch erforderlich.'
+        'Protokollentwurf aus abgeschlossener Sitzung · noch nicht zur Prüfung eingereicht.'
       FROM meetings m
       WHERE m.id=${meetingId}::uuid
         AND m.deleted_at IS NULL
@@ -911,6 +911,25 @@ export async function updateMeetingStatusAction(formData: FormData) {
             AND d.category='Protokoll'
             AND d.deleted_at IS NULL
         )
+    `;
+  }
+
+  if (
+    current==="completed" &&
+    status==="running" &&
+    String(before.minutes_status)==="review"
+  ) {
+    await sql`
+      UPDATE documents
+      SET
+        status='draft',
+        archived_at=NULL,
+        archived_by=NULL,
+        notes='Sitzung wurde wieder geöffnet · Protokoll erneut im Entwurf.',
+        updated_at=now()
+      WHERE meeting_id=${meetingId}::uuid
+        AND category='Protokoll'
+        AND deleted_at IS NULL
     `;
   }
 
@@ -1420,9 +1439,37 @@ export async function submitMeetingMinutesAction(formData: FormData) {
   `;
 
   await sql`
+    INSERT INTO documents (
+      title,category,storage_type,storage_ref,status,
+      document_date,meeting_id,notes
+    )
+    SELECT
+      'Protokoll · ' || m.title,
+      'Protokoll',
+      'internal',
+      '/sitzungen/' || m.id::text || '/protokoll',
+      'review',
+      (m.starts_at AT TIME ZONE 'Europe/Berlin')::date,
+      m.id,
+      'Protokoll zur Freigabe eingereicht.'
+    FROM meetings m
+    WHERE m.id=${meetingId}::uuid
+      AND m.deleted_at IS NULL
+      AND NOT EXISTS (
+        SELECT 1
+        FROM documents d
+        WHERE d.meeting_id=m.id
+          AND d.category='Protokoll'
+          AND d.deleted_at IS NULL
+      )
+  `;
+
+  await sql`
     UPDATE documents
     SET
       status='review',
+      archived_at=NULL,
+      archived_by=NULL,
       notes='Protokoll zur Freigabe eingereicht.',
       updated_at=now()
     WHERE meeting_id=${meetingId}::uuid
@@ -1480,6 +1527,19 @@ export async function returnMeetingMinutesAction(formData: FormData) {
       ${actor.id}::uuid,
       'Zur Überarbeitung zurückgegeben'
     )
+  `;
+
+  await sql`
+    UPDATE documents
+    SET
+      status='draft',
+      archived_at=NULL,
+      archived_by=NULL,
+      notes='Protokoll zur Überarbeitung zurückgegeben · ' || ${returnNote},
+      updated_at=now()
+    WHERE meeting_id=${meetingId}::uuid
+      AND category='Protokoll'
+      AND deleted_at IS NULL
   `;
 
   await writeAudit(actor.id,"meeting.minutes_returned","meeting",meetingId,{returnNote});
