@@ -471,18 +471,24 @@ export async function getDashboardData(
           AND status='planned'
           AND starts_at>=now()
         UNION ALL
-        SELECT 'Dokumentprüfung',
+        SELECT 'Protokolle offen',
           count(*)::text,
-          'innerhalb 30 Tagen',
-          '/dokumente',
+          'Entwürfe fertigstellen',
+          '/sitzungen',
           CASE WHEN count(*)>0 THEN 'warning' ELSE 'success' END
-        FROM documents
+        FROM meetings
         WHERE deleted_at IS NULL
-          AND status IN ('active','review')
-          AND (
-            (review_on IS NOT NULL AND review_on<=CURRENT_DATE+interval '30 days')
-            OR (valid_until IS NOT NULL AND valid_until<=CURRENT_DATE+interval '30 days')
-          )
+          AND status='completed'
+          AND minutes_status='draft'
+        UNION ALL
+        SELECT 'In Prüfung',
+          count(*)::text,
+          'wartet auf Freigabe',
+          '/sitzungen',
+          CASE WHEN count(*)>0 THEN 'warning' ELSE 'success' END
+        FROM meetings
+        WHERE deleted_at IS NULL
+          AND minutes_status='review'
         UNION ALL
         SELECT 'Offene Beschlüsse',
           count(*)::text,
