@@ -197,6 +197,9 @@ export default async function SurveyDetailPage({
   }
 
   const deadline = formatDate(survey.ends_at);
+  const displayStatus=deadlinePassed
+    ? "Frist abgelaufen"
+    : statusLabels[String(survey.status)] ?? String(survey.status);
 
   return (
     <div className="page-stack">
@@ -207,8 +210,8 @@ export default async function SurveyDetailPage({
           <h1>{String(survey.title)}</h1>
           <p>{String(survey.description || "Keine zusätzliche Beschreibung hinterlegt.")}</p>
         </div>
-        <span className={`survey-status survey-status-${survey.status}`}>
-          {statusLabels[String(survey.status)] ?? String(survey.status)}
+        <span className={`survey-status survey-status-${deadlinePassed ? "expired" : survey.status}`}>
+          {displayStatus}
         </span>
       </section>
 
@@ -268,15 +271,32 @@ export default async function SurveyDetailPage({
           <div className="panel-head">
             <div><span className="eyebrow">Verteilen</span><h2>Öffentlicher Link & WhatsApp</h2></div>
           </div>
-          <SurveyShare
-            title={String(survey.title)}
-            topic={String(survey.topic)}
-            description={String(survey.description ?? "")}
-            targetGroup={String(survey.target_group ?? "Alle")}
-            deadline={deadline}
-            publicPath={`/u/${survey.public_token}`}
-            isAnonymous={isAnonymous}
-          />
+          {survey.status==="active" && !deadlinePassed ? (
+            <SurveyShare
+              title={String(survey.title)}
+              topic={String(survey.topic)}
+              description={String(survey.description ?? "")}
+              targetGroup={String(survey.target_group ?? "Alle")}
+              deadline={deadline}
+              publicPath={`/u/${survey.public_token}`}
+              isAnonymous={isAnonymous}
+            />
+          ) : (
+            <div className="survey-share-inactive">
+              <strong>
+                {survey.status==="draft"
+                  ? "Noch nicht veröffentlicht"
+                  : deadlinePassed
+                    ? "Frist bereits abgelaufen"
+                    : "Umfrage ist nicht aktiv"}
+              </strong>
+              <span>
+                {survey.status==="draft"
+                  ? "Veröffentliche die Umfrage zuerst. Danach werden Link und WhatsApp-Text freigeschaltet."
+                  : "Der öffentliche Link nimmt aktuell keine neuen Antworten an."}
+              </span>
+            </div>
+          )}
         </article>
 
         <article className="panel">
@@ -285,7 +305,7 @@ export default async function SurveyDetailPage({
           </div>
 
           <div className="survey-control-list">
-            <div><span>Status</span><strong>{statusLabels[String(survey.status)] ?? String(survey.status)}</strong></div>
+            <div><span>Status</span><strong>{displayStatus}</strong></div>
             <div><span>Teilnahme</span><strong>{isAnonymous ? "Anonym" : "Nicht anonym"}</strong></div>
             <div><span>Ergebnisse öffentlich</span><strong>{survey.results_visibility === "after_submit" ? "Nach Abgabe" : "Nein"}</strong></div>
             <div><span>Mehrfachteilnahme</span><strong>{survey.one_response_per_browser ? "Pro Browser begrenzt" : "Erlaubt"}</strong></div>
