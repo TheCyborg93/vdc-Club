@@ -197,12 +197,17 @@ export async function updateDocumentStatusAction(formData: FormData) {
   }
 
   const before=await sql`
-    SELECT status,title
+    SELECT status,title,category,meeting_id::text
     FROM documents
     WHERE id=${id}::uuid
       AND deleted_at IS NULL
     LIMIT 1
   `;
+  const document=before[0];
+  if (!document) redirect("/dokumente?error=missing");
+  if (document.category==="Protokoll" && document.meeting_id) {
+    redirect(`/dokumente?error=protocol_managed`);
+  }
 
   await sql`
     UPDATE documents
@@ -231,6 +236,19 @@ export async function archiveDocumentAction(formData: FormData) {
 
   const id=value(formData,"id");
   if (!id) redirect("/dokumente?error=invalid");
+
+  const documentRows=await sql`
+    SELECT id::text,title,category,meeting_id::text
+    FROM documents
+    WHERE id=${id}::uuid
+      AND deleted_at IS NULL
+    LIMIT 1
+  `;
+  const document=documentRows[0];
+  if (!document) redirect("/dokumente?error=missing");
+  if (document.category==="Protokoll" && document.meeting_id) {
+    redirect("/dokumente?error=protocol_managed");
+  }
 
   const rows=await sql`
     UPDATE documents
