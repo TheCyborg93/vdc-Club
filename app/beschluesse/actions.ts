@@ -35,6 +35,9 @@ export async function updateResolutionStatusAction(formData: FormData) {
   if (before.status==="withdrawn" && status!=="withdrawn") {
     redirect("/beschluesse?error=withdrawn");
   }
+  if (before.status==="rejected") {
+    redirect("/beschluesse?error=rejected");
+  }
 
   await sql`
     UPDATE resolutions
@@ -155,7 +158,13 @@ export async function createResolutionTaskAction(formData: FormData) {
       ${ownerMemberId || null}::uuid,
       'resolution',
       ${resolutionId}::uuid
-    WHERE NOT EXISTS (
+    WHERE EXISTS (
+      SELECT 1 FROM resolutions r
+      WHERE r.id=${resolutionId}::uuid
+        AND COALESCE(r.decision_outcome,'accepted')='accepted'
+        AND r.status<>'rejected'
+    )
+    AND NOT EXISTS (
       SELECT 1
       FROM tasks
       WHERE source_type='resolution'
