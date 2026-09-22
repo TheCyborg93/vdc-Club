@@ -19,7 +19,6 @@ import {
   updateAttendanceAction,
   updateMeetingDetailsAction,
   updateMeetingFormalitiesAction,
-  updateMeetingGuestAttendanceAction,
   updateMeetingOfficersAction,
   updateMeetingStatusAction,
 } from "@/app/sitzungen/actions";
@@ -33,13 +32,6 @@ import {
   uploadMeetingAttachmentAction,
 } from "@/app/sitzungen/attachment-actions";
 import { meetingStatusLabel,taskStatusLabel } from "@/lib/ui-labels";
-
-const attendanceLabels:Record<string,string>={
-  invited:"Eingeladen",
-  present:"Anwesend",
-  absent:"Abwesend",
-  excused:"Entschuldigt",
-};
 
 const minutesStatusLabels:Record<string,string>={
   draft:"Entwurf",
