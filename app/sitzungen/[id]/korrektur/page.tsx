@@ -56,6 +56,7 @@ const errors:Record<string,string>={
   officer_remove:"Sitzungsleitung oder Protokollführung zuerst auf eine andere Person ändern.",
   resolution_exists:"Für diesen TOP existiert bereits ein Beschluss.",
   resolution_task:"Der Beschluss kann nicht entfernt werden, solange eine aktive Folgeaufgabe damit verknüpft ist.",
+  attachment_reason:"Bei Änderungen an Anlagen ist ein Änderungsgrund erforderlich.",
 };
 
 export default async function MeetingCorrectionPage({
@@ -392,6 +393,7 @@ export default async function MeetingCorrectionPage({
                       <input type="hidden" name="meetingId" value={id} />
                       <input type="hidden" name="documentId" value={String(doc.id)} />
                       <input type="hidden" name="returnTo" value={`/sitzungen/${id}/korrektur`} />
+                      <input name="changeReason" required placeholder="Änderungsgrund" />
                       <button className="mini-button">Entfernen</button>
                     </form>
                   )}
@@ -407,6 +409,7 @@ export default async function MeetingCorrectionPage({
             <input type="hidden" name="returnTo" value={`/sitzungen/${id}/korrektur`} />
             <label>Titel<input name="title" placeholder="Optional" /></label>
             <label>Datei<input name="file" type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.jpg,.jpeg,.png,.webp" required /></label>
+            <label>Änderungsgrund<input name="changeReason" required placeholder="Warum wird die Anlage nachgetragen?" /></label>
             <button className="mini-button">Sitzungsanlage hochladen</button>
           </form>
         )}
@@ -487,6 +490,7 @@ export default async function MeetingCorrectionPage({
                                   <input type="hidden" name="agendaItemId" value={String(item.id)} />
                                   <input type="hidden" name="documentId" value={String(doc.id)} />
                                   <input type="hidden" name="returnTo" value={`/sitzungen/${id}/korrektur`} />
+                                  <input name="changeReason" required placeholder="Änderungsgrund" />
                                   <button className="mini-button">Entfernen</button>
                                 </form>
                               )}
@@ -503,6 +507,7 @@ export default async function MeetingCorrectionPage({
                       <input type="hidden" name="returnTo" value={`/sitzungen/${id}/korrektur`} />
                       <label>Titel<input name="title" placeholder="Optional" /></label>
                       <label>Datei<input name="file" type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.jpg,.jpeg,.png,.webp" required /></label>
+                      <label>Änderungsgrund<input name="changeReason" required placeholder="Warum wird die Anlage nachgetragen?" /></label>
                       <button className="mini-button">TOP-Anlage hochladen</button>
                     </form>
                   )}
