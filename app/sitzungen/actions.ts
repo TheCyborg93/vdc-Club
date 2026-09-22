@@ -603,3 +603,296 @@ export async function createResolutionFromAgendaAction(formData: FormData) {
   revalidatePath("/");
   redirect(`/sitzungen/${meetingId}?top=${nextTop}&resolution=1`);
 }
+
+
+function canApproveMinutes(roles:string[]) {
+  return roles.some((role)=>["chair","vice_chair","board","admin"].includes(role));
+}
+
+export async function updateMeetingOfficersAction(formData: FormData) {
+  const actor=await requirePermission("meetings.write");
+  const sql=getDb();
+  if (!sql) redirect("/sitzungen?error=database");
+
+  const meetingId=value(formData,"meetingId");
+  const chairMemberId=value(formData,"chairMemberId");
+  const minuteTakerMemberId=value(formData,"minuteTakerMemberId");
+
+  const rows=await sql`
+    UPDATE meetings
+    SET
+      chair_member_id=${chairMemberId || null}::uuid,
+      minute_taker_member_id=${minuteTakerMemberId || null}::uuid,
+      updated_at=now()
+    WHERE id=${meetingId}::uuid
+      AND deleted_at IS NULL
+      AND minutes_status <> 'archived'
+    RETURNING id::text
+  `;
+
+  if (!rows.length) redirect(`/sitzungen/${meetingId}?error=meeting_locked`);
+
+  await writeAudit(actor.id,"meeting.officers_updated","meeting",meetingId,{
+    chairMemberId:chairMemberId || null,
+    minuteTakerMemberId:minuteTakerMemberId || null,
+  });
+
+  revalidatePath(`/sitzungen/${meetingId}`);
+  revalidatePath(`/sitzungen/${meetingId}/protokoll`);
+  redirect(`/sitzungen/${meetingId}?officers=1`);
+}
+
+export async function updateMeetingMinutesTextAction(formData: FormData) {
+  const actor=await requirePermission("meetings.write");
+  const sql=getDb();
+  if (!sql) redirect("/sitzungen?error=database");
+
+  const meetingId=value(formData,"meetingId");
+  const intro=value(formData,"minutesIntro");
+  const closing=value(formData,"minutesClosing");
+
+  const rows=await sql`
+    UPDATE meetings
+    SET
+      minutes_intro=${intro || null},
+      minutes_closing=${closing || null},
+      updated_at=now()
+    WHERE id=${meetingId}::uuid
+      AND deleted_at IS NULL
+      AND minutes_status='draft'
+    RETURNING id::text
+  `;
+
+  if (!rows.length) redirect(`/sitzungen/${meetingId}/protokoll?error=minutes_locked`);
+
+  await writeAudit(actor.id,"meeting.minutes_text_updated","meeting",meetingId,{});
+  revalidatePath(`/sitzungen/${meetingId}`);
+  revalidatePath(`/sitzungen/${meetingId}/protokoll`);
+  redirect(`/sitzungen/${meetingId}/protokoll?saved=1`);
+}
+
+export async function submitMeetingMinutesAction(formData: FormData) {
+  const actor=await requirePermission("meetings.write");
+  const sql=getDb();
+  if (!sql) redirect("/sitzungen?error=database");
+
+  const meetingId=value(formData,"meetingId");
+
+  const rows=await sql`
+    SELECT
+      id::text,status,minutes_status,minutes_version,
+      minutes_intro,minutes_closing,
+      chair_member_id::text,minute_taker_member_id::text
+    FROM meetings
+    WHERE id=${meetingId}::uuid
+      AND deleted_at IS NULL
+    LIMIT 1
+  `;
+  const meeting=rows[0];
+  if (!meeting) redirect("/sitzungen?error=missing");
+  if (String(meeting.status)!=="completed") {
+    redirect(`/sitzungen/${meetingId}/protokoll?error=meeting_not_completed`);
+  }
+  if (String(meeting.minutes_status)!=="draft") {
+    redirect(`/sitzungen/${meetingId}/protokoll?error=minutes_locked`);
+  }
+  if (!meeting.chair_member_id || !meeting.minute_taker_member_id) {
+    redirect(`/sitzungen/${meetingId}/protokoll?error=officers_missing`);
+  }
+
+  await sql`
+    INSERT INTO meeting_minutes_revisions (
+      meeting_id,version,status,intro,closing,return_note,changed_by,change_note
+    )
+    VALUES (
+      ${meetingId}::uuid,
+      ${Number(meeting.minutes_version ?? 1)}::int,
+      'review',
+      ${meeting.minutes_intro ?? null},
+      ${meeting.minutes_closing ?? null},
+      NULL,
+      ${actor.id}::uuid,
+      'Zur Prüfung eingereicht'
+    )
+    ON CONFLICT (meeting_id,version)
+    DO UPDATE SET
+      status='review',
+      intro=EXCLUDED.intro,
+      closing=EXCLUDED.closing,
+      changed_by=EXCLUDED.changed_by,
+      change_note=EXCLUDED.change_note,
+      created_at=now()
+  `;
+
+  await sql`
+    UPDATE meetings
+    SET
+      minutes_status='review',
+      minutes_return_note=NULL,
+      minutes_submitted_at=now(),
+      minutes_submitted_by=${actor.id}::uuid,
+      updated_at=now()
+    WHERE id=${meetingId}::uuid
+  `;
+
+  await sql`
+    UPDATE documents
+    SET
+      status='review',
+      notes='Protokoll zur Freigabe eingereicht.',
+      updated_at=now()
+    WHERE meeting_id=${meetingId}::uuid
+      AND category='Protokoll'
+      AND deleted_at IS NULL
+  `;
+
+  await writeAudit(actor.id,"meeting.minutes_submitted","meeting",meetingId,{});
+  revalidatePath(`/sitzungen/${meetingId}`);
+  revalidatePath(`/sitzungen/${meetingId}/protokoll`);
+  revalidatePath("/dokumente");
+  redirect(`/sitzungen/${meetingId}/protokoll?submitted=1`);
+}
+
+export async function returnMeetingMinutesAction(formData: FormData) {
+  const actor=await requirePermission("meetings.write");
+  if (!canApproveMinutes(actor.roles)) redirect("/sitzungen?error=forbidden");
+
+  const sql=getDb();
+  if (!sql) redirect("/sitzungen?error=database");
+
+  const meetingId=value(formData,"meetingId");
+  const returnNote=value(formData,"returnNote");
+  if (!returnNote) redirect(`/sitzungen/${meetingId}/protokoll?error=return_note`);
+
+  const rows=await sql`
+    UPDATE meetings
+    SET
+      minutes_status='draft',
+      minutes_return_note=${returnNote},
+      minutes_version=minutes_version+1,
+      minutes_approved_at=NULL,
+      minutes_approved_by=NULL,
+      updated_at=now()
+    WHERE id=${meetingId}::uuid
+      AND minutes_status='review'
+      AND deleted_at IS NULL
+    RETURNING minutes_version
+  `;
+
+  if (!rows.length) redirect(`/sitzungen/${meetingId}/protokoll?error=minutes_locked`);
+
+  await writeAudit(actor.id,"meeting.minutes_returned","meeting",meetingId,{returnNote});
+  revalidatePath(`/sitzungen/${meetingId}`);
+  revalidatePath(`/sitzungen/${meetingId}/protokoll`);
+  redirect(`/sitzungen/${meetingId}/protokoll?returned=1`);
+}
+
+export async function approveMeetingMinutesAction(formData: FormData) {
+  const actor=await requirePermission("meetings.write");
+  if (!canApproveMinutes(actor.roles)) redirect("/sitzungen?error=forbidden");
+
+  const sql=getDb();
+  if (!sql) redirect("/sitzungen?error=database");
+
+  const meetingId=value(formData,"meetingId");
+
+  const rows=await sql`
+    UPDATE meetings
+    SET
+      minutes_status='approved',
+      minutes_return_note=NULL,
+      minutes_approved_at=now(),
+      minutes_approved_by=${actor.id}::uuid,
+      updated_at=now()
+    WHERE id=${meetingId}::uuid
+      AND minutes_status='review'
+      AND deleted_at IS NULL
+    RETURNING minutes_version,minutes_intro,minutes_closing
+  `;
+
+  const meeting=rows[0];
+  if (!meeting) redirect(`/sitzungen/${meetingId}/protokoll?error=minutes_locked`);
+
+  await sql`
+    INSERT INTO meeting_minutes_revisions (
+      meeting_id,version,status,intro,closing,changed_by,change_note
+    )
+    VALUES (
+      ${meetingId}::uuid,
+      ${Number(meeting.minutes_version ?? 1)}::int,
+      'approved',
+      ${meeting.minutes_intro ?? null},
+      ${meeting.minutes_closing ?? null},
+      ${actor.id}::uuid,
+      'Protokoll freigegeben'
+    )
+    ON CONFLICT (meeting_id,version)
+    DO UPDATE SET
+      status='approved',
+      intro=EXCLUDED.intro,
+      closing=EXCLUDED.closing,
+      changed_by=EXCLUDED.changed_by,
+      change_note=EXCLUDED.change_note,
+      created_at=now()
+  `;
+
+  await sql`
+    UPDATE documents
+    SET
+      status='active',
+      notes='Freigegebenes Sitzungsprotokoll.',
+      updated_at=now()
+    WHERE meeting_id=${meetingId}::uuid
+      AND category='Protokoll'
+      AND deleted_at IS NULL
+  `;
+
+  await writeAudit(actor.id,"meeting.minutes_approved","meeting",meetingId,{});
+  revalidatePath(`/sitzungen/${meetingId}`);
+  revalidatePath(`/sitzungen/${meetingId}/protokoll`);
+  revalidatePath("/dokumente");
+  redirect(`/sitzungen/${meetingId}/protokoll?approved=1`);
+}
+
+export async function archiveMeetingMinutesAction(formData: FormData) {
+  const actor=await requirePermission("meetings.write");
+  const sql=getDb();
+  if (!sql) redirect("/sitzungen?error=database");
+
+  const meetingId=value(formData,"meetingId");
+
+  const rows=await sql`
+    UPDATE meetings
+    SET
+      minutes_status='archived',
+      minutes_archived_at=now(),
+      minutes_archived_by=${actor.id}::uuid,
+      updated_at=now()
+    WHERE id=${meetingId}::uuid
+      AND minutes_status='approved'
+      AND deleted_at IS NULL
+    RETURNING id::text
+  `;
+
+  if (!rows.length) redirect(`/sitzungen/${meetingId}/protokoll?error=minutes_locked`);
+
+  await sql`
+    UPDATE documents
+    SET
+      status='archived',
+      archived_at=now(),
+      archived_by=${actor.id}::uuid,
+      notes='Freigegebenes Sitzungsprotokoll · archiviert.',
+      updated_at=now()
+    WHERE meeting_id=${meetingId}::uuid
+      AND category='Protokoll'
+      AND deleted_at IS NULL
+  `;
+
+  await writeAudit(actor.id,"meeting.minutes_archived","meeting",meetingId,{});
+  revalidatePath(`/sitzungen/${meetingId}`);
+  revalidatePath(`/sitzungen/${meetingId}/protokoll`);
+  revalidatePath("/dokumente");
+  revalidatePath("/archiv");
+  redirect(`/sitzungen/${meetingId}/protokoll?archived=1`);
+}
