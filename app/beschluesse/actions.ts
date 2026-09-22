@@ -24,7 +24,7 @@ export async function updateResolutionStatusAction(formData: FormData) {
   if (!id) redirect("/beschluesse?error=missing");
 
   const beforeRows=await sql`
-    SELECT id::text,title,status
+    SELECT id::text,title,status,decision_outcome
     FROM resolutions
     WHERE id=${id}::uuid
     LIMIT 1
@@ -32,11 +32,11 @@ export async function updateResolutionStatusAction(formData: FormData) {
   const before=beforeRows[0];
   if (!before) redirect("/beschluesse?error=missing");
 
+  if (before.decision_outcome==="rejected") {
+    redirect("/beschluesse?error=rejected");
+  }
   if (before.status==="withdrawn" && status!=="withdrawn") {
     redirect("/beschluesse?error=withdrawn");
-  }
-  if (before.status==="rejected") {
-    redirect("/beschluesse?error=rejected");
   }
 
   await sql`
@@ -162,7 +162,7 @@ export async function createResolutionTaskAction(formData: FormData) {
       SELECT 1 FROM resolutions r
       WHERE r.id=${resolutionId}::uuid
         AND COALESCE(r.decision_outcome,'accepted')='accepted'
-        AND r.status<>'rejected'
+        AND r.decision_outcome='accepted'
     )
     AND NOT EXISTS (
       SELECT 1
