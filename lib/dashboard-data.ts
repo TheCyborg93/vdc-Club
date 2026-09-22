@@ -653,6 +653,13 @@ export async function getDashboardData(
     const resolutionRows=await sql`
       SELECT id::text,resolution_number,title,status,decision_outcome,decided_at
       FROM resolutions
+      WHERE NOT (
+        meeting_id IS NULL
+        AND agenda_item_id IS NULL
+        AND vote_method IS NULL
+        AND decision_outcome IS NULL
+        AND eligible_voters IS NULL
+      )
       ORDER BY
         CASE status WHEN 'open' THEN 0 WHEN 'in_progress' THEN 1 WHEN 'implemented' THEN 2 ELSE 3 END,
         decided_at DESC
