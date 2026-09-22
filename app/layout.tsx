@@ -7,6 +7,7 @@ import { getCurrentUser } from "@/lib/auth";
 import { getNotifications } from "@/lib/notifications";
 import { PwaInstallPrompt } from "@/components/pwa-install-prompt";
 import { ensureIntegrationsFresh } from "@/lib/club-sync";
+import "./panda.css";
 import "./globals.css";
 import "./vdc-theme.css";
 
@@ -35,7 +36,7 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: "#08100f",
+  themeColor: "#0e0e10",
   colorScheme: "dark",
   width: "device-width",
   initialScale: 1,
