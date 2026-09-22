@@ -63,6 +63,17 @@ export async function correctCompletedMeetingAction(formData:FormData) {
   const allowed=await ensureEditableMeeting(sql,meetingId);
   if (!allowed) redirect(`/sitzungen/${meetingId}/protokoll?error=minutes_locked`);
 
+  const officerRows=await sql`
+    SELECT count(DISTINCT member_id)::int AS count
+    FROM meeting_attendees
+    WHERE meeting_id=${meetingId}::uuid
+      AND member_id IN (${chairMemberId}::uuid,${minuteTakerMemberId}::uuid)
+  `;
+  const requiredOfficerCount=chairMemberId===minuteTakerMemberId ? 1 : 2;
+  if (Number(officerRows[0]?.count ?? 0)<requiredOfficerCount) {
+    redirect(`/sitzungen/${meetingId}/korrektur?error=officer_missing`);
+  }
+
   const beforeRows=await sql`
     SELECT
       title,starts_at,opened_at,ended_at,location,meeting_mode,
@@ -719,6 +730,17 @@ export async function correctResolutionAction(formData:FormData) {
   `;
   const after=rows[0];
   if (!after) redirect(`/sitzungen/${meetingId}/korrektur?error=missing`);
+
+  if (outcome==="rejected") {
+    await sql`
+      UPDATE tasks
+      SET status='cancelled',updated_at=now()
+      WHERE source_type='resolution'
+        AND source_id=${resolutionId}::uuid
+        AND deleted_at IS NULL
+        AND status<>'cancelled'
+    `;
+  }
 
   await sql`
     INSERT INTO meeting_change_log(
