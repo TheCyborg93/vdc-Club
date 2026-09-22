@@ -90,7 +90,7 @@ export async function updateDocumentMetadataAction(formData:FormData) {
     !id ||
     !title ||
     !category ||
-    !["active","review","expired","archived"].includes(status)
+    !["draft","active","review","expired","archived"].includes(status)
   ) {
     redirect(`/dokumente/${id}?error=missing`);
   }
