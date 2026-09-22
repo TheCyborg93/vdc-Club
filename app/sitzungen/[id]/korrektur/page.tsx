@@ -3,17 +3,21 @@ import { redirect } from "next/navigation";
 import { getDb } from "@/lib/db";
 import { hasPermission, requirePermission } from "@/lib/permissions";
 import {
+  addAgendaItemCorrectionAction,
   addMeetingAttendeeCorrectionAction,
   addMeetingGuestCorrectionAction,
   addResolutionCorrectionAction,
+  addVoteExclusionCorrectionAction,
   correctAgendaItemAction,
   correctCompletedMeetingAction,
   correctMeetingAttendeeAction,
   correctMeetingGuestAction,
   correctResolutionAction,
+  removeAgendaItemCorrectionAction,
   removeMeetingAttendeeCorrectionAction,
   removeMeetingGuestCorrectionAction,
   removeResolutionCorrectionAction,
+  removeVoteExclusionCorrectionAction,
 } from "@/app/sitzungen/correction-actions";
 import {
   removeMeetingAttachmentAction,
@@ -54,6 +58,9 @@ const errors:Record<string,string>={
   rollcall:"Bei namentlicher Abstimmung müssen die Abstimmungsdetails ausgefüllt sein.",
   person_exists:"Diese Person ist bereits als Teilnehmer eingetragen.",
   officer_remove:"Sitzungsleitung oder Protokollführung zuerst auf eine andere Person ändern.",
+  officer_missing:"Sitzungsleitung und Protokollführung müssen als Teilnehmer dieser Sitzung geführt werden.",
+  agenda_dependencies:"Der TOP hat noch einen Beschluss, eine Anlage, Aufgabe oder einen Abstimmungsausschluss. Diese Verknüpfungen zuerst korrigieren.",
+  exclusion_person:"Nur anwesende stimmberechtigte Teilnehmer können als von der Abstimmung ausgeschlossen dokumentiert werden.",
   resolution_exists:"Für diesen TOP existiert bereits ein Beschluss.",
   resolution_task:"Der Beschluss kann nicht entfernt werden, solange eine aktive Folgeaufgabe damit verknüpft ist.",
   attachment_reason:"Bei Änderungen an Anlagen ist ein Änderungsgrund erforderlich.",
@@ -73,7 +80,7 @@ export default async function MeetingCorrectionPage({
   const {id}=await params;
   const query=await searchParams;
 
-  const [meetingRows,members,attendees,guests,agenda,attachments,changes]=await Promise.all([
+  const [meetingRows,members,attendees,guests,agenda,attachments,exclusions,changes]=await Promise.all([
     sql`
       SELECT
         m.*,
@@ -129,6 +136,19 @@ export default async function MeetingCorrectionPage({
         AND d.category='Sitzungsanlage'
         AND d.deleted_at IS NULL
       ORDER BY d.created_at
+    `,
+    sql`
+      SELECT
+        ave.id::text,
+        ave.agenda_item_id::text,
+        ave.member_id::text,
+        ave.reason,
+        COALESCE(m.first_name || ' ' || m.last_name,ave.person_name) AS person_name
+      FROM agenda_vote_exclusions ave
+      LEFT JOIN members m ON m.id=ave.member_id
+      JOIN agenda_items ai ON ai.id=ave.agenda_item_id
+      WHERE ai.meeting_id=${id}::uuid
+      ORDER BY ave.created_at
     `,
     sql`
       SELECT
@@ -468,6 +488,15 @@ export default async function MeetingCorrectionPage({
                   <button className="mini-button">TOP korrigieren</button>
                 </form>
 
+                {!item.resolution_id && (
+                  <form action={removeAgendaItemCorrectionAction} className="meeting-resolution-remove-form">
+                    <input type="hidden" name="meetingId" value={id} />
+                    <input type="hidden" name="agendaItemId" value={String(item.id)} />
+                    <input name="changeReason" required placeholder="Grund für das Entfernen des TOPs" />
+                    <button className="meeting-agenda-delete">TOP entfernen</button>
+                  </form>
+                )}
+
                 <div className="meeting-correction-attachments">
                   <span className="eyebrow">TOP-Anlagen</span>
                   {attachments.filter((doc)=>String(doc.agenda_item_id)===String(item.id)).length===0 ? (
@@ -512,6 +541,70 @@ export default async function MeetingCorrectionPage({
                     </form>
                   )}
                 </div>
+
+                {canResolve && (item.resolution_id || item.agenda_type==="decision") && (
+                  <section className="meeting-correction-exclusions">
+                    <div className="meeting-section-head">
+                      <span>Abstimmungsausschlüsse</span>
+                      <b>{exclusions.filter((row)=>String(row.agenda_item_id)===String(item.id)).length}</b>
+                    </div>
+
+                    {exclusions.filter((row)=>String(row.agenda_item_id)===String(item.id)).length===0 ? (
+                      <div className="empty-state">Keine Person von der Abstimmung ausgeschlossen.</div>
+                    ) : (
+                      <div className="meeting-correction-remove-list">
+                        {exclusions
+                          .filter((row)=>String(row.agenda_item_id)===String(item.id))
+                          .map((row)=>(
+                            <form action={removeVoteExclusionCorrectionAction} key={String(row.id)}>
+                              <input type="hidden" name="meetingId" value={id} />
+                              <input type="hidden" name="agendaItemId" value={String(item.id)} />
+                              <input type="hidden" name="exclusionId" value={String(row.id)} />
+                              <span>
+                                {String(row.person_name ?? "Person")} · {String(row.reason)}
+                              </span>
+                              <input name="changeReason" required placeholder="Änderungsgrund" />
+                              <button className="meeting-agenda-delete">Ausschluss entfernen</button>
+                            </form>
+                          ))}
+                      </div>
+                    )}
+
+                    {attendees.some((row)=>
+                      row.attendance==="present" &&
+                      row.voting_eligible===true &&
+                      !exclusions.some((exclusion)=>
+                        String(exclusion.agenda_item_id)===String(item.id) &&
+                        String(exclusion.member_id)===String(row.member_id)
+                      )
+                    ) && (
+                      <form action={addVoteExclusionCorrectionAction} className="meeting-correction-add-form">
+                        <input type="hidden" name="meetingId" value={id} />
+                        <input type="hidden" name="agendaItemId" value={String(item.id)} />
+                        <select name="memberId" defaultValue="" required>
+                          <option value="" disabled>Person auswählen</option>
+                          {attendees
+                            .filter((row)=>
+                              row.attendance==="present" &&
+                              row.voting_eligible===true &&
+                              !exclusions.some((exclusion)=>
+                                String(exclusion.agenda_item_id)===String(item.id) &&
+                                String(exclusion.member_id)===String(row.member_id)
+                              )
+                            )
+                            .map((row)=>(
+                              <option key={String(row.member_id)} value={String(row.member_id)}>
+                                {String(row.first_name)} {String(row.last_name)}
+                              </option>
+                            ))}
+                        </select>
+                        <input name="exclusionReason" required placeholder="Grund für den Ausschluss" />
+                        <input name="changeReason" required placeholder="Änderungsgrund" />
+                        <button className="mini-button">Ausschluss nachtragen</button>
+                      </form>
+                    )}
+                  </section>
+                )}
 
                 {!item.resolution_id && canResolve && (
                   <form action={addResolutionCorrectionAction} className="meeting-correction-form resolution-correction-form">
@@ -599,6 +692,52 @@ export default async function MeetingCorrectionPage({
             </details>
           ))}
         </div>
+
+        <details className="meeting-correction-new-agenda">
+          <summary>
+            <div>
+              <span className="eyebrow">Nachtragen</span>
+              <strong>Fehlenden TOP ergänzen</strong>
+            </div>
+            <b>+</b>
+          </summary>
+          <form action={addAgendaItemCorrectionAction} className="meeting-correction-form">
+            <input type="hidden" name="meetingId" value={id} />
+            <div className="form-grid">
+              <label>Titel<input name="title" required placeholder="Titel des fehlenden TOPs" /></label>
+              <label>Typ
+                <select name="agendaType" defaultValue="consultation">
+                  <option value="information">Information</option>
+                  <option value="consultation">Beratung</option>
+                  <option value="decision">Beschluss</option>
+                </select>
+              </label>
+            </div>
+            <label>Sachverhalt<textarea name="description" rows={2} /></label>
+            <div className="form-grid">
+              <label>Status
+                <select name="status" defaultValue="done">
+                  <option value="done">Erledigt</option>
+                  <option value="deferred">Vertagt</option>
+                </select>
+              </label>
+              <label>Mit Einladung angekündigt?
+                <select name="announcedWithInvitation" defaultValue="false">
+                  <option value="true">Ja</option>
+                  <option value="false">Nein / spontan</option>
+                </select>
+              </label>
+            </div>
+            <label>Formale Begründung bei spontanem Beschluss-TOP
+              <textarea name="decisionBasisNote" rows={2} />
+            </label>
+            <label className="correction-reason">
+              Änderungsgrund
+              <input name="changeReason" required placeholder="Warum wird der TOP nachgetragen?" />
+            </label>
+            <button className="mini-button">TOP nachtragen</button>
+          </form>
+        </details>
       </section>
 
       <section className="panel meeting-change-history">
