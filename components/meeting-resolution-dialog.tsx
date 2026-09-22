@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { createResolutionFromAgendaAction } from "@/app/sitzungen/actions";
 
 type Member=Record<string,any>;
@@ -34,6 +34,58 @@ export function MeetingResolutionDialog({
   const [no,setNo]=useState(0);
   const [abstain,setAbstain]=useState(0);
   const [createTask,setCreateTask]=useState(false);
+  const dialogRef=useRef<HTMLElement|null>(null);
+
+  useEffect(()=>{
+    if (!open) return;
+
+    const previous=document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+    const previousOverflow=document.body.style.overflow;
+    document.body.style.overflow="hidden";
+
+    const dialog=dialogRef.current;
+    const focusable=()=>Array.from(
+      dialog?.querySelectorAll<HTMLElement>(
+        'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [href], [tabindex]:not([tabindex="-1"])'
+      ) ?? [],
+    );
+
+    window.setTimeout(()=>{
+      focusable()[0]?.focus();
+    },0);
+
+    function onKeyDown(event:KeyboardEvent) {
+      if (event.key==="Escape") {
+        event.preventDefault();
+        setOpen(false);
+        return;
+      }
+      if (event.key!=="Tab") return;
+
+      const elements=focusable();
+      if (elements.length===0) return;
+      const first=elements[0];
+      const last=elements[elements.length-1];
+      const active=document.activeElement;
+
+      if (event.shiftKey && active===first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && active===last) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+
+    document.addEventListener("keydown",onKeyDown);
+    return ()=>{
+      document.removeEventListener("keydown",onKeyDown);
+      document.body.style.overflow=previousOverflow;
+      previous?.focus();
+    };
+  },[open]);
 
   const total=yes+no+abstain;
   const validTotal=total===eligible;
@@ -47,6 +99,7 @@ export function MeetingResolutionDialog({
       {open && (
         <div className="meeting-modal-backdrop" role="presentation" onMouseDown={()=>setOpen(false)}>
           <section
+            ref={dialogRef}
             className="meeting-resolution-modal"
             role="dialog"
             aria-modal="true"
