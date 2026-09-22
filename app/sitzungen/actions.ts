@@ -747,14 +747,6 @@ export async function submitMeetingMinutesAction(formData: FormData) {
       ${actor.id}::uuid,
       'Zur Prüfung eingereicht'
     )
-    ON CONFLICT (meeting_id,version)
-    DO UPDATE SET
-      status='review',
-      intro=EXCLUDED.intro,
-      closing=EXCLUDED.closing,
-      changed_by=EXCLUDED.changed_by,
-      change_note=EXCLUDED.change_note,
-      created_at=now()
   `;
 
   await sql`
@@ -809,10 +801,27 @@ export async function returnMeetingMinutesAction(formData: FormData) {
     WHERE id=${meetingId}::uuid
       AND minutes_status='review'
       AND deleted_at IS NULL
-    RETURNING minutes_version
+    RETURNING minutes_version,minutes_intro,minutes_closing
   `;
 
-  if (!rows.length) redirect(`/sitzungen/${meetingId}/protokoll?error=minutes_locked`);
+  const meeting=rows[0];
+  if (!meeting) redirect(`/sitzungen/${meetingId}/protokoll?error=minutes_locked`);
+
+  await sql`
+    INSERT INTO meeting_minutes_revisions (
+      meeting_id,version,status,intro,closing,return_note,changed_by,change_note
+    )
+    VALUES (
+      ${meetingId}::uuid,
+      ${Number(meeting.minutes_version ?? 1)}::int,
+      'draft',
+      ${meeting.minutes_intro ?? null},
+      ${meeting.minutes_closing ?? null},
+      ${returnNote},
+      ${actor.id}::uuid,
+      'Zur Überarbeitung zurückgegeben'
+    )
+  `;
 
   await writeAudit(actor.id,"meeting.minutes_returned","meeting",meetingId,{returnNote});
   revalidatePath(`/sitzungen/${meetingId}`);
@@ -859,14 +868,6 @@ export async function approveMeetingMinutesAction(formData: FormData) {
       ${actor.id}::uuid,
       'Protokoll freigegeben'
     )
-    ON CONFLICT (meeting_id,version)
-    DO UPDATE SET
-      status='approved',
-      intro=EXCLUDED.intro,
-      closing=EXCLUDED.closing,
-      changed_by=EXCLUDED.changed_by,
-      change_note=EXCLUDED.change_note,
-      created_at=now()
   `;
 
   await sql`
@@ -908,6 +909,29 @@ export async function archiveMeetingMinutesAction(formData: FormData) {
   `;
 
   if (!rows.length) redirect(`/sitzungen/${meetingId}/protokoll?error=minutes_locked`);
+
+  const archiveSnapshot=await sql`
+    SELECT minutes_version,minutes_intro,minutes_closing
+    FROM meetings
+    WHERE id=${meetingId}::uuid
+    LIMIT 1
+  `;
+  const snapshot=archiveSnapshot[0];
+
+  await sql`
+    INSERT INTO meeting_minutes_revisions (
+      meeting_id,version,status,intro,closing,changed_by,change_note
+    )
+    VALUES (
+      ${meetingId}::uuid,
+      ${Number(snapshot?.minutes_version ?? 1)}::int,
+      'archived',
+      ${snapshot?.minutes_intro ?? null},
+      ${snapshot?.minutes_closing ?? null},
+      ${actor.id}::uuid,
+      'Protokoll archiviert'
+    )
+  `;
 
   await sql`
     UPDATE documents
