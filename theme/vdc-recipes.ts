@@ -55,8 +55,8 @@ export const button = defineRecipe({
       },
     },
     size: {
-      sm: { fontSize: "xs", h: "8", px: "3" },
-      md: { fontSize: "sm", h: "10", px: "4" },
+      sm: { fontSize: "xs", h: { base: "[44px]", md: "9" }, px: "3" },
+      md: { fontSize: "sm", h: { base: "[44px]", md: "10" }, px: "4" },
       lg: { fontSize: "md", h: "12", px: "5" },
     },
     fullWidth: {
