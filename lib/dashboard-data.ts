@@ -54,6 +54,7 @@ export type DashboardDocumentReview = {
   id: string;
   title: string;
   category: string;
+  meetingId: string | null;
   status: string;
   reviewOn: string | null;
   validUntil: string | null;
@@ -433,21 +434,36 @@ export async function getDashboardData(
     } else if (["chair","vice_chair","board"].includes(options.primaryRole ?? "")) {
       roleMetricRows=await sql`
         SELECT 'Offene Beschlüsse' AS label,
-          count(*) FILTER (WHERE status IN ('open','in_progress'))::text AS value,
+          count(*) FILTER (
+            WHERE status IN ('open','in_progress')
+              AND COALESCE(decision_outcome,'accepted')<>'rejected'
+          )::text AS value,
           'noch nicht abgeschlossen' AS note,
           '/beschluesse' AS href,
-          CASE WHEN count(*) FILTER (WHERE status='open')>0 THEN 'warning' ELSE 'neutral' END AS tone
+          CASE WHEN count(*) FILTER (
+            WHERE status='open'
+              AND COALESCE(decision_outcome,'accepted')<>'rejected'
+          )>0 THEN 'warning' ELSE 'neutral' END AS tone
         FROM resolutions
         UNION ALL
         SELECT 'Überfällige Aufgaben',
           count(*)::text,
           'Frist überschritten',
-          '/aufgaben',
+          '/aufgaben?view=overdue',
           CASE WHEN count(*)>0 THEN 'critical' ELSE 'success' END
         FROM tasks
         WHERE deleted_at IS NULL
           AND status IN ('open','in_progress','blocked')
           AND due_date<CURRENT_DATE
+        UNION ALL
+        SELECT 'Protokolle in Prüfung',
+          count(*)::text,
+          'wartet auf Freigabe',
+          '/sitzungen',
+          CASE WHEN count(*)>0 THEN 'warning' ELSE 'success' END
+        FROM meetings
+        WHERE deleted_at IS NULL
+          AND minutes_status='review'
         UNION ALL
         SELECT 'Nächste Sitzung',
           COALESCE(to_char(min(starts_at) AT TIME ZONE 'Europe/Berlin','DD.MM.'),'–'),
@@ -497,6 +513,7 @@ export async function getDashboardData(
           CASE WHEN count(*)>0 THEN 'warning' ELSE 'success' END
         FROM resolutions
         WHERE status IN ('open','in_progress')
+          AND COALESCE(decision_outcome,'accepted')<>'rejected'
       `;
     } else if (options.primaryRole==="treasurer") {
       roleMetricRows=await sql`
@@ -667,7 +684,7 @@ export async function getDashboardData(
     `;
 
     const reviewDocumentRows=await sql`
-      SELECT id::text,title,category,status,review_on,valid_until
+      SELECT id::text,title,category,meeting_id::text,status,review_on,valid_until
       FROM documents
       WHERE deleted_at IS NULL
         AND (
@@ -770,6 +787,7 @@ export async function getDashboardData(
         id:String(row.id),
         title:String(row.title),
         category:String(row.category),
+        meetingId:row.meeting_id ? String(row.meeting_id) : null,
         status:String(row.status),
         reviewOn:row.review_on ? String(row.review_on) : null,
         validUntil:row.valid_until ? String(row.valid_until) : null,
