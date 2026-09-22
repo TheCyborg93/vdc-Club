@@ -8,6 +8,14 @@ import {
 } from "@/app/beschluesse/actions";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 
+const voteMethodLabels:Record<string,string>={
+  open:"Offen",
+  show_of_hands:"Handzeichen",
+  roll_call:"Namentlich",
+  secret:"Geheim",
+  electronic:"Elektronisch",
+};
+
 const statusLabels:Record<string,string>={
   open:"Offen",
   in_progress:"In Umsetzung",
@@ -71,6 +79,7 @@ export default async function ResolutionsPage({
             r.votes_no,
             r.votes_abstain,
             r.vote_method,
+            r.vote_details,
             r.eligible_voters,
             r.excluded_voters,
             r.decision_outcome,
@@ -284,12 +293,19 @@ export default async function ResolutionsPage({
                 <div><span>Ja</span><strong>{Number(resolution.votes_yes)}</strong></div>
                 <div><span>Nein</span><strong>{Number(resolution.votes_no)}</strong></div>
                 <div><span>Enthaltung</span><strong>{Number(resolution.votes_abstain)}</strong></div>
-                <div><span>Abstimmungsart</span><strong>{String(resolution.vote_method ?? "–")}</strong></div>
+                <div><span>Abstimmungsart</span><strong>{voteMethodLabels[String(resolution.vote_method)] ?? "–"}</strong></div>
                 <div>
                   <span>Umgesetzt am</span>
                   <strong>{resolution.implemented_at ? formatDate(resolution.implemented_at) : "–"}</strong>
                 </div>
               </div>
+
+              {resolution.vote_details && (
+                <div className="resolution-implementation-note">
+                  <span className="eyebrow">Namentliche Abstimmung</span>
+                  <p>{String(resolution.vote_details)}</p>
+                </div>
+              )}
 
               {resolution.implementation_notes && (
                 <div className="resolution-implementation-note">
