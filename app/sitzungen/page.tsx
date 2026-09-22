@@ -44,6 +44,8 @@ function readiness(row:Record<string,unknown>) {
   return [
     row.chair_member_id,
     row.minute_taker_member_id,
+    row.invited_at,
+    Boolean(String(row.invitation_method ?? "").trim()),
     row.invitation_timely!=null,
     row.agenda_sent_with_invitation!=null,
     row.quorum_confirmed!=null,
@@ -78,10 +80,10 @@ function MeetingCard({meeting}:{meeting:Record<string,unknown>}) {
       <div className="meeting-overview-readiness">
         <div>
           <span>Vorbereitung</span>
-          <strong>{ready}/5</strong>
+          <strong>{ready}/7</strong>
         </div>
         <div className="meeting-mini-progress" aria-hidden="true">
-          <i style={{width:`${Math.round((ready/5)*100)}%`}} />
+          <i style={{width:`${Math.round((ready/7)*100)}%`}} />
         </div>
       </div>
 
@@ -117,6 +119,8 @@ export default async function MeetingsPage({
             m.status,
             m.minutes_status,
             m.meeting_mode,
+            m.invited_at,
+            m.invitation_method,
             m.chair_member_id::text,
             m.minute_taker_member_id::text,
             m.invitation_timely,
@@ -227,7 +231,7 @@ export default async function MeetingsPage({
               <span>{modeLabels[String(focus.meeting_mode)] ?? "Präsenz"}</span>
               <span>{Number(focus.agenda_count ?? 0)} TOPs</span>
               <span>{Number(focus.attendee_count ?? 0)} Personen</span>
-              <span>{readiness(focus)}/5 Vorbereitung</span>
+              <span>{readiness(focus)}/7 Vorbereitung</span>
             </div>
           </div>
           <div className="meeting-focus-overview-actions">
