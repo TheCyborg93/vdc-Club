@@ -35,6 +35,11 @@ function ext(name:string) {
   return i>=0 ? name.slice(i+1).toLowerCase() : "";
 }
 
+function redirectWith(base:string,key:string,value:string) {
+  const separator=base.includes("?") ? "&" : "?";
+  return `${base}${separator}${encodeURIComponent(key)}=${encodeURIComponent(value)}`;
+}
+
 function safeName(name:string) {
   return name
     .normalize("NFKD")
@@ -52,24 +57,25 @@ export async function uploadMeetingAttachmentAction(formData:FormData) {
   const meetingId=value(formData,"meetingId");
   const agendaItemId=value(formData,"agendaItemId");
   const title=value(formData,"title");
+  const returnTo=value(formData,"returnTo") || `/sitzungen/${meetingId}?top=${agendaItemId}`;
   const raw=formData.get("file");
   const file=raw instanceof File && raw.size>0 ? raw : null;
 
   if (!meetingId || !agendaItemId || !file) {
-    redirect(`/sitzungen/${meetingId}?top=${agendaItemId}&error=attachment_missing`);
+    redirect(redirectWith(returnTo,"error","attachment_missing"));
   }
   if (file.size>MAX_ATTACHMENT_SIZE) {
-    redirect(`/sitzungen/${meetingId}?top=${agendaItemId}&error=attachment_size`);
+    redirect(redirectWith(returnTo,"error","attachment_size"));
   }
 
   const extension=ext(file.name);
   const allowedMime=allowed[extension];
   const mime=(file.type || "application/octet-stream").toLowerCase();
   if (!allowedMime || !allowedMime.includes(mime)) {
-    redirect(`/sitzungen/${meetingId}?top=${agendaItemId}&error=attachment_type`);
+    redirect(redirectWith(returnTo,"error","attachment_type"));
   }
   if (!isDocumentStorageConfigured()) {
-    redirect(`/sitzungen/${meetingId}?top=${agendaItemId}&error=storage`);
+    redirect(redirectWith(returnTo,"error","storage"));
   }
 
   const valid=await sql`
@@ -85,7 +91,7 @@ export async function uploadMeetingAttachmentAction(formData:FormData) {
       )
     LIMIT 1
   `;
-  if (!valid.length) redirect(`/sitzungen/${meetingId}?error=meeting_locked`);
+  if (!valid.length) redirect(redirectWith(returnTo,"error","meeting_locked"));
 
   const bytes=new Uint8Array(await file.arrayBuffer());
   const now=new Date();
@@ -96,7 +102,7 @@ export async function uploadMeetingAttachmentAction(formData:FormData) {
   try {
     await uploadDocumentObject({key,body:bytes,contentType:mime});
   } catch {
-    redirect(`/sitzungen/${meetingId}?top=${agendaItemId}&error=attachment_upload`);
+    redirect(redirectWith(returnTo,"error","attachment_upload"));
   }
 
   try {
@@ -136,7 +142,7 @@ export async function uploadMeetingAttachmentAction(formData:FormData) {
   revalidatePath(`/sitzungen/${meetingId}`);
   revalidatePath(`/sitzungen/${meetingId}/protokoll`);
   revalidatePath("/dokumente");
-  redirect(`/sitzungen/${meetingId}?top=${agendaItemId}&attachment=1`);
+  redirect(redirectWith(returnTo,"attachment","1"));
 }
 
 export async function uploadMeetingGeneralAttachmentAction(formData:FormData) {
@@ -278,6 +284,7 @@ export async function removeMeetingAttachmentAction(formData:FormData) {
   const meetingId=value(formData,"meetingId");
   const agendaItemId=value(formData,"agendaItemId");
   const documentId=value(formData,"documentId");
+  const returnTo=value(formData,"returnTo") || `/sitzungen/${meetingId}?top=${agendaItemId}`;
 
   const rows=await sql`
     UPDATE documents
@@ -303,7 +310,7 @@ export async function removeMeetingAttachmentAction(formData:FormData) {
     RETURNING title
   `;
 
-  if (!rows.length) redirect(`/sitzungen/${meetingId}?top=${agendaItemId}&error=attachment_missing`);
+  if (!rows.length) redirect(redirectWith(returnTo,"error","attachment_missing"));
 
   await writeAudit(actor.id,"meeting.attachment_removed","document",documentId,{
     meetingId,agendaItemId,title:String(rows[0].title),
@@ -312,5 +319,5 @@ export async function removeMeetingAttachmentAction(formData:FormData) {
   revalidatePath(`/sitzungen/${meetingId}`);
   revalidatePath(`/sitzungen/${meetingId}/protokoll`);
   revalidatePath("/dokumente");
-  redirect(`/sitzungen/${meetingId}?top=${agendaItemId}&attachment_deleted=1`);
+  redirect(redirectWith(returnTo,"attachment_deleted","1"));
 }
