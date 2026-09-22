@@ -7028,3 +7028,623 @@ body{
     padding:15px;
   }
 }
+
+
+/* ============================================================
+   Complete meeting typography pass · mobile readability
+   Preparation → live TOPs → completion → correction.
+   ============================================================ */
+
+.meeting-control-page,
+.meeting-correction-page,
+.minutes-page{
+  color:#f3efe9;
+}
+
+.meeting-control-page .eyebrow,
+.meeting-correction-page .eyebrow,
+.minutes-page .eyebrow{
+  color:#f05a43;
+  font-weight:900;
+  letter-spacing:.12em;
+  line-height:1.25;
+}
+
+.meeting-control-page .panel-head h2,
+.meeting-correction-page .panel-head h2,
+.meeting-correction-group-summary strong,
+.meeting-section-head h2,
+.meeting-section-head h3{
+  color:#f3efe9;
+  font-weight:900;
+  letter-spacing:-.022em;
+  line-height:1.2;
+}
+
+.meeting-control-page .panel-head p,
+.meeting-correction-page .panel-head p,
+.meeting-correction-group-summary small,
+.meeting-control-page .empty-state,
+.meeting-control-page .compact-empty,
+.meeting-correction-page .empty-state{
+  color:#aaa6a3;
+  line-height:1.5;
+}
+
+.meeting-control-page .formal-state,
+.meeting-control-page .status-badge,
+.meeting-correction-page .correction-state{
+  font-weight:850;
+  letter-spacing:.01em;
+  line-height:1.2;
+}
+
+.meeting-control-page label,
+.meeting-correction-page label{
+  color:#d8d3cd;
+  font-weight:700;
+  line-height:1.3;
+}
+
+.meeting-control-page input,
+.meeting-control-page select,
+.meeting-control-page textarea,
+.meeting-correction-page input,
+.meeting-correction-page select,
+.meeting-correction-page textarea{
+  min-width:0;
+  border-color:rgba(255,255,255,.14);
+  background:#0f1114;
+  color:#f3efe9;
+  line-height:1.4;
+}
+
+.meeting-control-page input::placeholder,
+.meeting-control-page textarea::placeholder,
+.meeting-correction-page input::placeholder,
+.meeting-correction-page textarea::placeholder{
+  color:#8e8987;
+  opacity:1;
+  font-weight:500;
+}
+
+.meeting-control-page input:focus,
+.meeting-control-page select:focus,
+.meeting-control-page textarea:focus,
+.meeting-correction-page input:focus,
+.meeting-correction-page select:focus,
+.meeting-correction-page textarea:focus{
+  border-color:rgba(230,52,38,.58);
+  box-shadow:0 0 0 3px rgba(230,52,38,.10);
+  outline:none;
+}
+
+.meeting-formalities-form,
+.meeting-officer-form,
+.meeting-agenda-add-form,
+.meeting-general-attachment-upload,
+.meeting-attachment-upload,
+.meeting-top-formal-form,
+.vote-exclusion-form,
+.meeting-close-form,
+.meeting-correction-form,
+.meeting-correction-add-form,
+.resolution-correction-form{
+  gap:12px;
+}
+
+.meeting-formalities-form label,
+.meeting-officer-form label,
+.meeting-agenda-add-form label,
+.meeting-general-attachment-upload label,
+.meeting-attachment-upload label,
+.meeting-top-formal-form label,
+.vote-exclusion-form label,
+.meeting-close-form label,
+.meeting-correction-form label,
+.meeting-correction-add-form label,
+.resolution-correction-form label{
+  display:grid;
+  gap:7px;
+}
+
+.meeting-agenda-add-footer small,
+.meeting-close-help,
+.meeting-close-summary,
+.meeting-formal-note,
+.meeting-correction-guide-grid small{
+  color:#aaa6a3;
+  line-height:1.5;
+}
+
+.meeting-formal-readonly,
+.meeting-officer-readonly{
+  color:#bcb7b3;
+  line-height:1.45;
+}
+
+.meeting-control-title p,
+.meeting-control-stats span,
+.meeting-control-stats small{
+  color:#9b9694;
+  line-height:1.4;
+}
+
+.meeting-top-rail-head>span,
+.meeting-top-link small,
+.meeting-focus-status>span,
+.meeting-focus-section>span,
+.meeting-section-head>span,
+.meeting-resolution-summary>p,
+.meeting-resolution-summary>div>span,
+.meeting-no-resolution p,
+.meeting-no-resolution span,
+.meeting-finish-strip span,
+.muted-copy{
+  color:#aaa6a3!important;
+  line-height:1.45;
+}
+
+.meeting-top-link strong{
+  color:#ebe7e1;
+  font-weight:800;
+  line-height:1.25;
+}
+
+.meeting-top-number{
+  font-weight:900;
+}
+
+.meeting-focus-head h2{
+  color:#f5f1eb;
+  font-weight:900;
+  letter-spacing:-.025em;
+}
+
+.meeting-focus-section>p,
+.meeting-read-note,
+.meeting-resolution-summary>p,
+.meeting-no-resolution p{
+  color:#b8b3af!important;
+}
+
+.meeting-focus-note-form textarea{
+  color:#f2eee8;
+}
+
+.meeting-top-more>summary,
+.meeting-top-danger-more>summary,
+.meeting-prep-more>summary,
+.meeting-close-drawer>summary{
+  color:#c8c3be;
+  font-weight:750;
+}
+
+.meeting-top-more>summary small,
+.meeting-top-danger-more>summary small{
+  color:#96918f;
+  line-height:1.4;
+}
+
+.meeting-action,
+.meeting-control-page .mini-button,
+.meeting-control-page .ghost-button,
+.meeting-control-page .primary-button,
+.meeting-correction-page .mini-button,
+.meeting-correction-page .ghost-button,
+.meeting-correction-page .primary-button{
+  font-weight:850;
+  letter-spacing:-.005em;
+}
+
+.vote-exclusion-list strong,
+.meeting-attachment-list strong,
+.attendee-row strong,
+.meeting-guest-list strong{
+  color:#eeeae4;
+  line-height:1.3;
+}
+
+.vote-exclusion-list span,
+.meeting-attachment-list span,
+.attendee-row span,
+.meeting-guest-list span{
+  color:#a9a4a1;
+  line-height:1.4;
+}
+
+.meeting-correction-group-summary{
+  line-height:1.25;
+}
+
+.meeting-correction-group-summary small{
+  display:block;
+  margin-top:5px;
+}
+
+.meeting-correction-guide-grid strong{
+  color:#ece8e2;
+  line-height:1.25;
+}
+
+.meeting-correction-list,
+.meeting-change-list,
+.meeting-correction-remove-list{
+  color:#c5c0bb;
+}
+
+.correction-reason{
+  color:#e5b1a5!important;
+}
+
+/* Minutes/protocol workspace */
+.minutes-page .secretary-workspace-head h1,
+.minutes-page .minutes-review-head h2{
+  color:#f5f1eb;
+  font-weight:900;
+  letter-spacing:-.025em;
+}
+
+.minutes-page .secretary-meta-grid span,
+.minutes-page .minutes-quality-strip span,
+.minutes-page .minutes-formality-grid span,
+.minutes-page .minutes-attendance-grid span{
+  color:#9e9996;
+}
+
+.minutes-page .secretary-meta-grid strong,
+.minutes-page .minutes-quality-strip strong,
+.minutes-page .minutes-formality-grid strong,
+.minutes-page .minutes-attendance-grid strong{
+  color:#f0ece6;
+}
+
+.minutes-page .minutes-readiness,
+.minutes-page .minutes-return-note,
+.minutes-page .minutes-waiting{
+  color:#b6b1ad;
+  line-height:1.5;
+}
+
+@media(max-width:720px){
+  .meeting-control-page .eyebrow,
+  .meeting-correction-page .eyebrow,
+  .minutes-page .eyebrow{
+    font-size:10px;
+    letter-spacing:.11em;
+  }
+
+  .meeting-control-page .panel,
+  .meeting-correction-page .panel{
+    border-radius:14px;
+  }
+
+  .meeting-control-page .panel-head,
+  .meeting-correction-page .panel-head{
+    gap:12px;
+  }
+
+  .meeting-control-page .panel-head h2,
+  .meeting-correction-page .panel-head h2,
+  .meeting-correction-group-summary strong{
+    font-size:20px;
+  }
+
+  .meeting-control-page .panel-head p,
+  .meeting-correction-page .panel-head p,
+  .meeting-correction-group-summary small{
+    font-size:12px;
+  }
+
+  .meeting-control-page .formal-state,
+  .meeting-control-page .status-badge,
+  .meeting-correction-page .correction-state,
+  .meeting-control-page .count-chip{
+    font-size:11px;
+  }
+
+  .meeting-control-page label,
+  .meeting-correction-page label{
+    font-size:13px;
+  }
+
+  .meeting-control-page input,
+  .meeting-control-page select,
+  .meeting-control-page textarea,
+  .meeting-correction-page input,
+  .meeting-correction-page select,
+  .meeting-correction-page textarea{
+    width:100%;
+    min-height:44px;
+    padding:9px 11px;
+    border-radius:9px;
+    font-size:16px!important;
+  }
+
+  .meeting-control-page textarea,
+  .meeting-correction-page textarea{
+    min-height:92px;
+    padding:10px 11px;
+  }
+
+  .meeting-control-page input[type="file"],
+  .meeting-correction-page input[type="file"]{
+    min-height:46px;
+    padding:7px 9px;
+  }
+
+  .meeting-formalities-form,
+  .meeting-officer-form,
+  .meeting-agenda-add-form,
+  .meeting-general-attachment-upload,
+  .meeting-attachment-upload,
+  .meeting-top-formal-form,
+  .vote-exclusion-form,
+  .meeting-close-form,
+  .meeting-correction-form,
+  .meeting-correction-add-form,
+  .resolution-correction-form{
+    gap:14px;
+  }
+
+  .meeting-formalities-form .form-grid,
+  .meeting-correction-form .form-grid,
+  .meeting-close-grid{
+    grid-template-columns:1fr;
+    gap:14px;
+  }
+
+  .meeting-formal-readonly,
+  .meeting-officer-readonly{
+    font-size:12px;
+  }
+
+  .meeting-agenda-add-footer small,
+  .meeting-close-help,
+  .meeting-close-summary,
+  .meeting-formal-note{
+    font-size:11px;
+  }
+
+  .meeting-control-title h1{
+    font-size:20px;
+    line-height:1.1;
+  }
+
+  .meeting-control-title p{
+    margin-top:4px;
+    font-size:11px;
+  }
+
+  .meeting-control-stats article{
+    min-height:82px;
+    padding:11px 12px;
+  }
+
+  .meeting-control-stats span{
+    font-size:10px;
+  }
+
+  .meeting-control-stats strong{
+    margin:2px 0;
+    font-size:18px;
+  }
+
+  .meeting-control-stats small{
+    font-size:10px;
+  }
+
+  .meeting-top-rail-head h2{
+    font-size:17px;
+  }
+
+  .meeting-top-rail-head>span{
+    font-size:10px;
+  }
+
+  .meeting-top-link{
+    min-width:190px;
+    min-height:64px;
+    padding:9px;
+  }
+
+  .meeting-top-number{
+    width:34px;
+    height:34px;
+    font-size:12px;
+  }
+
+  .meeting-top-link strong{
+    font-size:12px;
+  }
+
+  .meeting-top-link small{
+    margin-top:3px;
+    font-size:10px;
+  }
+
+  .meeting-focus-head{
+    min-height:82px;
+    padding:14px 15px;
+  }
+
+  .meeting-focus-head h2{
+    font-size:24px;
+  }
+
+  .meeting-focus-status>span{
+    font-size:10px;
+  }
+
+  .agenda-status{
+    padding:6px 9px;
+    font-size:10px;
+    font-weight:850;
+  }
+
+  .meeting-focus-content{
+    gap:12px;
+    padding:12px 12px 112px;
+  }
+
+  .meeting-focus-section{
+    padding:14px;
+    border-radius:11px;
+  }
+
+  .meeting-focus-section>span,
+  .meeting-section-head>span{
+    font-size:10px;
+    letter-spacing:.08em;
+    text-transform:uppercase;
+  }
+
+  .meeting-focus-section>p,
+  .meeting-read-note{
+    margin-top:8px!important;
+    font-size:13px!important;
+    line-height:1.55;
+  }
+
+  .meeting-focus-note-form textarea{
+    min-height:170px;
+    font-size:16px!important;
+    line-height:1.5;
+  }
+
+  .meeting-section-head>b{
+    padding:5px 8px;
+    font-size:10px;
+  }
+
+  .meeting-resolution-summary>strong{
+    font-size:13px;
+  }
+
+  .meeting-resolution-summary>p{
+    font-size:12px!important;
+  }
+
+  .meeting-resolution-summary>div>span{
+    font-size:10px;
+  }
+
+  .meeting-no-resolution{
+    padding:13px;
+  }
+
+  .meeting-no-resolution p{
+    font-size:12px!important;
+  }
+
+  .meeting-no-resolution span{
+    margin-top:5px!important;
+    font-size:10px;
+  }
+
+  .meeting-top-more>summary,
+  .meeting-top-danger-more>summary,
+  .meeting-prep-more>summary,
+  .meeting-close-drawer>summary{
+    min-height:48px;
+    font-size:12px;
+  }
+
+  .meeting-top-more>summary small,
+  .meeting-top-danger-more>summary small{
+    font-size:10px;
+  }
+
+  .vote-exclusion-list strong,
+  .meeting-attachment-list strong,
+  .attendee-row strong,
+  .meeting-guest-list strong{
+    font-size:12px;
+  }
+
+  .vote-exclusion-list span,
+  .meeting-attachment-list span,
+  .attendee-row span,
+  .meeting-guest-list span{
+    font-size:11px;
+  }
+
+  .meeting-action{
+    min-height:46px;
+    padding:10px 13px;
+    font-size:12px;
+  }
+
+  .meeting-action-center .meeting-action{
+    min-height:46px;
+  }
+
+  .meeting-control-page .mini-button,
+  .meeting-control-page .ghost-button,
+  .meeting-control-page .primary-button,
+  .meeting-correction-page .mini-button,
+  .meeting-correction-page .ghost-button,
+  .meeting-correction-page .primary-button{
+    min-height:46px;
+    padding:10px 13px;
+    font-size:13px;
+  }
+
+  .meeting-correction-group-summary{
+    padding:15px 16px;
+  }
+
+  .meeting-correction-guide-grid strong{
+    font-size:12px;
+  }
+
+  .meeting-correction-guide-grid small{
+    font-size:10px;
+  }
+
+  .meeting-correction-list,
+  .meeting-change-list,
+  .meeting-correction-remove-list{
+    font-size:12px;
+  }
+
+  .minutes-page .secretary-workspace-head h1{
+    font-size:26px;
+  }
+
+  .minutes-page .minutes-review-head h2{
+    font-size:20px;
+  }
+
+  .minutes-page .secretary-meta-grid span,
+  .minutes-page .minutes-quality-strip span,
+  .minutes-page .minutes-formality-grid span,
+  .minutes-page .minutes-attendance-grid span{
+    font-size:10px;
+  }
+
+  .minutes-page .secretary-meta-grid strong,
+  .minutes-page .minutes-quality-strip strong,
+  .minutes-page .minutes-formality-grid strong,
+  .minutes-page .minutes-attendance-grid strong{
+    font-size:12px;
+  }
+
+  .minutes-page .minutes-readiness,
+  .minutes-page .minutes-return-note,
+  .minutes-page .minutes-waiting{
+    font-size:12px;
+  }
+}
+
+@media(max-width:420px){
+  .meeting-control-page .panel-head h2,
+  .meeting-correction-page .panel-head h2,
+  .meeting-correction-group-summary strong{
+    font-size:19px;
+  }
+
+  .meeting-focus-head h2{
+    font-size:22px;
+  }
+}
