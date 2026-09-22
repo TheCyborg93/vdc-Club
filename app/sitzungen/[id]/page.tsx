@@ -87,6 +87,7 @@ const errors:Record<string,string>={
   not_quorate_for_resolutions:"Beschlüsse können nur bei dokumentierter Beschlussfähigkeit abgeschlossen werden.",
   vote_incomplete:"Mindestens eine Abstimmung ist formal unvollständig oder die Stimmenzahl passt nicht.",
   vote_mismatch:"Ja, Nein und Enthaltungen müssen zusammen genau der Zahl der Stimmberechtigten entsprechen.",
+  roll_call_details:"Bei einer namentlichen Abstimmung müssen Namen und jeweilige Stimmen dokumentiert werden.",
   spontaneous_basis:"Bei einem nicht mit der Einladung angekündigten TOP ist vor einem Beschluss eine Begründung erforderlich.",
   guest_missing:"Bitte einen Namen für den Gast angeben.",
   exclusion_missing:"Für einen Stimmrechtsausschluss werden Person und Begründung benötigt.",
@@ -1002,6 +1003,15 @@ export default async function MeetingDetailPage({
                               </select>
                             </label>
                           </div>
+
+                          <label>
+                            Namentliche Stimmen / Abstimmungsdetails
+                            <textarea
+                              name="voteDetails"
+                              rows={3}
+                              placeholder="Nur bei namentlicher Abstimmung erforderlich, z. B. Max Mustermann: Ja · Erika Beispiel: Enthaltung"
+                            />
+                          </label>
 
                           <div className="vote-formal-summary">
                             <label>
