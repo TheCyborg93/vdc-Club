@@ -17,7 +17,7 @@ function formatDate(value: unknown) {
 export default async function ArchivePage({
   searchParams,
 }: {
-  searchParams: Promise<{ restored?:string }>;
+  searchParams: Promise<{ restored?:string;error?:string }>;
 }) {
   const actor=await requirePermission("documents.read");
   const sql=getDb();
@@ -32,7 +32,7 @@ export default async function ArchivePage({
   const [documents,members,meetings,resolutions,sponsors]=sql
     ? await Promise.all([
         sql`
-          SELECT id::text,title,category,document_date,archived_at,storage_type,storage_ref,original_filename,file_size_bytes
+          SELECT id::text,title,category,document_date,archived_at,storage_type,storage_ref,original_filename,file_size_bytes,meeting_id::text
           FROM documents
           WHERE status='archived'
             AND deleted_at IS NULL
@@ -47,7 +47,7 @@ export default async function ArchivePage({
           LIMIT 100
         ` : Promise.resolve([]),
         canMeetings ? sql`
-          SELECT id::text,title,starts_at,ended_at,status
+          SELECT id::text,title,starts_at,ended_at,status,minutes_status
           FROM meetings
           WHERE status IN ('completed','cancelled')
             AND deleted_at IS NULL
@@ -83,6 +83,11 @@ export default async function ArchivePage({
       </section>
 
       {params.restored && <div className="form-success">Dokument wurde aus dem Archiv wiederhergestellt.</div>}
+      {params.error==="protocol_locked" && (
+        <div className="form-error">
+          Freigegebene Sitzungsprotokolle sind finale Vereinsunterlagen und können hier weder reaktiviert noch gelöscht werden.
+        </div>
+      )}
 
       <section className="stat-grid">
         <article className="stat-card"><span>Dokumente</span><strong>{documents.length}</strong><small>archiviert</small></article>
@@ -99,50 +104,70 @@ export default async function ArchivePage({
         <div className="archive-list">
           {documents.length===0 ? (
             <div className="empty-state">Noch keine Dokumente archiviert.</div>
-          ) : documents.map((doc)=>(
-            <div className="archive-row" key={String(doc.id)}>
-              <div>
-                <Link href={"/dokumente/"+String(doc.id)} className="document-title-link">
-                  <strong>{String(doc.title)}</strong>
-                </Link>
-                <span>{String(doc.category)} · {doc.document_date ? formatDate(doc.document_date) : "ohne Dokumentdatum"}</span>
-                <small>
-                  Archiviert {formatDate(doc.archived_at)}
-                  {doc.storage_type==="upload" && doc.original_filename ? " · Datei: "+String(doc.original_filename) : ""}
-                </small>
+          ) : documents.map((doc)=>{
+            const isMeetingMinutes=String(doc.category)==="Protokoll" && Boolean(doc.meeting_id);
+            const primaryHref=isMeetingMinutes
+              ? "/sitzungen/"+String(doc.meeting_id)+"/protokoll"
+              : "/dokumente/"+String(doc.id);
+
+            return (
+              <div className={"archive-row "+(isMeetingMinutes ? "archive-final-minutes" : "")} key={String(doc.id)}>
+                <div>
+                  <Link href={primaryHref} className="document-title-link">
+                    <strong>{String(doc.title)}</strong>
+                  </Link>
+                  <span>
+                    {isMeetingMinutes ? "Finales Sitzungsprotokoll" : String(doc.category)}
+                    {" · "}
+                    {doc.document_date ? formatDate(doc.document_date) : "ohne Dokumentdatum"}
+                  </span>
+                  <small>
+                    Archiviert {formatDate(doc.archived_at)}
+                    {doc.storage_type==="upload" && doc.original_filename ? " · Datei: "+String(doc.original_filename) : ""}
+                  </small>
+                </div>
+                <div className="archive-row-actions">
+                  {isMeetingMinutes ? (
+                    <>
+                      <Link href={primaryHref} className="primary-button">Protokoll öffnen</Link>
+                      <Link href={"/dokumente/"+String(doc.id)} className="mini-button">Dokumentdetails</Link>
+                    </>
+                  ) : (
+                    <>
+                      <Link href={"/dokumente/"+String(doc.id)} className="mini-button">Details</Link>
+                      {doc.storage_ref && (
+                        doc.storage_type==="upload"
+                          ? (
+                            <>
+                              <Link href={"/api/documents/"+String(doc.id)+"/file"} target="_blank" className="mini-button">Datei öffnen</Link>
+                              <Link href={"/api/documents/"+String(doc.id)+"/file?download=1"} className="mini-button">Download</Link>
+                            </>
+                          )
+                          : doc.storage_type==="internal"
+                            ? <Link href={String(doc.storage_ref)} className="mini-button">Öffnen</Link>
+                            : <a href={String(doc.storage_ref)} target="_blank" rel="noreferrer" className="mini-button">Öffnen</a>
+                      )}
+                      {canWriteDocuments && (
+                        <>
+                          <form action={restoreDocumentAction}>
+                            <input type="hidden" name="id" value={String(doc.id)} />
+                            <button className="mini-button">Wiederherstellen</button>
+                          </form>
+                          <form action={moveToTrashAction}>
+                            <input type="hidden" name="type" value="document" />
+                            <input type="hidden" name="id" value={String(doc.id)} />
+                            <ConfirmSubmitButton message={"Archiviertes Dokument „"+String(doc.title)+"“ in den Papierkorb verschieben?"}>
+                              Löschen
+                            </ConfirmSubmitButton>
+                          </form>
+                        </>
+                      )}
+                    </>
+                  )}
+                </div>
               </div>
-              <div className="archive-row-actions">
-                <Link href={"/dokumente/"+String(doc.id)} className="mini-button">Details</Link>
-                {doc.storage_ref && (
-                  doc.storage_type==="upload"
-                    ? (
-                      <>
-                        <Link href={"/api/documents/"+String(doc.id)+"/file"} target="_blank" className="mini-button">Datei öffnen</Link>
-                        <Link href={"/api/documents/"+String(doc.id)+"/file?download=1"} className="mini-button">Download</Link>
-                      </>
-                    )
-                    : doc.storage_type==="internal"
-                      ? <Link href={String(doc.storage_ref)} className="mini-button">Öffnen</Link>
-                      : <a href={String(doc.storage_ref)} target="_blank" rel="noreferrer" className="mini-button">Öffnen</a>
-                )}
-                {canWriteDocuments && (
-                  <>
-                    <form action={restoreDocumentAction}>
-                      <input type="hidden" name="id" value={String(doc.id)} />
-                      <button className="mini-button">Wiederherstellen</button>
-                    </form>
-                    <form action={moveToTrashAction}>
-                      <input type="hidden" name="type" value="document" />
-                      <input type="hidden" name="id" value={String(doc.id)} />
-                      <ConfirmSubmitButton message={"Archiviertes Dokument „"+String(doc.title)+"“ in den Papierkorb verschieben?"}>
-                        Löschen
-                      </ConfirmSubmitButton>
-                    </form>
-                  </>
-                )}
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </article>
 
@@ -153,12 +178,23 @@ export default async function ArchivePage({
             <span className="count-chip">{meetings.length}</span>
           </div>
           <div className="archive-grid">
-            {meetings.map((meeting)=>(
-              <Link href={"/sitzungen/"+String(meeting.id)} key={String(meeting.id)}>
-                <strong>{String(meeting.title)}</strong>
-                <span>{formatDate(meeting.starts_at)} · {meetingStatusLabel(meeting.status)}</span>
-              </Link>
-            ))}
+            {meetings.map((meeting)=>{
+              const hasFinalMinutes=meeting.minutes_status==="archived";
+              return (
+                <Link
+                  href={hasFinalMinutes
+                    ? "/sitzungen/"+String(meeting.id)+"/protokoll"
+                    : "/sitzungen/"+String(meeting.id)}
+                  key={String(meeting.id)}
+                >
+                  <strong>{String(meeting.title)}</strong>
+                  <span>
+                    {formatDate(meeting.starts_at)} · {meetingStatusLabel(meeting.status)}
+                    {hasFinalMinutes ? " · Protokoll archiviert" : ""}
+                  </span>
+                </Link>
+              );
+            })}
           </div>
         </article>
       )}
