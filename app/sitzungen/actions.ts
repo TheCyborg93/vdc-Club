@@ -786,6 +786,38 @@ export async function updateMeetingStatusAction(formData: FormData) {
              OR r.eligible_voters IS NULL
              OR r.decision_outcome IS NULL
              OR r.eligible_voters <> (r.votes_yes+r.votes_no+r.votes_abstain)
+             OR r.excluded_voters <> (
+               SELECT count(*)::int
+               FROM agenda_vote_exclusions ave
+               WHERE ave.agenda_item_id=ai.id
+             )
+             OR r.eligible_voters <> GREATEST(
+               0,
+               (
+                 SELECT count(*)::int
+                 FROM meeting_attendees ma
+                 WHERE ma.meeting_id=m.id
+                   AND ma.attendance='present'
+                   AND ma.voting_eligible=true
+               ) - (
+                 SELECT count(*)::int
+                 FROM agenda_vote_exclusions ave
+                 WHERE ave.agenda_item_id=ai.id
+               )
+             )
+             OR EXISTS(
+               SELECT 1
+               FROM agenda_vote_exclusions ave
+               LEFT JOIN meeting_attendees ma
+                 ON ma.meeting_id=m.id
+                AND ma.member_id=ave.member_id
+               WHERE ave.agenda_item_id=ai.id
+                 AND (
+                   ma.member_id IS NULL
+                   OR ma.attendance<>'present'
+                   OR ma.voting_eligible IS NOT TRUE
+                 )
+             )
              OR (r.vote_method='roll_call' AND NULLIF(trim(r.vote_details),'') IS NULL)
         )::int AS incomplete_votes,
         count(r.id) FILTER (
@@ -1062,7 +1094,6 @@ export async function createResolutionFromAgendaAction(formData: FormData) {
   const yes = Number(value(formData, "votesYes") || "0");
   const no = Number(value(formData, "votesNo") || "0");
   const abstain = Number(value(formData, "votesAbstain") || "0");
-  const eligibleVoters=Number(value(formData,"eligibleVoters") || "0");
   const createTaskRequested = formData.get("createTask") === "on";
   const taskOwner = value(formData, "taskOwner");
   const taskDueDate = value(formData, "taskDueDate");
@@ -1077,9 +1108,7 @@ export async function createResolutionFromAgendaAction(formData: FormData) {
   const safeYes=Number.isFinite(yes) && yes>=0 ? yes : 0;
   const safeNo=Number.isFinite(no) && no>=0 ? no : 0;
   const safeAbstain=Number.isFinite(abstain) && abstain>=0 ? abstain : 0;
-  const safeEligible=Number.isFinite(eligibleVoters) && eligibleVoters>=0 ? eligibleVoters : 0;
-
-  if (safeYes+safeNo+safeAbstain!==safeEligible) {
+  if ([safeYes,safeNo,safeAbstain].some((number)=>!Number.isFinite(number) || number<0)) {
     redirect(`/sitzungen/${meetingId}?top=${agendaItemId}&error=vote_mismatch`);
   }
 
@@ -1092,7 +1121,27 @@ export async function createResolutionFromAgendaAction(formData: FormData) {
         SELECT count(*)::int
         FROM agenda_vote_exclusions ave
         WHERE ave.agenda_item_id=ai.id
-      ) AS excluded_voters
+      ) AS excluded_voters,
+      (
+        SELECT count(*)::int
+        FROM meeting_attendees ma
+        WHERE ma.meeting_id=m.id
+          AND ma.attendance='present'
+          AND ma.voting_eligible=true
+      ) AS present_voting_count,
+      (
+        SELECT count(*)::int
+        FROM agenda_vote_exclusions ave
+        LEFT JOIN meeting_attendees ma
+          ON ma.meeting_id=m.id
+         AND ma.member_id=ave.member_id
+        WHERE ave.agenda_item_id=ai.id
+          AND (
+            ma.member_id IS NULL
+            OR ma.attendance<>'present'
+            OR ma.voting_eligible IS NOT TRUE
+          )
+      ) AS invalid_exclusions
     FROM agenda_items ai
     JOIN meetings m ON m.id=ai.meeting_id
     WHERE ai.id=${agendaItemId}::uuid
@@ -1111,6 +1160,13 @@ export async function createResolutionFromAgendaAction(formData: FormData) {
   }
 
   const excludedVoters=Number(formal.excluded_voters ?? 0);
+  if (Number(formal.invalid_exclusions ?? 0)>0) {
+    redirect(`/sitzungen/${meetingId}?top=${agendaItemId}&error=vote_mismatch`);
+  }
+  const safeEligible=Math.max(0,Number(formal.present_voting_count ?? 0)-excludedVoters);
+  if (safeYes+safeNo+safeAbstain!==safeEligible) {
+    redirect(`/sitzungen/${meetingId}?top=${agendaItemId}&error=vote_mismatch`);
+  }
   const createTask =
     decisionOutcome==="accepted" &&
     createTaskRequested &&
@@ -1337,6 +1393,20 @@ export async function submitMeetingMinutesAction(formData: FormData) {
              SELECT count(*)::int
              FROM agenda_vote_exclusions ave
              WHERE ave.agenda_item_id=ai.id
+           )
+           OR r.eligible_voters<>GREATEST(
+             0,
+             (
+               SELECT count(*)::int
+               FROM meeting_attendees ma2
+               WHERE ma2.meeting_id=m.id
+                 AND ma2.attendance='present'
+                 AND ma2.voting_eligible=true
+             ) - (
+               SELECT count(*)::int
+               FROM agenda_vote_exclusions ave2
+               WHERE ave2.agenda_item_id=ai.id
+             )
            )
            OR EXISTS(
              SELECT 1
