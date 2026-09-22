@@ -1,6 +1,14 @@
 import { redirect } from "next/navigation";
 import { getCurrentUser, hasAdminAccount } from "@/lib/auth";
 import { setupAdminAction } from "@/app/auth/actions";
+import {
+  AuthSurface,
+  authFieldClass,
+  authFormClass,
+  authGridClass,
+  authInputClass,
+  authSubmitClass,
+} from "@/components/auth-surface";
 
 const messages: Record<string, string> = {
   database: "Die Datenbankverbindung ist noch nicht eingerichtet.",
@@ -24,29 +32,37 @@ export default async function SetupPage({
   const message = params.error ? messages[params.error] : null;
 
   return (
-    <main className="auth-page">
-      <section className="auth-card">
-        <div className="brand auth-brand">
-          <div className="brand-mark" aria-hidden="true"><span>VDC</span><i /></div>
-          <div className="brand-copy"><strong>Vestischer Dart Club</strong><span>e.V. · Ersteinrichtung</span></div>
+    <AuthSurface
+      eyebrow="Einmalige Einrichtung"
+      title="Ersten Administrator anlegen"
+      description="Dieser Schritt ist nur möglich, solange noch kein Administrator existiert."
+      message={message}
+    >
+      <form action={setupAdminAction} className={authFormClass}>
+        <div className={authGridClass}>
+          <label className={authFieldClass}>
+            Vorname
+            <input className={authInputClass} name="firstName" required autoComplete="given-name" />
+          </label>
+          <label className={authFieldClass}>
+            Nachname
+            <input className={authInputClass} name="lastName" required autoComplete="family-name" />
+          </label>
         </div>
-        <div className="auth-copy">
-          <span className="eyebrow">Einmalige Einrichtung</span>
-          <h1>Ersten Administrator anlegen</h1>
-          <p>Dieser Schritt ist nur möglich, solange noch kein Administrator existiert.</p>
-        </div>
-        {message && <div className="form-error">{message}</div>}
-        <form action={setupAdminAction} className="form-stack">
-          <div className="form-grid">
-            <label>Vorname<input name="firstName" required autoComplete="given-name" /></label>
-            <label>Nachname<input name="lastName" required autoComplete="family-name" /></label>
-          </div>
-          <label>E-Mail<input name="email" type="email" required autoComplete="email" /></label>
-          <label>Passwort<input name="password" type="password" minLength={12} required autoComplete="new-password" /></label>
-          <label>Passwort wiederholen<input name="confirm" type="password" minLength={12} required autoComplete="new-password" /></label>
-          <button className="primary-button" type="submit">Administrator erstellen</button>
-        </form>
-      </section>
-    </main>
+        <label className={authFieldClass}>
+          E-Mail
+          <input className={authInputClass} name="email" type="email" required autoComplete="email" />
+        </label>
+        <label className={authFieldClass}>
+          Passwort
+          <input className={authInputClass} name="password" type="password" minLength={12} required autoComplete="new-password" />
+        </label>
+        <label className={authFieldClass}>
+          Passwort wiederholen
+          <input className={authInputClass} name="confirm" type="password" minLength={12} required autoComplete="new-password" />
+        </label>
+        <button className={authSubmitClass} type="submit">Administrator erstellen</button>
+      </form>
+    </AuthSurface>
   );
 }
