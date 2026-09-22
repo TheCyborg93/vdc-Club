@@ -12,7 +12,7 @@ function value(formData: FormData, key: string) {
 }
 
 export async function createMeetingAction(formData: FormData) {
-  await requirePermission("meetings.write");
+  const actor=await requirePermission("meetings.write");
   const sql = getDb();
   if (!sql) redirect("/sitzungen?error=database");
 
@@ -24,7 +24,45 @@ export async function createMeetingAction(formData: FormData) {
   if (!title || !startsAt) redirect("/sitzungen?error=missing");
 
   const rows = await sql`
-    WITH new_event AS (
+    WITH board_members AS (
+      SELECT DISTINCT au.member_id
+      FROM app_users au
+      JOIN user_roles ur ON ur.user_id=au.id
+      JOIN members m ON m.id=au.member_id
+      WHERE au.status='active'
+        AND m.status='active'
+        AND au.member_id IS NOT NULL
+        AND ur.role_key IN (
+          'chair','vice_chair','treasurer','media_director',
+          'sport_director','secretary','board'
+        )
+    ),
+    detected_roles AS (
+      SELECT
+        (
+          SELECT au.member_id
+          FROM app_users au
+          JOIN user_roles ur ON ur.user_id=au.id
+          JOIN members m ON m.id=au.member_id
+          WHERE au.status='active'
+            AND m.status='active'
+            AND ur.role_key='chair'
+          ORDER BY au.display_name
+          LIMIT 1
+        ) AS chair_member_id,
+        (
+          SELECT au.member_id
+          FROM app_users au
+          JOIN user_roles ur ON ur.user_id=au.id
+          JOIN members m ON m.id=au.member_id
+          WHERE au.status='active'
+            AND m.status='active'
+            AND ur.role_key='secretary'
+          ORDER BY au.display_name
+          LIMIT 1
+        ) AS minute_taker_member_id
+    ),
+    new_event AS (
       INSERT INTO club_events (
         title, event_type, starts_at, location, source, description
       )
@@ -39,15 +77,39 @@ export async function createMeetingAction(formData: FormData) {
       RETURNING id, title, starts_at, location
     ),
     new_meeting AS (
-      INSERT INTO meetings (event_id, title, starts_at, location, status, notes)
-      SELECT id, title, starts_at, location, 'planned', ${notes || null}
-      FROM new_event
+      INSERT INTO meetings (
+        event_id,title,starts_at,location,status,notes,
+        chair_member_id,minute_taker_member_id
+      )
+      SELECT
+        ne.id,ne.title,ne.starts_at,ne.location,'planned',${notes || null},
+        dr.chair_member_id,dr.minute_taker_member_id
+      FROM new_event ne
+      CROSS JOIN detected_roles dr
       RETURNING id
+    ),
+    invited_board AS (
+      INSERT INTO meeting_attendees (
+        meeting_id,member_id,attendance,voting_eligible
+      )
+      SELECT nm.id,bm.member_id,'invited',true
+      FROM new_meeting nm
+      CROSS JOIN board_members bm
+      ON CONFLICT (meeting_id,member_id) DO NOTHING
     )
     SELECT id::text FROM new_meeting
   `;
 
   const id = rows[0]?.id;
+  if (id) {
+    await writeAudit(actor.id,"meeting.created","meeting",String(id),{
+      title,
+      startsAt,
+      location:location || null,
+      autoInvitedBoard:true,
+      autoAssignedOfficers:true,
+    });
+  }
   revalidatePath("/sitzungen");
   revalidatePath("/kalender");
   revalidatePath("/");
@@ -116,12 +178,16 @@ export async function addAgendaItemAction(formData: FormData) {
   const meetingId = value(formData, "meetingId");
   const title = value(formData, "title");
   const description = value(formData, "description");
+  const agendaTypeRaw=value(formData,"agendaType");
+  const agendaType=["information","consultation","decision"].includes(agendaTypeRaw)
+    ? agendaTypeRaw
+    : "consultation";
   if (!meetingId || !title) redirect(`/sitzungen/${meetingId}?error=missing`);
 
   await sql`
     INSERT INTO agenda_items (
       meeting_id, position, title, description, status,
-      announced_with_invitation,decision_basis_note
+      announced_with_invitation,decision_basis_note,agenda_type
     )
     SELECT
       ${meetingId}::uuid,
@@ -130,7 +196,8 @@ export async function addAgendaItemAction(formData: FormData) {
       ${description || null},
       'open',
       (m.status='planned' AND m.invited_at IS NULL),
-      NULL
+      NULL,
+      ${agendaType}
     FROM meetings m
     WHERE m.id=${meetingId}::uuid
       AND m.deleted_at IS NULL
@@ -1642,4 +1709,64 @@ export async function updateAgendaFormalAction(formData:FormData) {
   revalidatePath(`/sitzungen/${meetingId}`);
   revalidatePath(`/sitzungen/${meetingId}/protokoll`);
   redirect(`/sitzungen/${meetingId}?top=${agendaItemId}&formal=1`);
+}
+
+
+export async function reorderAgendaItemsAction(
+  meetingId:string,
+  orderedIds:string[],
+) {
+  const actor=await requirePermission("meetings.write");
+  const sql=getDb();
+  if (!sql) return {ok:false,error:"database"};
+
+  if (!meetingId || orderedIds.length===0 || new Set(orderedIds).size!==orderedIds.length) {
+    return {ok:false,error:"invalid"};
+  }
+
+  const meetingRows=await sql`
+    SELECT id::text
+    FROM meetings
+    WHERE id=${meetingId}::uuid
+      AND deleted_at IS NULL
+      AND status='planned'
+    LIMIT 1
+  `;
+  if (!meetingRows.length) return {ok:false,error:"locked"};
+
+  const existing=await sql`
+    SELECT id::text
+    FROM agenda_items
+    WHERE meeting_id=${meetingId}::uuid
+    ORDER BY position
+  `;
+  const existingIds=existing.map((row)=>String(row.id));
+  if (
+    existingIds.length!==orderedIds.length ||
+    existingIds.some((id)=>!orderedIds.includes(id))
+  ) {
+    return {ok:false,error:"mismatch"};
+  }
+
+  await sql`
+    UPDATE agenda_items
+    SET position=position+10000
+    WHERE meeting_id=${meetingId}::uuid
+  `;
+
+  for (let index=0;index<orderedIds.length;index++) {
+    await sql`
+      UPDATE agenda_items
+      SET position=${index+1},updated_at=now()
+      WHERE id=${orderedIds[index]}::uuid
+        AND meeting_id=${meetingId}::uuid
+    `;
+  }
+
+  await writeAudit(actor.id,"agenda.reordered","meeting",meetingId,{
+    orderedIds,
+  });
+
+  revalidatePath(`/sitzungen/${meetingId}`);
+  return {ok:true};
 }
