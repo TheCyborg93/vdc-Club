@@ -1105,12 +1105,12 @@ export async function createResolutionFromAgendaAction(formData: FormData) {
     redirect(`/sitzungen/${meetingId}?top=${agendaItemId}&error=roll_call_details`);
   }
 
-  const safeYes=Number.isFinite(yes) && yes>=0 ? yes : 0;
-  const safeNo=Number.isFinite(no) && no>=0 ? no : 0;
-  const safeAbstain=Number.isFinite(abstain) && abstain>=0 ? abstain : 0;
-  if ([safeYes,safeNo,safeAbstain].some((number)=>!Number.isFinite(number) || number<0)) {
+  if ([yes,no,abstain].some((number)=>!Number.isFinite(number) || number<0)) {
     redirect(`/sitzungen/${meetingId}?top=${agendaItemId}&error=vote_mismatch`);
   }
+  const safeYes=yes;
+  const safeNo=no;
+  const safeAbstain=abstain;
 
   const formalRows=await sql`
     SELECT
