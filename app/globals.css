@@ -815,3 +815,14 @@ body.meeting-focus-mode .meeting-control-hero{position:sticky;top:0;z-index:18;b
 .meeting-resolution-task{display:grid;gap:8px;padding:10px;border:1px solid var(--line);border-radius:10px;background:rgba(255,255,255,.008)}
 .meeting-resolution-modal-form>footer{display:flex;justify-content:flex-end;gap:7px;padding-top:3px}.meeting-resolution-modal-form>footer .primary-button:disabled{opacity:.35;cursor:not-allowed}
 @media(max-width:720px){.meeting-modal-backdrop{padding:6px;align-items:end}.meeting-resolution-modal{width:100%;max-height:92vh;border-radius:15px 15px 0 0}.meeting-vote-context{grid-template-columns:1fr 1fr}.meeting-vote-context>div:last-child{grid-column:1/-1}.meeting-resolution-modal-form>footer{display:grid;grid-template-columns:1fr 1fr}.meeting-resolution-modal-form>footer button{width:100%}}
+
+
+/* Meeting close + attachment polish */
+.meeting-close-summary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;margin-top:10px}
+.meeting-close-summary>div{padding:9px 10px;border:1px solid var(--line);border-radius:9px;background:rgba(255,255,255,.008)}
+.meeting-close-summary span,.meeting-close-summary strong{display:block}.meeting-close-summary span{font-size:clamp(7px,.46vw,9px);color:var(--muted)}.meeting-close-summary strong{margin-top:2px;font-size:clamp(15px,1vw,20px)}
+.meeting-next-create{grid-column:1/-1;padding:9px 10px;border:1px solid rgba(68,224,176,.10);border-radius:9px;background:rgba(68,224,176,.018)}
+.meeting-general-attachments{border-radius:16px}.meeting-general-attachment-upload{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;gap:7px;align-items:end;margin-top:10px;padding-top:10px;border-top:1px solid var(--line)}.meeting-general-attachment-upload label{display:grid;gap:4px;color:var(--muted);font-size:clamp(7px,.46vw,9px)}
+.meeting-correction-attachments{display:grid;gap:8px;margin-top:9px;padding-top:10px;border-top:1px solid var(--line)}
+.minutes-agenda-type{padding:3px 6px;border-radius:99px;background:#eef7f4;color:#27705c;font-size:8px}
+@media(max-width:720px){.meeting-close-summary{grid-template-columns:1fr 1fr}.meeting-general-attachment-upload{grid-template-columns:1fr}.meeting-general-attachment-upload button{width:100%}}
