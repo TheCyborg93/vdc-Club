@@ -7,6 +7,7 @@ import {
   addAttendeeAction,
   addMeetingGuestAction,
   addVoteExclusionAction,
+  removeAttendeeAction,
   carryForwardAgendaItemAction,
   carryForwardTaskAction,
   createResolutionFromAgendaAction,
@@ -18,6 +19,7 @@ import {
   updateAttendanceAction,
   updateMeetingDetailsAction,
   updateMeetingFormalitiesAction,
+  updateMeetingGuestAttendanceAction,
   updateMeetingOfficersAction,
   updateMeetingStatusAction,
 } from "@/app/sitzungen/actions";
@@ -73,6 +75,7 @@ const agendaLabels:Record<string,string>={
 const errors:Record<string,string>={
   missing:"Bitte alle erforderlichen Angaben ausfüllen.",
   attendee:"Teilnehmer konnte nicht hinzugefügt werden.",
+  attendee_remove_locked:"Teilnehmer können nur vor Sitzungsbeginn wieder entfernt werden.",
   resolution:"Für einen Beschluss werden Titel und Beschlusstext benötigt.",
   protected_delete:"Diese Sitzung kann nicht gelöscht werden, weil sie bereits abgeschlossen ist oder Beschlüsse/Dokumente enthält.",
   agenda_delete:"Dieser TOP kann nicht gelöscht werden, weil bereits ein Beschluss dazu existiert oder die Sitzung abgeschlossen ist.",
@@ -151,6 +154,7 @@ export default async function MeetingDetailPage({
     formal?:string;
     attachment?:string;
     attachment_deleted?:string;
+    attendee_removed?:string;
   }>;
 }) {
   const actor=await requirePermission("meetings.read");
@@ -507,7 +511,7 @@ export default async function MeetingDetailPage({
       </nav>
 
       {query.error && <div className="form-error">{errors[query.error] ?? "Die Aktion konnte nicht ausgeführt werden."}</div>}
-      {(query.agenda || query.resolution || query.created || query.saved || query.status || query.officers || query.formalities || query.guest || query.exclusion || query.formal || query.attachment || query.attachment_deleted) && <div className="form-success">Sitzung wurde aktualisiert.</div>}
+      {(query.agenda || query.resolution || query.created || query.saved || query.status || query.officers || query.formalities || query.guest || query.exclusion || query.formal || query.attachment || query.attachment_deleted || query.attendee_removed) && <div className="form-success">Sitzung wurde aktualisiert.</div>}
       {query.notes && <div className="form-success">Ergebnisnotiz wurde gespeichert.</div>}
       {query.agenda_deleted && <div className="form-success">TOP wurde gelöscht.</div>}
 
@@ -1303,6 +1307,17 @@ export default async function MeetingDetailPage({
                     <button className="mini-button">Speichern</button>
                   </form>
                 )}
+                {canWrite && ["planned","cancelled"].includes(String(meeting.status)) && (
+                  <form action={removeAttendeeAction} className="attendee-remove-form">
+                    <input type="hidden" name="meetingId" value={id} />
+                    <input type="hidden" name="memberId" value={String(attendee.member_id)} />
+                    <ConfirmSubmitButton
+                      message={"„"+String(attendee.first_name)+" "+String(attendee.last_name)+"“ aus dieser Sitzung entfernen?"}
+                    >
+                      Entfernen
+                    </ConfirmSubmitButton>
+                  </form>
+                )}
               </div>
             ))}
           </div>
@@ -1340,9 +1355,23 @@ export default async function MeetingDetailPage({
                   <strong>{String(guest.name)}</strong>
                   <span>
                     {guest.organization ? String(guest.organization) : "Gast"}
+                    {" · "}
+                    {guest.attendance==="present" ? "Anwesend" : guest.attendance==="absent" ? "Abwesend" : "Eingeladen"}
                     {guest.note ? " · "+String(guest.note) : ""}
                   </span>
                 </div>
+                {canWrite && ["planned","running"].includes(String(meeting.status)) && (
+                  <form action={updateMeetingGuestAttendanceAction} className="meeting-guest-status-form">
+                    <input type="hidden" name="meetingId" value={id} />
+                    <input type="hidden" name="guestId" value={String(guest.id)} />
+                    <select name="attendance" defaultValue={String(guest.attendance)}>
+                      <option value="invited">Eingeladen</option>
+                      <option value="present">Anwesend</option>
+                      <option value="absent">Abwesend</option>
+                    </select>
+                    <button className="mini-button">Speichern</button>
+                  </form>
+                )}
                 {canWrite && ["planned","running"].includes(String(meeting.status)) && (
                   <form action={deleteMeetingGuestAction}>
                     <input type="hidden" name="meetingId" value={id} />
