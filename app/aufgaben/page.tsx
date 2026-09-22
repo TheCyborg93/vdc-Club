@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { getDb } from "@/lib/db";
 import { hasPermission, requirePermission } from "@/lib/permissions";
 import {
@@ -59,10 +60,16 @@ export default async function TasksPage({
             t.due_date,
             t.created_at,
             t.source_type,
+            t.source_id::text,
             m.first_name,
-            m.last_name
+            m.last_name,
+            r.resolution_number,
+            r.title AS resolution_title
           FROM tasks t
           LEFT JOIN members m ON m.id = t.owner_member_id
+          LEFT JOIN resolutions r
+            ON t.source_type='resolution'
+           AND r.id=t.source_id
           WHERE t.status <> 'cancelled'
             AND t.deleted_at IS NULL
           ORDER BY
@@ -86,7 +93,10 @@ export default async function TasksPage({
             count(*) FILTER (WHERE status = 'open')::int AS open,
             count(*) FILTER (WHERE priority IN ('high','urgent') AND status NOT IN ('done','cancelled'))::int AS high,
             count(*) FILTER (WHERE status = 'in_progress')::int AS progress,
-            count(*) FILTER (WHERE status = 'done' AND completed_at >= DATE '2026-07-01')::int AS done
+            count(*) FILTER (
+              WHERE status = 'done'
+                AND completed_at >= date_trunc('year',CURRENT_DATE)
+            )::int AS done
           FROM tasks
           WHERE deleted_at IS NULL
         `,
@@ -116,7 +126,7 @@ export default async function TasksPage({
         <article className="stat-card"><span>Offen</span><strong>{Number(count.open ?? 0)}</strong><small>noch nicht begonnen</small></article>
         <article className="stat-card"><span>Hohe Priorität</span><strong>{Number(count.high ?? 0)}</strong><small>hoch oder dringend</small></article>
         <article className="stat-card"><span>In Arbeit</span><strong>{Number(count.progress ?? 0)}</strong><small>aktuell bearbeitet</small></article>
-        <article className="stat-card"><span>Erledigt</span><strong>{Number(count.done ?? 0)}</strong><small>Saison 2026/27</small></article>
+        <article className="stat-card"><span>Erledigt</span><strong>{Number(count.done ?? 0)}</strong><small>dieses Jahr</small></article>
       </section>
 
       {canWrite && (
@@ -172,6 +182,18 @@ export default async function TasksPage({
                       <span className="task-category">{task.category ? String(task.category) : "Allgemein"}</span>
                     </div>
                     <h3>{String(task.title)}</h3>
+                    {task.source_type==="resolution" && task.source_id && (
+                      <Link
+                        href={"/beschluesse?q="+encodeURIComponent(String(task.resolution_number ?? task.resolution_title ?? ""))}
+                        className="task-source-link"
+                      >
+                        <span>Aus Beschluss</span>
+                        <strong>
+                          {task.resolution_number ? String(task.resolution_number)+" · " : ""}
+                          {task.resolution_title ? String(task.resolution_title) : "Beschluss öffnen"}
+                        </strong>
+                      </Link>
+                    )}
                     {task.description && <p>{String(task.description)}</p>}
                     <div className="task-info">
                       <span>{task.first_name ? `${task.first_name} ${task.last_name}` : "Nicht zugewiesen"}</span>
