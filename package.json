@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "typecheck": "tsc --noEmit",
-    "prepare": "panda codegen"
+    "prepare": "panda codegen",
+    "stylecheck": "node scripts/check-styling.mjs"
   },
   "dependencies": {
     "@neondatabase/serverless": "1.1.0",
