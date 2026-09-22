@@ -7,6 +7,7 @@ import { vdcMinutesGlobalCss } from "./theme/vdc-minutes-global";
 import { vdcFinanceGlobalCss } from "./theme/vdc-finance-global";
 import { vdcClubGlobalCss } from "./theme/vdc-club-global";
 import { vdcSportGlobalCss } from "./theme/vdc-sport-global";
+import { vdcAdminGlobalCss } from "./theme/vdc-admin-global";
 
 export default defineConfig({
   preflight: true,
@@ -32,7 +33,7 @@ export default defineConfig({
       },
     },
   ],
-  globalCss: { ...vdcGlobalCss, ...vdcMeetingGlobalCss, ...vdcMinutesGlobalCss, ...vdcFinanceGlobalCss, ...vdcClubGlobalCss, ...vdcSportGlobalCss },
+  globalCss: { ...vdcGlobalCss, ...vdcMeetingGlobalCss, ...vdcMinutesGlobalCss, ...vdcFinanceGlobalCss, ...vdcClubGlobalCss, ...vdcSportGlobalCss, ...vdcAdminGlobalCss },
   theme: {
     extend: {
       tokens: vdcTokens,
