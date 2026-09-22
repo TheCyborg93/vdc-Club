@@ -13,7 +13,7 @@ export default defineConfig({
   exclude: [],
   outdir: "styled-system",
   jsxFramework: "react",
-  strictTokens: true,
+  strictTokens: false,
   minify: true,
   plugins: [
     {
