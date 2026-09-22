@@ -473,6 +473,8 @@ export async function updateMeetingStatusAction(formData: FormData) {
       SELECT
         m.chair_member_id IS NOT NULL AS has_chair,
         m.minute_taker_member_id IS NOT NULL AS has_minute_taker,
+        m.invited_at IS NOT NULL AS invitation_date_present,
+        NULLIF(trim(m.invitation_method),'') IS NOT NULL AS invitation_method_present,
         m.invitation_timely IS NOT NULL AS invitation_checked,
         m.agenda_sent_with_invitation IS NOT NULL AS agenda_checked,
         m.quorum_confirmed,
@@ -507,13 +509,20 @@ export async function updateMeetingStatusAction(formData: FormData) {
       WHERE m.id=${meetingId}::uuid
       GROUP BY
         m.id,m.chair_member_id,m.minute_taker_member_id,
+        m.invited_at,m.invitation_method,
         m.invitation_timely,m.agenda_sent_with_invitation,m.quorum_confirmed
     `;
     const check=checks[0] ?? {};
     if (!check.has_chair || !check.has_minute_taker) {
       redirect(`/sitzungen/${meetingId}?error=officers_missing`);
     }
-    if (!check.invitation_checked || !check.agenda_checked || check.quorum_confirmed==null) {
+    if (
+      !check.invitation_date_present ||
+      !check.invitation_method_present ||
+      !check.invitation_checked ||
+      !check.agenda_checked ||
+      check.quorum_confirmed==null
+    ) {
       redirect(`/sitzungen/${meetingId}?error=formalities_open`);
     }
     if (Number(check.resolution_count ?? 0)>0 && check.quorum_confirmed!==true) {
