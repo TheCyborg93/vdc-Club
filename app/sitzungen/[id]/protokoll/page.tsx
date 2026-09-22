@@ -242,7 +242,8 @@ export default async function MinutesPage({
 
   const canWrite=hasPermission(actor.roles,"meetings.write");
   const canApprove=actor.roles.some((role)=>["chair","vice_chair","board","admin"].includes(role));
-  const minutesStatus=String(meeting.minutes_status ?? "draft");
+  const rawMinutesStatus=String(meeting.minutes_status ?? "draft");
+  const minutesStatus=rawMinutesStatus==="approved" ? "archived" : rawMinutesStatus;
   const officersComplete=Boolean(meeting.chair_member_id && meeting.minute_taker_member_id);
   const meetingComplete=String(meeting.status)==="completed";
   if (!meetingComplete) redirect(`/sitzungen/${id}`);
