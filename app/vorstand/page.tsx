@@ -93,8 +93,9 @@ const personCard = css({
 });
 const personTop = css({
   display: "grid",
-  gridTemplateColumns: "[42px] minmax(0,1fr) auto",
+  gridTemplateColumns: { base: "[42px] minmax(0,1fr)", md: "[42px] minmax(0,1fr) auto" },
   gap: "3",
+  "& > :last-child": { gridColumn: { base: "2", md: "auto" }, justifySelf: { base: "start", md: "end" } },
   alignItems: "center",
 });
 const avatar = css({
@@ -127,7 +128,7 @@ const personActions = css({ display: "flex", gap: "2", flexWrap: "wrap", pt: "2.
 const smallLink = css({
   display: "inline-flex",
   alignItems: "center",
-  minH: "8",
+  minH: { base: "[44px]", md: "8" },
   px: "3",
   border: "1px solid",
   borderColor: "surface.border",
