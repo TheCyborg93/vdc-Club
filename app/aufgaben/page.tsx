@@ -42,11 +42,14 @@ function formatDate(value: unknown) {
 export default async function TasksPage({
   searchParams,
 }: {
-  searchParams: Promise<{ error?: string; created?: string; deleted?: string; saved?:string }>;
+  searchParams: Promise<{ error?: string; created?: string; deleted?: string; saved?:string; view?:string }>;
 }) {
   const actor = await requirePermission("tasks.read");
   const sql = getDb();
   const params = await searchParams;
+  const view=["active","mine","overdue","priority","done","all"].includes(params.view ?? "")
+    ? String(params.view)
+    : "active";
 
   const [tasks, members, counts] = sql
     ? await Promise.all([
@@ -60,6 +63,7 @@ export default async function TasksPage({
             t.priority,
             t.due_date,
             t.created_at,
+            (t.due_date<CURRENT_DATE AND t.status IN ('open','in_progress','blocked')) AS is_overdue,
             t.source_type,
             t.source_id::text,
             t.owner_member_id::text,
@@ -74,6 +78,26 @@ export default async function TasksPage({
            AND r.id=t.source_id
           WHERE t.status <> 'cancelled'
             AND t.deleted_at IS NULL
+            AND (
+              ${view}='all'
+              OR (${view}='active' AND t.status IN ('open','in_progress','blocked'))
+              OR (
+                ${view}='mine'
+                AND t.status IN ('open','in_progress','blocked')
+                AND t.owner_member_id=${actor.memberId || null}::uuid
+              )
+              OR (
+                ${view}='overdue'
+                AND t.status IN ('open','in_progress','blocked')
+                AND t.due_date<CURRENT_DATE
+              )
+              OR (
+                ${view}='priority'
+                AND t.status IN ('open','in_progress','blocked')
+                AND t.priority IN ('high','urgent')
+              )
+              OR (${view}='done' AND t.status='done')
+            )
           ORDER BY
             CASE t.priority
               WHEN 'urgent' THEN 1
@@ -108,7 +132,21 @@ export default async function TasksPage({
   const count = counts[0] ?? {};
   const canWrite = hasPermission(actor.roles, "tasks.write");
 
-  const columns = ["open", "in_progress", "blocked", "done"] as const;
+  const allColumns = ["open", "in_progress", "blocked", "done"] as const;
+  const columns = view==="done"
+    ? allColumns.filter((status)=>status==="done")
+    : view==="all"
+      ? [...allColumns]
+      : allColumns.filter((status)=>status!=="done");
+
+  const taskViews=[
+    ["active","Aktiv"],
+    ["mine","Meine"],
+    ["overdue","Überfällig"],
+    ["priority","Hohe Priorität"],
+    ["done","Erledigt"],
+    ["all","Alle"],
+  ];
 
   return (
     <div className="page-stack">
@@ -124,6 +162,18 @@ export default async function TasksPage({
       {params.created && <div className="form-success">Aufgabe wurde angelegt.</div>}
       {params.deleted && <div className="form-success">Aufgabe wurde in den Papierkorb verschoben.</div>}
       {params.saved && <div className="form-success">Aufgabe wurde aktualisiert.</div>}
+
+      <nav className="task-view-tabs" aria-label="Aufgaben filtern">
+        {taskViews.map(([key,label])=>(
+          <Link
+            key={key}
+            href={key==="active" ? "/aufgaben" : "/aufgaben?view="+key}
+            className={view===key ? "is-active" : ""}
+          >
+            {label}
+          </Link>
+        ))}
+      </nav>
 
       <section className="stat-grid">
         <article className="stat-card"><span>Offen</span><strong>{Number(count.open ?? 0)}</strong><small>noch nicht begonnen</small></article>
@@ -177,12 +227,15 @@ export default async function TasksPage({
                 {items.length === 0 ? (
                   <div className="empty-state">Keine Aufgaben.</div>
                 ) : items.map((task) => (
-                  <div className="task-card" key={String(task.id)}>
+                  <div className={"task-card "+(task.is_overdue ? "is-overdue" : "")} key={String(task.id)}>
                     <div className="task-card-top">
                       <span className={`task-priority priority-${task.priority}`}>
                         {priorityLabels[String(task.priority)] ?? String(task.priority)}
                       </span>
-                      <span className="task-category">{task.category ? String(task.category) : "Allgemein"}</span>
+                      <div className="task-card-tags">
+                        {task.is_overdue && <span className="task-overdue-chip">Überfällig</span>}
+                        <span className="task-category">{task.category ? String(task.category) : "Allgemein"}</span>
+                      </div>
                     </div>
                     <h3>{String(task.title)}</h3>
                     {task.source_type==="resolution" && task.source_id && (
