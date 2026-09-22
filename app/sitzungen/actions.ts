@@ -682,7 +682,7 @@ export async function createResolutionFromAgendaAction(formData: FormData) {
         ${safeEligible},
         ${excludedVoters},
         ${decisionOutcome},
-        CASE WHEN ${decisionOutcome}='accepted' THEN 'open' ELSE 'rejected' END,
+        CASE WHEN ${decisionOutcome}='accepted' THEN 'open' ELSE 'withdrawn' END,
         now(),
         year::text || '-' || lpad(last_number::text, 3, '0')
       FROM counter
