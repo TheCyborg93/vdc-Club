@@ -5,17 +5,29 @@ import { hasPermission, requirePermission } from "@/lib/permissions";
 import {
   addAgendaItemAction,
   addAttendeeAction,
+  addMeetingGuestAction,
+  addVoteExclusionAction,
+  carryForwardAgendaItemAction,
+  carryForwardTaskAction,
   createResolutionFromAgendaAction,
   deleteAgendaItemAction,
+  deleteMeetingGuestAction,
+  deleteVoteExclusionAction,
+  updateAgendaFormalAction,
   updateAgendaStatusAction,
   updateAttendanceAction,
   updateMeetingDetailsAction,
+  updateMeetingFormalitiesAction,
   updateMeetingOfficersAction,
   updateMeetingStatusAction,
 } from "@/app/sitzungen/actions";
 import { moveToTrashAction } from "@/app/admin/papierkorb/actions";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 import { MeetingAutoNotes } from "@/components/meeting-auto-notes";
+import {
+  removeMeetingAttachmentAction,
+  uploadMeetingAttachmentAction,
+} from "@/app/sitzungen/attachment-actions";
 import { meetingStatusLabel,taskStatusLabel } from "@/lib/ui-labels";
 
 const attendanceLabels:Record<string,string>={
@@ -51,6 +63,20 @@ const errors:Record<string,string>={
   invalid_transition:"Dieser Statuswechsel ist nicht zulässig.",
   minutes_archived:"Die Sitzung kann nicht wieder geöffnet werden, weil das Protokoll bereits archiviert ist.",
   forbidden:"Diese Aktion ist für deine Rolle nicht freigegeben.",
+  officers_missing:"Sitzungsleitung und Protokollführung müssen festgelegt sein.",
+  formalities_open:"Einladung, Tagesordnung und Beschlussfähigkeit müssen vollständig dokumentiert sein.",
+  not_quorate_for_resolutions:"Beschlüsse können nur bei dokumentierter Beschlussfähigkeit abgeschlossen werden.",
+  vote_incomplete:"Mindestens eine Abstimmung ist formal unvollständig oder die Stimmenzahl passt nicht.",
+  vote_mismatch:"Ja, Nein und Enthaltungen müssen zusammen genau der Zahl der Stimmberechtigten entsprechen.",
+  spontaneous_basis:"Bei einem nicht mit der Einladung angekündigten TOP ist vor einem Beschluss eine Begründung erforderlich.",
+  guest_missing:"Bitte einen Namen für den Gast angeben.",
+  exclusion_missing:"Für einen Stimmrechtsausschluss werden Person und Begründung benötigt.",
+  carryover_exists:"Dieser offene Punkt wurde bereits in die Tagesordnung übernommen.",
+  attachment_missing:"Bitte eine Datei auswählen.",
+  attachment_size:"Die Anlage ist zu groß. Maximal 8 MB.",
+  attachment_type:"Dieser Dateityp ist für Sitzungsanlagen nicht erlaubt.",
+  attachment_upload:"Die Anlage konnte nicht hochgeladen werden.",
+  storage:"Der private Dokumentenspeicher ist nicht konfiguriert.",
 };
 
 export const dynamic="force-dynamic";
@@ -99,6 +125,12 @@ export default async function MeetingDetailPage({
     saved?:string;
     status?:string;
     officers?:string;
+    formalities?:string;
+    guest?:string;
+    exclusion?:string;
+    formal?:string;
+    attachment?:string;
+    attachment_deleted?:string;
   }>;
 }) {
   const actor=await requirePermission("meetings.read");
@@ -108,7 +140,16 @@ export default async function MeetingDetailPage({
   const {id}=await params;
   const query=await searchParams;
 
-  const [meetingRows,agenda,attendees,members]=await Promise.all([
+  const [
+    meetingRows,
+    agenda,
+    attendees,
+    members,
+    guests,
+    exclusions,
+    attachments,
+    carryovers,
+  ]=await Promise.all([
     sql`
       SELECT
         m.id::text,
@@ -117,10 +158,21 @@ export default async function MeetingDetailPage({
         m.location,
         m.status,
         m.notes,
+        m.opened_at,
         m.ended_at,
         m.chair_member_id::text,
         m.minute_taker_member_id::text,
         m.minutes_status,
+        m.meeting_mode,
+        m.invited_at,
+        m.invitation_method,
+        m.invitation_timely,
+        m.agenda_sent_with_invitation,
+        m.quorum_confirmed,
+        m.quorum_note,
+        m.quorum_basis,
+        m.formalities_note,
+        m.next_meeting_at,
         e.id::text AS event_id
       FROM meetings m
       LEFT JOIN club_events e ON e.id=m.event_id
@@ -136,6 +188,10 @@ export default async function MeetingDetailPage({
         ai.description,
         ai.notes,
         ai.status,
+        ai.announced_with_invitation,
+        ai.decision_basis_note,
+        ai.carried_from_agenda_item_id::text,
+        ai.carried_from_task_id::text,
         r.id::text AS resolution_id,
         r.resolution_number,
         r.title AS resolution_title,
@@ -143,6 +199,10 @@ export default async function MeetingDetailPage({
         r.votes_yes,
         r.votes_no,
         r.votes_abstain,
+        r.vote_method,
+        r.eligible_voters,
+        r.excluded_voters,
+        r.decision_outcome,
         r.status AS resolution_status,
         t.id::text AS task_id,
         t.status AS task_status
@@ -164,6 +224,7 @@ export default async function MeetingDetailPage({
       SELECT
         ma.member_id::text,
         ma.attendance,
+        ma.voting_eligible,
         m.first_name,
         m.last_name
       FROM meeting_attendees ma
@@ -177,7 +238,103 @@ export default async function MeetingDetailPage({
       WHERE status='active'
       ORDER BY last_name,first_name
     `,
+    sql`
+      SELECT id::text,name,organization,note,attendance
+      FROM meeting_guests
+      WHERE meeting_id=${id}::uuid
+      ORDER BY created_at,name
+    `,
+    sql`
+      SELECT
+        ave.id::text,
+        ave.agenda_item_id::text,
+        ave.member_id::text,
+        ave.reason,
+        COALESCE(m.first_name || ' ' || m.last_name,ave.person_name) AS person_name
+      FROM agenda_vote_exclusions ave
+      LEFT JOIN members m ON m.id=ave.member_id
+      JOIN agenda_items ai ON ai.id=ave.agenda_item_id
+      WHERE ai.meeting_id=${id}::uuid
+      ORDER BY ave.created_at
+    `,
+    sql`
+      SELECT
+        d.id::text,
+        d.agenda_item_id::text,
+        d.title,
+        d.original_filename,
+        d.file_size_bytes,
+        d.storage_type,
+        d.storage_ref
+      FROM documents d
+      WHERE d.meeting_id=${id}::uuid
+        AND d.agenda_item_id IS NOT NULL
+        AND d.category='Sitzungsanlage'
+        AND d.deleted_at IS NULL
+      ORDER BY d.created_at
+    `,
+    sql`
+      WITH current_meeting AS (
+        SELECT starts_at
+        FROM meetings
+        WHERE id=${id}::uuid
+        LIMIT 1
+      ),
+      previous_meeting AS (
+        SELECT m.id,m.title
+        FROM meetings m,current_meeting c
+        WHERE m.id<>${id}::uuid
+          AND m.deleted_at IS NULL
+          AND m.status='completed'
+          AND m.starts_at<c.starts_at
+        ORDER BY m.starts_at DESC
+        LIMIT 1
+      )
+      SELECT
+        'agenda'::text AS source_type,
+        ai.id::text AS source_id,
+        ai.title,
+        COALESCE(ai.notes,ai.description) AS detail,
+        NULL::text AS owner_name,
+        NULL::text AS due_date,
+        pm.title AS meeting_title
+      FROM previous_meeting pm
+      JOIN agenda_items ai ON ai.meeting_id=pm.id
+      WHERE ai.status='deferred'
+        AND NOT EXISTS (
+          SELECT 1 FROM agenda_items current
+          WHERE current.meeting_id=${id}::uuid
+            AND current.carried_from_agenda_item_id=ai.id
+        )
+
+      UNION ALL
+
+      SELECT
+        'task'::text,
+        t.id::text,
+        t.title,
+        t.description,
+        CASE WHEN owner.id IS NOT NULL THEN owner.first_name || ' ' || owner.last_name ELSE NULL END,
+        t.due_date::text,
+        pm.title
+      FROM previous_meeting pm
+      JOIN resolutions r ON r.meeting_id=pm.id
+      JOIN tasks t
+        ON t.source_type='resolution'
+       AND t.source_id=r.id
+       AND t.deleted_at IS NULL
+       AND t.status IN ('open','in_progress','blocked')
+      LEFT JOIN members owner ON owner.id=t.owner_member_id
+      WHERE NOT EXISTS (
+        SELECT 1 FROM agenda_items current
+        WHERE current.meeting_id=${id}::uuid
+          AND current.carried_from_task_id=t.id
+      )
+      ORDER BY source_type,title
+    `,
   ]);
+
+
 
   const meeting=meetingRows[0];
   if (!meeting) notFound();
