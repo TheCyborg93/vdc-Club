@@ -43,6 +43,7 @@ const errorLabels: Record<string,string> = {
   type:"Dieser Dateityp ist nicht erlaubt.",
   storage:"Der private Dokumentenspeicher ist noch nicht konfiguriert.",
   upload:"Die Datei konnte nicht in den privaten Speicher hochgeladen werden.",
+  protocol_managed:"Dieses Sitzungsprotokoll wird automatisch über den Sitzungsworkflow verwaltet.",
 };
 
 export default async function DocumentsPage({
@@ -183,12 +184,18 @@ export default async function DocumentsPage({
           <div className="document-list">
             {documents.length===0 ? (
               <div className="empty-state">Keine Dokumente für diesen Filter.</div>
-            ) : documents.map((doc)=>(
-              <article className="document-row" key={String(doc.id)}>
+            ) : documents.map((doc)=>{
+              const isMeetingMinutes=doc.category==="Protokoll" && Boolean(doc.meeting_id);
+              const primaryHref=isMeetingMinutes
+                ? "/sitzungen/"+String(doc.meeting_id)+"/protokoll"
+                : "/dokumente/"+String(doc.id);
+
+              return (
+              <article className={"document-row "+(isMeetingMinutes ? "is-system-minutes" : "")} key={String(doc.id)}>
                 <div className="document-icon">{doc.category==="Protokoll" ? "PRO" : doc.category==="Vertrag" ? "VER" : "DOC"}</div>
                 <div className="document-main">
                   <div className="document-title-row">
-                    <Link href={"/dokumente/"+String(doc.id)} className="document-title-link">
+                    <Link href={primaryHref} className="document-title-link">
                       <strong>{String(doc.title)}</strong>
                     </Link>
                     <div className="document-title-meta">
@@ -196,6 +203,7 @@ export default async function DocumentsPage({
                       <span className={`document-status document-${doc.status}`}>
                         {statusLabels[String(doc.status)] ?? String(doc.status)}
                       </span>
+                      {isMeetingMinutes && <span className="document-system-chip">Systemgeführt</span>}
                     </div>
                   </div>
                   <span>
@@ -228,7 +236,14 @@ export default async function DocumentsPage({
                 </div>
 
                 <div className="document-actions">
-                  <Link href={"/dokumente/"+String(doc.id)} className="mini-button">Details</Link>
+                  {isMeetingMinutes ? (
+                    <>
+                      <Link href={primaryHref} className="primary-button">Protokoll öffnen</Link>
+                      <Link href={"/dokumente/"+String(doc.id)} className="mini-button">Dokumentdetails</Link>
+                    </>
+                  ) : (
+                    <Link href={"/dokumente/"+String(doc.id)} className="mini-button">Details</Link>
+                  )}
                   {doc.storage_ref && (
                     doc.storage_type==="upload"
                       ? (
@@ -241,7 +256,7 @@ export default async function DocumentsPage({
                         ? <Link href={String(doc.storage_ref)} className="mini-button">Öffnen</Link>
                         : <a href={String(doc.storage_ref)} target="_blank" rel="noreferrer" className="mini-button">Öffnen</a>
                   )}
-                  {canWrite && (
+                  {canWrite && !isMeetingMinutes && (
                     <>
                       <form action={updateDocumentStatusAction}>
                         <input type="hidden" name="id" value={String(doc.id)} />
@@ -267,7 +282,8 @@ export default async function DocumentsPage({
                   )}
                 </div>
               </article>
-            ))}
+              );
+            })}
           </div>
         </article>
 
