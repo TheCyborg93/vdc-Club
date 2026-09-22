@@ -59,7 +59,7 @@ const tabs = css({
 const tab = css({
   display: "grid",
   placeItems: "center",
-  minH: "9",
+  minH: { base: "[44px]", md: "9" },
   px: "2",
   borderRadius: "l1",
   color: "fg.muted",
@@ -98,7 +98,7 @@ const field = css({ display: "grid", gap: "1.5", color: "fg.muted", fontSize: "x
 const fieldWide = css({ gridColumn: { md: "1 / -1" } });
 const control = css({
   w: "full",
-  minH: "10",
+  minH: "[44px]",
   px: "3",
   py: "2",
   border: "1px solid",
@@ -176,7 +176,7 @@ const editDrawer = css({
   border: "1px solid",
   borderColor: "surface.border",
   borderRadius: "l1",
-  "& > summary": { p: "2.5", cursor: "pointer", listStyle: "none", color: "fg.muted", fontSize: "xs", fontWeight: "800" },
+  "& > summary": { display: "flex", alignItems: "center", gap: "1.5", minH: "[44px]", p: "2.5", cursor: "pointer", listStyle: "none", color: "fg.muted", fontSize: "xs", fontWeight: "800" },
   "& > summary::-webkit-details-marker": { display: "none" },
   "&[open] > summary": { borderBottom: "1px solid", borderColor: "surface.border", color: "fg" },
 });
