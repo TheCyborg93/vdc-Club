@@ -35,6 +35,10 @@ function ext(name:string) {
   return i>=0 ? name.slice(i+1).toLowerCase() : "";
 }
 
+function safeReturnTo(raw:string,fallback:string) {
+  return raw.startsWith("/sitzungen/") && !raw.startsWith("//") ? raw : fallback;
+}
+
 function redirectWith(base:string,key:string,value:string) {
   const separator=base.includes("?") ? "&" : "?";
   return `${base}${separator}${encodeURIComponent(key)}=${encodeURIComponent(value)}`;
@@ -85,14 +89,17 @@ export async function uploadMeetingAttachmentAction(formData:FormData) {
   const meetingId=value(formData,"meetingId");
   const agendaItemId=value(formData,"agendaItemId");
   const title=value(formData,"title");
-  const returnTo=value(formData,"returnTo") || `/sitzungen/${meetingId}?top=${agendaItemId}`;
-  const correction=await correctionContext(sql,meetingId,formData,returnTo);
   const raw=formData.get("file");
   const file=raw instanceof File && raw.size>0 ? raw : null;
 
   if (!meetingId || !agendaItemId || !file) {
-    redirect(redirectWith(returnTo,"error","attachment_missing"));
+    redirect("/sitzungen?error=attachment_missing");
   }
+  const returnTo=safeReturnTo(
+    value(formData,"returnTo"),
+    `/sitzungen/${meetingId}?top=${agendaItemId}`,
+  );
+  const correction=await correctionContext(sql,meetingId,formData,returnTo);
   if (file.size>MAX_ATTACHMENT_SIZE) {
     redirect(redirectWith(returnTo,"error","attachment_size"));
   }
@@ -196,21 +203,21 @@ export async function uploadMeetingGeneralAttachmentAction(formData:FormData) {
 
   const meetingId=value(formData,"meetingId");
   const title=value(formData,"title");
-  const returnTo=value(formData,"returnTo") || `/sitzungen/${meetingId}`;
-  const correction=await correctionContext(sql,meetingId,formData,returnTo);
   const raw=formData.get("file");
   const file=raw instanceof File && raw.size>0 ? raw : null;
 
-  if (!meetingId || !file) redirect(`${returnTo}?error=attachment_missing`);
-  if (file.size>MAX_ATTACHMENT_SIZE) redirect(`${returnTo}?error=attachment_size`);
+  if (!meetingId || !file) redirect("/sitzungen?error=attachment_missing");
+  const returnTo=safeReturnTo(value(formData,"returnTo"),`/sitzungen/${meetingId}`);
+  const correction=await correctionContext(sql,meetingId,formData,returnTo);
+  if (file.size>MAX_ATTACHMENT_SIZE) redirect(redirectWith(returnTo,"error","attachment_size"));
 
   const extension=ext(file.name);
   const allowedMime=allowed[extension];
   const mime=(file.type || "application/octet-stream").toLowerCase();
   if (!allowedMime || !allowedMime.includes(mime)) {
-    redirect(`${returnTo}?error=attachment_type`);
+    redirect(redirectWith(returnTo,"error","attachment_type"));
   }
-  if (!isDocumentStorageConfigured()) redirect(`${returnTo}?error=storage`);
+  if (!isDocumentStorageConfigured()) redirect(redirectWith(returnTo,"error","storage"));
 
   const valid=await sql`
     SELECT id::text
@@ -223,7 +230,7 @@ export async function uploadMeetingGeneralAttachmentAction(formData:FormData) {
       )
     LIMIT 1
   `;
-  if (!valid.length) redirect(`${returnTo}?error=meeting_locked`);
+  if (!valid.length) redirect(redirectWith(returnTo,"error","meeting_locked"));
 
   const bytes=new Uint8Array(await file.arrayBuffer());
   const now=new Date();
@@ -234,7 +241,7 @@ export async function uploadMeetingGeneralAttachmentAction(formData:FormData) {
   try {
     await uploadDocumentObject({key,body:bytes,contentType:mime});
   } catch {
-    redirect(`${returnTo}?error=attachment_upload`);
+    redirect(redirectWith(returnTo,"error","attachment_upload"));
   }
 
   try {
@@ -290,7 +297,7 @@ export async function uploadMeetingGeneralAttachmentAction(formData:FormData) {
   revalidatePath(`/sitzungen/${meetingId}/protokoll`);
   revalidatePath(`/sitzungen/${meetingId}/korrektur`);
   revalidatePath("/dokumente");
-  redirect(`${returnTo}?attachment=1`);
+  redirect(redirectWith(returnTo,"attachment","1"));
 }
 
 export async function removeMeetingGeneralAttachmentAction(formData:FormData) {
@@ -300,7 +307,8 @@ export async function removeMeetingGeneralAttachmentAction(formData:FormData) {
 
   const meetingId=value(formData,"meetingId");
   const documentId=value(formData,"documentId");
-  const returnTo=value(formData,"returnTo") || `/sitzungen/${meetingId}`;
+  if (!meetingId || !documentId) redirect("/sitzungen?error=attachment_missing");
+  const returnTo=safeReturnTo(value(formData,"returnTo"),`/sitzungen/${meetingId}`);
   const correction=await correctionContext(sql,meetingId,formData,returnTo);
 
   const rows=await sql`
@@ -324,7 +332,7 @@ export async function removeMeetingGeneralAttachmentAction(formData:FormData) {
     RETURNING d.title,d.original_filename,d.file_size_bytes
   `;
 
-  if (!rows.length) redirect(`${returnTo}?error=attachment_missing`);
+  if (!rows.length) redirect(redirectWith(returnTo,"error","attachment_missing"));
 
   if (correction.isCorrection) {
     await sql`
@@ -346,7 +354,7 @@ export async function removeMeetingGeneralAttachmentAction(formData:FormData) {
   revalidatePath(`/sitzungen/${meetingId}/protokoll`);
   revalidatePath(`/sitzungen/${meetingId}/korrektur`);
   revalidatePath("/dokumente");
-  redirect(`${returnTo}?attachment_deleted=1`);
+  redirect(redirectWith(returnTo,"attachment_deleted","1"));
 }
 
 export async function removeMeetingAttachmentAction(formData:FormData) {
@@ -357,7 +365,11 @@ export async function removeMeetingAttachmentAction(formData:FormData) {
   const meetingId=value(formData,"meetingId");
   const agendaItemId=value(formData,"agendaItemId");
   const documentId=value(formData,"documentId");
-  const returnTo=value(formData,"returnTo") || `/sitzungen/${meetingId}?top=${agendaItemId}`;
+  if (!meetingId || !agendaItemId || !documentId) redirect("/sitzungen?error=attachment_missing");
+  const returnTo=safeReturnTo(
+    value(formData,"returnTo"),
+    `/sitzungen/${meetingId}?top=${agendaItemId}`,
+  );
   const correction=await correctionContext(sql,meetingId,formData,returnTo);
 
   const rows=await sql`
