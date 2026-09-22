@@ -734,6 +734,153 @@ export default async function MeetingDetailPage({
                   ) : null}
                 </section>
 
+                <section className="meeting-focus-section meeting-top-formal-block">
+                  <div className="meeting-section-head">
+                    <span>Formaler TOP-Status</span>
+                    <b className={preferredAgenda.announced_with_invitation ? "top-announced" : "top-spontaneous"}>
+                      {preferredAgenda.announced_with_invitation ? "Mit Einladung angekündigt" : "Spontan ergänzt"}
+                    </b>
+                  </div>
+
+                  {!preferredAgenda.announced_with_invitation && preferredAgenda.decision_basis_note && (
+                    <p className="meeting-formal-note">
+                      <strong>Begründung für Beschlussfassung:</strong> {String(preferredAgenda.decision_basis_note)}
+                    </p>
+                  )}
+
+                  {canWrite && ["planned","running"].includes(String(meeting.status)) && !preferredAgenda.resolution_id && (
+                    <form action={updateAgendaFormalAction} className="meeting-top-formal-form">
+                      <input type="hidden" name="meetingId" value={id} />
+                      <input type="hidden" name="agendaItemId" value={String(preferredAgenda.id)} />
+                      <label>
+                        Tagesordnungsstatus
+                        <select
+                          name="announcementStatus"
+                          defaultValue={preferredAgenda.announced_with_invitation ? "announced" : "spontaneous"}
+                        >
+                          <option value="announced">Mit Einladung angekündigt</option>
+                          <option value="spontaneous">Nachträglich / spontan ergänzt</option>
+                        </select>
+                      </label>
+                      <label>
+                        Begründung bei spontanem TOP
+                        <textarea
+                          name="decisionBasisNote"
+                          rows={2}
+                          defaultValue={preferredAgenda.decision_basis_note ? String(preferredAgenda.decision_basis_note) : ""}
+                          placeholder="Warum ist eine Behandlung bzw. Beschlussfassung trotz später Aufnahme zulässig?"
+                        />
+                      </label>
+                      <button className="mini-button">Formalen Status speichern</button>
+                    </form>
+                  )}
+                </section>
+
+                <section className="meeting-focus-section">
+                  <div className="meeting-section-head">
+                    <span>Befangenheit / Stimmrechtsausschluss</span>
+                    <b>{preferredExclusions.length}</b>
+                  </div>
+
+                  {preferredExclusions.length===0 ? (
+                    <p className="muted-copy">Für diesen TOP ist aktuell niemand von der Abstimmung ausgeschlossen.</p>
+                  ) : (
+                    <div className="vote-exclusion-list">
+                      {preferredExclusions.map((entry)=>(
+                        <div key={String(entry.id)}>
+                          <div>
+                            <strong>{String(entry.person_name)}</strong>
+                            <span>{String(entry.reason)}</span>
+                          </div>
+                          {canWrite && meetingRunning && !preferredAgenda.resolution_id && (
+                            <form action={deleteVoteExclusionAction}>
+                              <input type="hidden" name="meetingId" value={id} />
+                              <input type="hidden" name="agendaItemId" value={String(preferredAgenda.id)} />
+                              <input type="hidden" name="exclusionId" value={String(entry.id)} />
+                              <button className="mini-button">Entfernen</button>
+                            </form>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {canWrite && meetingRunning && !preferredAgenda.resolution_id && (
+                    <form action={addVoteExclusionAction} className="vote-exclusion-form">
+                      <input type="hidden" name="meetingId" value={id} />
+                      <input type="hidden" name="agendaItemId" value={String(preferredAgenda.id)} />
+                      <label>
+                        Person
+                        <select name="memberId" defaultValue="" required>
+                          <option value="" disabled>Person auswählen</option>
+                          {attendees
+                            .filter((row)=>row.attendance==="present" && row.voting_eligible===true)
+                            .map((row)=>(
+                              <option value={String(row.member_id)} key={String(row.member_id)}>
+                                {String(row.first_name)} {String(row.last_name)}
+                              </option>
+                            ))}
+                        </select>
+                      </label>
+                      <label>
+                        Grund
+                        <input name="reason" required placeholder="z. B. persönlicher Interessenkonflikt" />
+                      </label>
+                      <button className="mini-button">Ausschluss dokumentieren</button>
+                    </form>
+                  )}
+                </section>
+
+                <section className="meeting-focus-section">
+                  <div className="meeting-section-head">
+                    <span>Anlagen</span>
+                    <b>{preferredAttachments.length}</b>
+                  </div>
+
+                  {preferredAttachments.length===0 ? (
+                    <p className="muted-copy">Noch keine Unterlagen mit diesem TOP verknüpft.</p>
+                  ) : (
+                    <div className="meeting-attachment-list">
+                      {preferredAttachments.map((doc)=>(
+                        <div key={String(doc.id)}>
+                          <div>
+                            <strong>{String(doc.title)}</strong>
+                            <span>{doc.original_filename ? String(doc.original_filename) : "Dokument"}</span>
+                          </div>
+                          <div>
+                            <Link href={"/api/documents/"+String(doc.id)+"/file"} target="_blank" className="mini-button">Öffnen</Link>
+                            {canDocumentsWrite && ["planned","running"].includes(String(meeting.status)) && (
+                              <form action={removeMeetingAttachmentAction}>
+                                <input type="hidden" name="meetingId" value={id} />
+                                <input type="hidden" name="agendaItemId" value={String(preferredAgenda.id)} />
+                                <input type="hidden" name="documentId" value={String(doc.id)} />
+                                <button className="mini-button">Entfernen</button>
+                              </form>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {canDocumentsWrite && ["planned","running"].includes(String(meeting.status)) && (
+                    <form action={uploadMeetingAttachmentAction} className="meeting-attachment-upload" encType="multipart/form-data">
+                      <input type="hidden" name="meetingId" value={id} />
+                      <input type="hidden" name="agendaItemId" value={String(preferredAgenda.id)} />
+                      <label>Titel<input name="title" placeholder="Optional" /></label>
+                      <label>Datei
+                        <input
+                          name="file"
+                          type="file"
+                          accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.jpg,.jpeg,.png,.webp"
+                          required
+                        />
+                      </label>
+                      <button className="mini-button">Anlage hochladen</button>
+                    </form>
+                  )}
+                </section>
+
                 <section className="meeting-focus-section">
                   <div className="meeting-section-head">
                     <span>Beschluss</span>
@@ -745,6 +892,10 @@ export default async function MeetingDetailPage({
                       <strong>{String(preferredAgenda.resolution_title)}</strong>
                       <p>{String(preferredAgenda.decision_text)}</p>
                       <div>
+                        <span>Ergebnis <b>{outcomeLabels[String(preferredAgenda.decision_outcome)] ?? "Offen"}</b></span>
+                        <span>Abstimmung <b>{voteMethodLabels[String(preferredAgenda.vote_method)] ?? "–"}</b></span>
+                        <span>Stimmberechtigt <b>{Number(preferredAgenda.eligible_voters ?? 0)}</b></span>
+                        <span>Ausgeschlossen <b>{Number(preferredAgenda.excluded_voters ?? 0)}</b></span>
                         <span>Ja <b>{Number(preferredAgenda.votes_yes)}</b></span>
                         <span>Nein <b>{Number(preferredAgenda.votes_no)}</b></span>
                         <span>Enthaltung <b>{Number(preferredAgenda.votes_abstain)}</b></span>
@@ -821,7 +972,53 @@ export default async function MeetingDetailPage({
                           <input type="hidden" name="meetingId" value={id} />
                           <input type="hidden" name="agendaItemId" value={String(preferredAgenda.id)} />
                           <label>Titel<input name="title" defaultValue={String(preferredAgenda.title)} required /></label>
-                          <label>Beschlusstext<textarea name="decisionText" rows={4} required /></label>
+                          <label>
+                            Antrag / exakter Beschlusstext
+                            <textarea
+                              name="decisionText"
+                              rows={4}
+                              required
+                              placeholder="Der Vorstand beschließt …"
+                            />
+                          </label>
+
+                          <div className="form-grid">
+                            <label>
+                              Abstimmungsart
+                              <select name="voteMethod" defaultValue="show_of_hands">
+                                <option value="show_of_hands">Handzeichen</option>
+                                <option value="open">Offen</option>
+                                <option value="roll_call">Namentlich</option>
+                                <option value="secret">Geheim</option>
+                                <option value="electronic">Elektronisch</option>
+                              </select>
+                            </label>
+                            <label>
+                              Ergebnis
+                              <select name="decisionOutcome" defaultValue="" required>
+                                <option value="" disabled>Ergebnis auswählen</option>
+                                <option value="accepted">Angenommen</option>
+                                <option value="rejected">Abgelehnt</option>
+                              </select>
+                            </label>
+                          </div>
+
+                          <div className="vote-formal-summary">
+                            <label>
+                              Stimmberechtigte bei diesem TOP
+                              <input
+                                name="eligibleVoters"
+                                type="number"
+                                min="0"
+                                defaultValue={eligibleForCurrentVote}
+                                required
+                              />
+                            </label>
+                            <span>
+                              {presentVoterCount} anwesend stimmberechtigt · {preferredExclusions.length} ausgeschlossen
+                            </span>
+                          </div>
+
                           <div className="vote-input-grid">
                             <label>Ja<input name="votesYes" type="number" min="0" defaultValue="0" /></label>
                             <label>Nein<input name="votesNo" type="number" min="0" defaultValue="0" /></label>
