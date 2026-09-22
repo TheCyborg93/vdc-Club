@@ -607,188 +607,150 @@ export default async function MeetingDetailPage({
         )}
       </section>
 
-      <section className="meeting-formalities-panel" id="vorbereitung">
-        <article className="panel">
-          <div className="panel-head">
-            <div>
-              <span className="eyebrow">Sitzung eröffnen</span>
-              <h2>Formale Prüfung</h2>
+      {["planned","cancelled"].includes(String(meeting.status)) && (
+        <section className="meeting-formalities-panel" id="vorbereitung">
+          <article className="panel">
+            <div className="panel-head">
+              <div>
+                <span className="eyebrow">Vorbereitung</span>
+                <h2>Einladung & Rahmen</h2>
+              </div>
+              <span className={invitationPrepared ? "formal-state formal-ok" : "formal-state formal-open"}>
+                {invitationPrepared ? "Vollständig" : "Noch offen"}
+              </span>
             </div>
-            <span className={formalitiesDocumented ? "formal-state formal-ok" : "formal-state formal-open"}>
-              {formalitiesDocumented ? "Dokumentiert" : "Noch offen"}
-            </span>
-          </div>
 
-          {canWrite && ["planned","running"].includes(String(meeting.status)) ? (
-            <form action={updateMeetingFormalitiesAction} className="meeting-formalities-form">
-              <input type="hidden" name="meetingId" value={id} />
+            {canWrite && meeting.status==="planned" ? (
+              <form action={updateMeetingFormalitiesAction} className="meeting-formalities-form">
+                <input type="hidden" name="meetingId" value={id} />
 
-              <div className="form-grid">
-                <label>
-                  Sitzungsart
-                  <select name="meetingMode" defaultValue={String(meeting.meeting_mode ?? "in_person")}>
-                    <option value="in_person">Präsenz</option>
-                    <option value="hybrid">Hybrid</option>
-                    <option value="online">Online</option>
-                  </select>
-                </label>
-                <label>
-                  Einladung versendet am
-                  <input name="invitedAt" type="datetime-local" defaultValue={dateTimeLocal(meeting.invited_at)} />
-                </label>
-              </div>
+                <div className="form-grid">
+                  <label>
+                    Sitzungsart
+                    <select name="meetingMode" defaultValue={String(meeting.meeting_mode ?? "in_person")}>
+                      <option value="in_person">Präsenz</option>
+                      <option value="hybrid">Hybrid</option>
+                      <option value="online">Online</option>
+                    </select>
+                  </label>
+                  <label>
+                    Einladung versendet am
+                    <input name="invitedAt" type="datetime-local" defaultValue={dateTimeLocal(meeting.invited_at)} required />
+                  </label>
+                </div>
 
-              <div className="form-grid">
-                <label>
-                  Einladung über
-                  <input
-                    name="invitationMethod"
-                    defaultValue={meeting.invitation_method ? String(meeting.invitation_method) : ""}
-                    placeholder="z. B. WhatsApp, E-Mail, schriftlich"
-                  />
-                </label>
-                <label>
-                  Einladung fristgerecht?
-                  <select
-                    name="invitationTimely"
-                    defaultValue={meeting.invitation_timely==null ? "" : meeting.invitation_timely ? "yes" : "no"}
-                  >
-                    <option value="">Noch nicht geprüft</option>
-                    <option value="yes">Ja</option>
-                    <option value="no">Nein / Abweichung dokumentieren</option>
-                  </select>
-                </label>
-              </div>
+                <div className="form-grid">
+                  <label>
+                    Einladung über
+                    <input
+                      name="invitationMethod"
+                      defaultValue={meeting.invitation_method ? String(meeting.invitation_method) : ""}
+                      placeholder="z. B. WhatsApp, E-Mail, schriftlich"
+                      required
+                    />
+                  </label>
+                  <label>
+                    Einladung fristgerecht?
+                    <select
+                      name="invitationTimely"
+                      defaultValue={meeting.invitation_timely==null ? "" : meeting.invitation_timely ? "yes" : "no"}
+                      required
+                    >
+                      <option value="" disabled>Bitte auswählen</option>
+                      <option value="yes">Ja</option>
+                      <option value="no">Nein / Abweichung</option>
+                    </select>
+                  </label>
+                </div>
 
-              <div className="form-grid">
                 <label>
-                  Tagesordnung mit Einladung?
+                  Tagesordnung mit Einladung versendet?
                   <select
                     name="agendaSentWithInvitation"
                     defaultValue={meeting.agenda_sent_with_invitation==null ? "" : meeting.agenda_sent_with_invitation ? "yes" : "no"}
+                    required
                   >
-                    <option value="">Noch nicht geprüft</option>
+                    <option value="" disabled>Bitte auswählen</option>
                     <option value="yes">Ja</option>
                     <option value="no">Nein / abweichend</option>
                   </select>
                 </label>
+
                 <label>
-                  Beschlussfähigkeit festgestellt?
-                  <select
-                    name="quorumConfirmed"
-                    defaultValue={meeting.quorum_confirmed==null ? "" : meeting.quorum_confirmed ? "yes" : "no"}
-                  >
-                    <option value="">Noch nicht geprüft</option>
-                    <option value="yes">Ja</option>
-                    <option value="no">Nein</option>
+                  Besonderheiten zur Einladung
+                  <textarea
+                    name="formalitiesNote"
+                    rows={2}
+                    defaultValue={meeting.formalities_note ? String(meeting.formalities_note) : ""}
+                    placeholder="Nur bei Abweichungen oder Besonderheiten nötig"
+                  />
+                </label>
+
+                <button className="mini-button" type="submit">Vorbereitung speichern</button>
+              </form>
+            ) : (
+              <div className="meeting-formal-readonly">
+                <span>{meetingModeLabels[String(meeting.meeting_mode)] ?? String(meeting.meeting_mode)}</span>
+                <span>Einladung: {meeting.invitation_timely===true ? "fristgerecht" : meeting.invitation_timely===false ? "Abweichung" : "nicht geprüft"}</span>
+                <span>Tagesordnung: {meeting.agenda_sent_with_invitation===true ? "mit Einladung" : meeting.agenda_sent_with_invitation===false ? "abweichend" : "nicht geprüft"}</span>
+              </div>
+            )}
+          </article>
+        </section>
+      )}
+
+      {["planned","cancelled"].includes(String(meeting.status)) && (
+        <section className="meeting-secretary-setup">
+          <article className="panel">
+            <div className="panel-head">
+              <div>
+                <span className="eyebrow">Verantwortung</span>
+                <h2>Sitzungsleitung & Protokollführung</h2>
+              </div>
+              <span className={officersComplete ? "formal-state formal-ok" : "formal-state formal-open"}>
+                {officersComplete ? "Festgelegt" : "Noch offen"}
+              </span>
+            </div>
+
+            {canWrite && meeting.status==="planned" ? (
+              <form action={updateMeetingOfficersAction} className="meeting-officer-form">
+                <input type="hidden" name="meetingId" value={id} />
+                <label>
+                  Sitzungsleitung
+                  <select name="chairMemberId" defaultValue={String(meeting.chair_member_id ?? "")} required>
+                    <option value="">Bitte auswählen</option>
+                    {members.map((member)=>(
+                      <option key={String(member.id)} value={String(member.id)}>
+                        {String(member.first_name)} {String(member.last_name)}
+                      </option>
+                    ))}
                   </select>
                 </label>
+                <label>
+                  Protokollführung
+                  <select
+                    name="minuteTakerMemberId"
+                    defaultValue={String(meeting.minute_taker_member_id ?? actor.memberId ?? "")}
+                    required
+                  >
+                    <option value="">Bitte auswählen</option>
+                    {members.map((member)=>(
+                      <option key={String(member.id)} value={String(member.id)}>
+                        {String(member.first_name)} {String(member.last_name)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <button className="mini-button" type="submit">Rollen speichern</button>
+              </form>
+            ) : (
+              <div className="meeting-officer-readonly">
+                <span>Rollen sind für die Sitzung festgelegt.</span>
               </div>
-
-              <label>
-                Grundlage / Satzungshinweis
-                <input
-                  name="quorumBasis"
-                  defaultValue={meeting.quorum_basis ? String(meeting.quorum_basis) : ""}
-                  placeholder="z. B. Satzung § … / Geschäftsordnung"
-                />
-              </label>
-
-              <label>
-                Bemerkung zur Beschlussfähigkeit
-                <textarea
-                  name="quorumNote"
-                  rows={2}
-                  defaultValue={meeting.quorum_note ? String(meeting.quorum_note) : ""}
-                  placeholder="z. B. 5 von 6 Vorstandsmitgliedern anwesend"
-                />
-              </label>
-
-              <label>
-                Formale Besonderheiten
-                <textarea
-                  name="formalitiesNote"
-                  rows={2}
-                  defaultValue={meeting.formalities_note ? String(meeting.formalities_note) : ""}
-                  placeholder="Abweichungen bei Einladung, Teilnahmeform oder sonstige Hinweise"
-                />
-              </label>
-
-              <label>
-                Nächster Sitzungstermin
-                <input name="nextMeetingAt" type="datetime-local" defaultValue={dateTimeLocal(meeting.next_meeting_at)} />
-              </label>
-
-              <button className="mini-button" type="submit">Formale Angaben speichern</button>
-            </form>
-          ) : (
-            <div className="meeting-formal-readonly">
-              <span>{meetingModeLabels[String(meeting.meeting_mode)] ?? String(meeting.meeting_mode)}</span>
-              <span>Einladung: {meeting.invitation_timely===true ? "fristgerecht" : meeting.invitation_timely===false ? "Abweichung dokumentiert" : "nicht geprüft"}</span>
-              <span>Tagesordnung: {meeting.agenda_sent_with_invitation===true ? "mit Einladung" : meeting.agenda_sent_with_invitation===false ? "abweichend" : "nicht geprüft"}</span>
-              <span>Beschlussfähig: {meeting.quorum_confirmed===true ? "Ja" : meeting.quorum_confirmed===false ? "Nein" : "nicht geprüft"}</span>
-            </div>
-          )}
-        </article>
-      </section>
-
-      <section className="meeting-secretary-setup">
-        <article className="panel">
-          <div className="panel-head">
-            <div>
-              <span className="eyebrow">Protokollorganisation</span>
-              <h2>Sitzungsleitung & Protokollführung</h2>
-            </div>
-            <b className={"minutes-status minutes-"+minutesStatus}>
-              {minutesStatusLabels[minutesStatus] ?? minutesStatus}
-            </b>
-          </div>
-
-          {canWrite && minutesStatus==="draft" ? (
-            <form action={updateMeetingOfficersAction} className="meeting-officer-form">
-              <input type="hidden" name="meetingId" value={id} />
-              <label>
-                Sitzungsleitung
-                <select name="chairMemberId" defaultValue={String(meeting.chair_member_id ?? "")}>
-                  <option value="">Noch nicht festgelegt</option>
-                  {members.map((member)=>(
-                    <option key={String(member.id)} value={String(member.id)}>
-                      {String(member.first_name)} {String(member.last_name)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label>
-                Protokollführung
-                <select
-                  name="minuteTakerMemberId"
-                  defaultValue={String(meeting.minute_taker_member_id ?? actor.memberId ?? "")}
-                >
-                  <option value="">Noch nicht festgelegt</option>
-                  {members.map((member)=>(
-                    <option key={String(member.id)} value={String(member.id)}>
-                      {String(member.first_name)} {String(member.last_name)}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <button className="mini-button" type="submit">Rollen speichern</button>
-            </form>
-          ) : (
-            <div className="meeting-officer-readonly">
-              <span>Nach der Einreichung bleiben Sitzungsleitung und Protokollführung für diese Protokollversion gesperrt.</span>
-            </div>
-          )}
-
-          <div className="meeting-protocol-shortcut">
-            <div>
-              <strong>Schriftführer-Arbeitsplatz</strong>
-              <span>Einleitung, Abschluss, Prüfung, Freigabe und Archivierung des Protokolls.</span>
-            </div>
-            <Link href={`/sitzungen/${id}/protokoll`} className="primary-button">Protokoll öffnen</Link>
-          </div>
-        </article>
-      </section>
+            )}
+          </article>
+        </section>
+      )}
 
       <section className="meeting-session-shell" id="live">
         <aside className="meeting-top-rail">
