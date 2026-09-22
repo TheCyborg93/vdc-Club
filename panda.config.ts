@@ -3,6 +3,7 @@ import { vdcSemanticTokens, vdcTokens } from "./theme/vdc-tokens";
 import { badge, button, card, input } from "./theme/vdc-recipes";
 import { vdcGlobalCss } from "./theme/vdc-global";
 import { vdcMeetingGlobalCss } from "./theme/vdc-meeting-global";
+import { vdcMinutesGlobalCss } from "./theme/vdc-minutes-global";
 
 export default defineConfig({
   preflight: true,
@@ -28,7 +29,7 @@ export default defineConfig({
       },
     },
   ],
-  globalCss: { ...vdcGlobalCss, ...vdcMeetingGlobalCss },
+  globalCss: { ...vdcGlobalCss, ...vdcMeetingGlobalCss, ...vdcMinutesGlobalCss },
   theme: {
     extend: {
       tokens: vdcTokens,
