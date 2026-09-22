@@ -1313,6 +1313,88 @@ export async function submitMeetingMinutesAction(formData: FormData) {
     redirect(`/sitzungen/${meetingId}/protokoll?error=officers_missing`);
   }
 
+  const validationRows=await sql`
+    SELECT
+      m.invited_at IS NOT NULL
+        AND NULLIF(trim(m.invitation_method),'') IS NOT NULL
+        AND m.invitation_timely IS NOT NULL
+        AND m.agenda_sent_with_invitation IS NOT NULL
+        AND m.quorum_confirmed IS NOT NULL AS formalities_complete,
+      m.quorum_confirmed,
+      count(DISTINCT ai.id) FILTER (
+        WHERE ai.status NOT IN ('done','deferred')
+      )::int AS unfinished_agenda,
+      count(DISTINCT ai.id) FILTER (
+        WHERE ai.agenda_type='decision'
+          AND ai.status='done'
+          AND r.id IS NULL
+      )::int AS decision_without_resolution,
+      count(DISTINCT r.id)::int AS resolution_count,
+      count(DISTINCT r.id) FILTER (
+        WHERE r.vote_method IS NULL
+           OR r.eligible_voters IS NULL
+           OR r.decision_outcome IS NULL
+           OR r.eligible_voters<>(r.votes_yes+r.votes_no+r.votes_abstain)
+           OR (r.vote_method='roll_call' AND NULLIF(trim(r.vote_details),'') IS NULL)
+      )::int AS invalid_votes,
+      count(DISTINCT r.id) FILTER (
+        WHERE ai.announced_with_invitation=false
+          AND NULLIF(trim(ai.decision_basis_note),'') IS NULL
+      )::int AS spontaneous_without_basis,
+      (
+        SELECT count(*)::int
+        FROM meeting_attendees ma
+        WHERE ma.meeting_id=m.id
+          AND ma.attendance='invited'
+      ) AS unresolved_attendees,
+      (
+        SELECT count(*)::int
+        FROM meeting_guests mg
+        WHERE mg.meeting_id=m.id
+          AND mg.attendance='invited'
+      ) AS unresolved_guests,
+      (
+        SELECT count(*)::int
+        FROM meeting_attendees ma
+        WHERE ma.meeting_id=m.id
+          AND ma.member_id IN (m.chair_member_id,m.minute_taker_member_id)
+          AND ma.attendance='present'
+      ) AS present_officers
+    FROM meetings m
+    LEFT JOIN agenda_items ai ON ai.meeting_id=m.id
+    LEFT JOIN resolutions r ON r.agenda_item_id=ai.id
+    WHERE m.id=${meetingId}::uuid
+    GROUP BY m.id,m.invited_at,m.invitation_method,m.invitation_timely,
+      m.agenda_sent_with_invitation,m.quorum_confirmed,
+      m.chair_member_id,m.minute_taker_member_id
+  `;
+  const validation=validationRows[0] ?? {};
+
+  if (!validation.formalities_complete) {
+    redirect(`/sitzungen/${meetingId}/protokoll?error=protocol_formalities`);
+  }
+  if (Number(validation.present_officers ?? 0)<2) {
+    redirect(`/sitzungen/${meetingId}/protokoll?error=protocol_officers_present`);
+  }
+  if (Number(validation.unresolved_attendees ?? 0)>0 || Number(validation.unresolved_guests ?? 0)>0) {
+    redirect(`/sitzungen/${meetingId}/protokoll?error=protocol_attendance`);
+  }
+  if (Number(validation.unfinished_agenda ?? 0)>0) {
+    redirect(`/sitzungen/${meetingId}/protokoll?error=protocol_agenda`);
+  }
+  if (Number(validation.decision_without_resolution ?? 0)>0) {
+    redirect(`/sitzungen/${meetingId}/protokoll?error=protocol_decision`);
+  }
+  if (Number(validation.invalid_votes ?? 0)>0) {
+    redirect(`/sitzungen/${meetingId}/protokoll?error=protocol_votes`);
+  }
+  if (Number(validation.spontaneous_without_basis ?? 0)>0) {
+    redirect(`/sitzungen/${meetingId}/protokoll?error=protocol_spontaneous`);
+  }
+  if (Number(validation.resolution_count ?? 0)>0 && validation.quorum_confirmed!==true) {
+    redirect(`/sitzungen/${meetingId}/protokoll?error=protocol_quorum`);
+  }
+
   await sql`
     INSERT INTO meeting_minutes_revisions (
       meeting_id,version,status,intro,closing,return_note,changed_by,change_note
