@@ -4,6 +4,13 @@ import { hasPermission, requirePermission } from "@/lib/permissions";
 import { createMeetingAction } from "@/app/sitzungen/actions";
 import { meetingStatusLabel } from "@/lib/ui-labels";
 
+const minutesStatusLabels:Record<string,string>={
+  draft:"Entwurf",
+  review:"In Prüfung",
+  approved:"Freigegeben",
+  archived:"Archiviert",
+};
+
 const errors: Record<string, string> = {
   database: "Die Datenbankverbindung fehlt.",
   missing: "Titel und Startzeit sind erforderlich.",
@@ -45,6 +52,7 @@ export default async function MeetingsPage({
             m.starts_at,
             m.location,
             m.status,
+            m.minutes_status,
             count(DISTINCT ai.id)::int AS agenda_count,
             count(DISTINCT r.id)::int AS resolution_count,
             count(DISTINCT ma.member_id)::int AS attendee_count
@@ -69,12 +77,18 @@ export default async function MeetingsPage({
               WHERE ai.status IN ('open','active')
                 AND mx.deleted_at IS NULL
             ) AS open_agenda,
-            (SELECT count(*)::int FROM resolutions WHERE EXTRACT(YEAR FROM decided_at) = EXTRACT(YEAR FROM CURRENT_DATE)) AS resolutions
+            (SELECT count(*)::int FROM resolutions WHERE EXTRACT(YEAR FROM decided_at) = EXTRACT(YEAR FROM CURRENT_DATE)) AS resolutions,
+            count(*) FILTER (
+              WHERE status='completed' AND minutes_status='draft'
+            )::int AS minutes_open,
+            count(*) FILTER (
+              WHERE minutes_status='review'
+            )::int AS minutes_review
           FROM meetings
           WHERE deleted_at IS NULL
         `,
       ])
-    : [[], [{ planned: 0, year_count: 0, open_agenda: 0, resolutions: 0 }]];
+    : [[], [{ planned: 0, year_count: 0, open_agenda: 0, resolutions: 0, minutes_open:0, minutes_review:0 }]];
 
   const count = counts[0] ?? {};
   const canWrite = hasPermission(actor.roles, "meetings.write");
@@ -98,6 +112,7 @@ export default async function MeetingsPage({
         <article className="stat-card"><span>Dieses Jahr</span><strong>{Number(count.year_count ?? 0)}</strong><small>Sitzungen</small></article>
         <article className="stat-card"><span>Offene TOPs</span><strong>{Number(count.open_agenda ?? 0)}</strong><small>noch zu behandeln</small></article>
         <article className="stat-card"><span>Beschlüsse</span><strong>{Number(count.resolutions ?? 0)}</strong><small>dieses Jahr</small></article>
+        <article className="stat-card"><span>Protokolle offen</span><strong>{Number(count.minutes_open ?? 0)}</strong><small>{Number(count.minutes_review ?? 0)} in Prüfung</small></article>
       </section>
 
       <section className={canWrite ? "management-grid" : "management-grid single"}>
@@ -117,6 +132,9 @@ export default async function MeetingsPage({
                   <span>{Number(meeting.agenda_count)} TOPs</span>
                   <span>{Number(meeting.resolution_count)} Beschlüsse</span>
                   <span>{Number(meeting.attendee_count)} Personen</span>
+                  <span className={"minutes-status minutes-"+String(meeting.minutes_status)}>
+                    {minutesStatusLabels[String(meeting.minutes_status)] ?? String(meeting.minutes_status)}
+                  </span>
                 </div>
                 <b className={`status-badge status-${meeting.status}`}>{meetingStatusLabel(meeting.status)}</b>
               </Link>
