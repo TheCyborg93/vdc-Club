@@ -44,9 +44,10 @@ export default async function BoardPage() {
 
   let userRows: BoardUserRow[] = [];
   let history: BoardHistoryRow[] = [];
+  let workOverview={meetings:0,resolutions:0,tasks:0,documents:0};
 
   if (sql) {
-    const [rawUsers, rawHistory] = await Promise.all([
+    const [rawUsers, rawHistory, rawWork] = await Promise.all([
       sql`
         SELECT
           u.id::text,
@@ -81,6 +82,33 @@ export default async function BoardPage() {
         ORDER BY bp.end_date DESC NULLS LAST
         LIMIT 8
       `,
+      sql`
+        SELECT
+          (
+            SELECT count(*)::int
+            FROM meetings
+            WHERE deleted_at IS NULL
+              AND status IN ('planned','running')
+          ) AS meetings,
+          (
+            SELECT count(*)::int
+            FROM resolutions
+            WHERE status IN ('open','in_progress')
+              AND COALESCE(decision_outcome,'accepted')<>'rejected'
+          ) AS resolutions,
+          (
+            SELECT count(*)::int
+            FROM tasks
+            WHERE deleted_at IS NULL
+              AND status IN ('open','in_progress','blocked')
+          ) AS tasks,
+          (
+            SELECT count(*)::int
+            FROM documents
+            WHERE deleted_at IS NULL
+              AND status='review'
+          ) AS documents
+      `,
     ]);
 
     userRows = rawUsers.map((row) => ({
@@ -102,6 +130,13 @@ export default async function BoardPage() {
       firstName: String(row.first_name),
       lastName: String(row.last_name),
     }));
+
+    workOverview={
+      meetings:Number(rawWork[0]?.meetings ?? 0),
+      resolutions:Number(rawWork[0]?.resolutions ?? 0),
+      tasks:Number(rawWork[0]?.tasks ?? 0),
+      documents:Number(rawWork[0]?.documents ?? 0),
+    };
   }
 
   const people = userRows
@@ -125,6 +160,10 @@ export default async function BoardPage() {
     });
 
   const canManage = hasPermission(actor.roles, "settings.manage");
+  const canMeetings = hasPermission(actor.roles, "meetings.read");
+  const canResolutions = hasPermission(actor.roles, "resolutions.read");
+  const canTasks = hasPermission(actor.roles, "tasks.read");
+  const canDocuments = hasPermission(actor.roles, "documents.read");
   const multipleRoles = people.filter((person) => person.additionalRoles.length > 0).length;
   const activeAccounts = people.filter((person) => person.userStatus === "active").length;
 
