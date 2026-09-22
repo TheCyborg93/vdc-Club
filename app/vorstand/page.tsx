@@ -44,7 +44,7 @@ export default async function BoardPage() {
 
   let userRows: BoardUserRow[] = [];
   let history: BoardHistoryRow[] = [];
-  let workOverview={meetings:0,resolutions:0,tasks:0,documents:0};
+  let workOverview={meetings:0,resolutions:0,tasks:0,documents:0,surveys:0};
 
   if (sql) {
     const [rawUsers, rawHistory, rawWork] = await Promise.all([
@@ -107,7 +107,12 @@ export default async function BoardPage() {
             FROM documents
             WHERE deleted_at IS NULL
               AND status='review'
-          ) AS documents
+          ) AS documents,
+          (
+            SELECT count(*)::int
+            FROM surveys
+            WHERE status='active'
+          ) AS surveys
       `,
     ]);
 
@@ -136,6 +141,7 @@ export default async function BoardPage() {
       resolutions:Number(rawWork[0]?.resolutions ?? 0),
       tasks:Number(rawWork[0]?.tasks ?? 0),
       documents:Number(rawWork[0]?.documents ?? 0),
+      surveys:Number(rawWork[0]?.surveys ?? 0),
     };
   }
 
@@ -164,6 +170,7 @@ export default async function BoardPage() {
   const canResolutions = hasPermission(actor.roles, "resolutions.read");
   const canTasks = hasPermission(actor.roles, "tasks.read");
   const canDocuments = hasPermission(actor.roles, "documents.read");
+  const canSurveys = hasPermission(actor.roles, "surveys.read");
   const multipleRoles = people.filter((person) => person.additionalRoles.length > 0).length;
   const activeAccounts = people.filter((person) => person.userStatus === "active").length;
 
@@ -245,6 +252,14 @@ export default async function BoardPage() {
               <span>Dokumente</span>
               <strong>{workOverview.documents}</strong>
               <small>zur Prüfung</small>
+              <b>Öffnen →</b>
+            </Link>
+          )}
+          {canSurveys && (
+            <Link href="/umfragen">
+              <span>Umfragen</span>
+              <strong>{workOverview.surveys}</strong>
+              <small>aktuell aktiv</small>
               <b>Öffnen →</b>
             </Link>
           )}
