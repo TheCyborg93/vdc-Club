@@ -251,6 +251,25 @@ export default async function ResolutionsPage({
       {params.task && <div className="form-success">Folgeaufgabe wurde angelegt.</div>}
       {params.saved && <div className="form-success">Beschluss wurde aktualisiert.</div>}
 
+      <nav className="resolution-view-tabs" aria-label="Beschlüsse filtern">
+        <Link href="/beschluesse" className={view==="active" ? "is-active" : ""}>
+          Aktiv
+          <span>{Number(count.open ?? 0)+Number(count.progress ?? 0)}</span>
+        </Link>
+        <Link href="/beschluesse?view=overdue" className={view==="overdue" ? "is-active is-warning" : ""}>
+          Überfällig
+          <span>{Number(count.overdue ?? 0)}</span>
+        </Link>
+        <Link href="/beschluesse?view=implemented" className={view==="implemented" ? "is-active" : ""}>
+          Abgeschlossen
+          <span>{Number(count.implemented ?? 0)+Number(count.withdrawn ?? 0)+Number(count.rejected ?? 0)}</span>
+        </Link>
+        <Link href="/beschluesse?view=all" className={view==="all" ? "is-active" : ""}>
+          Alle
+          <span>{Number(count.total ?? 0)}</span>
+        </Link>
+      </nav>
+
       <section className="stat-grid">
         <article className="stat-card">
           <span>Beschlüsse</span>
@@ -279,8 +298,16 @@ export default async function ResolutionsPage({
         </article>
       </section>
 
-      <article className="panel resolution-filter-panel">
+      <details className="panel resolution-filter-panel" open={Boolean(q || yearNum || status)}>
+        <summary className="resolution-filter-summary">
+          <div>
+            <span className="eyebrow">Feinfilter</span>
+            <strong>Suche, Jahr & Status</strong>
+          </div>
+          <span>{q || yearNum || status ? "Filter aktiv" : "Optional"}</span>
+        </summary>
         <form method="get" className="resolution-filter-form">
+          <input type="hidden" name="view" value={view} />
           <label>
             Suche
             <input
@@ -313,10 +340,10 @@ export default async function ResolutionsPage({
           </label>
           <button className="mini-button">Filtern</button>
           {(q || yearNum || status) && (
-            <Link href="/beschluesse" className="mini-button">Zurücksetzen</Link>
+            <Link href={view==="active" ? "/beschluesse" : "/beschluesse?view="+view} className="mini-button">Zurücksetzen</Link>
           )}
         </form>
-      </article>
+      </details>
 
       <section className="resolution-register">
         {resolutions.length===0 ? (
@@ -324,7 +351,10 @@ export default async function ResolutionsPage({
             <div className="empty-state">Keine Beschlüsse für diesen Filter gefunden.</div>
           </article>
         ) : resolutions.map((resolution)=>(
-          <article className="resolution-card" key={String(resolution.id)}>
+          <article
+            className={"resolution-card "+(resolution.task_overdue ? "is-overdue" : "")}
+            key={String(resolution.id)}
+          >
             <div className="resolution-card-number">
               <span>Beschluss</span>
               <strong>
@@ -352,11 +382,14 @@ export default async function ResolutionsPage({
                     </Link>
                   )}
                 </div>
-                <b className={"resolution-status resolution-status-"+(resolution.decision_outcome==="rejected" ? "rejected" : String(resolution.status))}>
-                  {resolution.decision_outcome==="rejected"
-                    ? "Abgelehnt"
-                    : statusLabels[String(resolution.status)] ?? String(resolution.status)}
-                </b>
+                <div className="resolution-head-status">
+                  {resolution.task_overdue && <span className="resolution-overdue-chip">Überfällig</span>}
+                  <b className={"resolution-status resolution-status-"+(resolution.decision_outcome==="rejected" ? "rejected" : String(resolution.status))}>
+                    {resolution.decision_outcome==="rejected"
+                      ? "Abgelehnt"
+                      : statusLabels[String(resolution.status)] ?? String(resolution.status)}
+                  </b>
+                </div>
               </div>
 
               <p className="resolution-text">{String(resolution.decision_text)}</p>
