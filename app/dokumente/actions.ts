@@ -90,6 +90,9 @@ export async function createDocumentAction(formData: FormData) {
   const file=rawFile instanceof File && rawFile.size>0 ? rawFile : null;
 
   if (!title || !category) redirect("/dokumente?error=missing");
+  if (category==="Protokoll" && meetingId) {
+    redirect("/dokumente?error=protocol_managed");
+  }
   if (file && storageRef) redirect("/dokumente?error=source");
 
   if (storageRef) {
