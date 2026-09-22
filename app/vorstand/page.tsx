@@ -172,10 +172,9 @@ export default async function BoardPage() {
       <section className="page-heading board-heading">
         <div>
           <span className="eyebrow">Verein</span>
-          <h1>Vorstandsstruktur</h1>
+          <h1>Vorstand</h1>
           <p>
-            Personen werden automatisch aus den vergebenen Rollen übernommen. Bei mehreren Rollen
-            bestimmt die festgelegte Reihenfolge die angezeigte Hauptrolle.
+            Aktuelle Besetzung und laufende Vorstandsarbeit an einem Ort. Rollen und Zugänge werden automatisch aus der Vereinsverwaltung übernommen.
           </p>
         </div>
         {canManage && (
@@ -298,6 +297,17 @@ export default async function BoardPage() {
                     </div>
                   </div>
                 )}
+
+                <div className="board-person-actions">
+                  {person.memberId && (
+                    <Link href={"/mitglieder/"+person.memberId} className="mini-button">
+                      Mitglied öffnen
+                    </Link>
+                  )}
+                  {canManage && (
+                    <Link href="/admin/benutzer" className="mini-button">Rollen verwalten</Link>
+                  )}
+                </div>
               </article>
             ))}
           </div>
