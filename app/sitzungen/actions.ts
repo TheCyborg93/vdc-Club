@@ -360,6 +360,33 @@ export async function addAttendeeAction(formData: FormData) {
   redirect(`/sitzungen/${meetingId}`);
 }
 
+export async function removeAttendeeAction(formData:FormData) {
+  const actor=await requirePermission("meetings.write");
+  const sql=getDb();
+  if (!sql) redirect("/sitzungen?error=database");
+
+  const meetingId=value(formData,"meetingId");
+  const memberId=value(formData,"memberId");
+
+  const rows=await sql`
+    DELETE FROM meeting_attendees ma
+    USING meetings m
+    WHERE ma.meeting_id=${meetingId}::uuid
+      AND ma.member_id=${memberId}::uuid
+      AND m.id=ma.meeting_id
+      AND m.deleted_at IS NULL
+      AND m.status IN ('planned','cancelled')
+    RETURNING ma.member_id::text
+  `;
+
+  if (!rows.length) redirect(`/sitzungen/${meetingId}?error=attendee_remove_locked`);
+
+  await writeAudit(actor.id,"meeting.attendee_removed","meeting",meetingId,{memberId});
+  revalidatePath(`/sitzungen/${meetingId}`);
+  revalidatePath(`/sitzungen/${meetingId}/protokoll`);
+  redirect(`/sitzungen/${meetingId}?attendee_removed=1`);
+}
+
 export async function updateAttendanceAction(formData: FormData) {
   const actor=await requirePermission("meetings.write");
   const sql=getDb();
@@ -1162,18 +1189,56 @@ export async function addMeetingGuestAction(formData:FormData) {
 
   const rows=await sql`
     INSERT INTO meeting_guests(meeting_id,name,organization,note,attendance)
-    SELECT ${meetingId}::uuid,${name},${organization || null},${note || null},'present'
-    WHERE EXISTS (
-      SELECT 1 FROM meetings
-      WHERE id=${meetingId}::uuid
-        AND deleted_at IS NULL
-        AND status IN ('planned','running')
-    )
+    SELECT
+      ${meetingId}::uuid,
+      ${name},
+      ${organization || null},
+      ${note || null},
+      CASE WHEN m.status='running' THEN 'present' ELSE 'invited' END
+    FROM meetings m
+    WHERE m.id=${meetingId}::uuid
+      AND m.deleted_at IS NULL
+      AND m.status IN ('planned','running')
     RETURNING id::text
   `;
 
   if (!rows.length) redirect(`/sitzungen/${meetingId}?error=meeting_locked`);
   await writeAudit(actor.id,"meeting.guest_added","meeting",meetingId,{name,organization});
+  revalidatePath(`/sitzungen/${meetingId}`);
+  revalidatePath(`/sitzungen/${meetingId}/protokoll`);
+  redirect(`/sitzungen/${meetingId}?guest=1`);
+}
+
+export async function updateMeetingGuestAttendanceAction(formData:FormData) {
+  const actor=await requirePermission("meetings.write");
+  const sql=getDb();
+  if (!sql) redirect("/sitzungen?error=database");
+
+  const meetingId=value(formData,"meetingId");
+  const guestId=value(formData,"guestId");
+  const attendanceRaw=value(formData,"attendance");
+  const attendance=["invited","present","absent"].includes(attendanceRaw) ? attendanceRaw : "invited";
+
+  const rows=await sql`
+    UPDATE meeting_guests g
+    SET attendance=${attendance}
+    FROM meetings m
+    WHERE g.id=${guestId}::uuid
+      AND g.meeting_id=${meetingId}::uuid
+      AND m.id=g.meeting_id
+      AND m.deleted_at IS NULL
+      AND m.status IN ('planned','running')
+    RETURNING g.name
+  `;
+
+  if (!rows.length) redirect(`/sitzungen/${meetingId}?error=meeting_locked`);
+
+  await writeAudit(actor.id,"meeting.guest_attendance_changed","meeting",meetingId,{
+    guestId,
+    attendance,
+    name:String(rows[0].name ?? ""),
+  });
+
   revalidatePath(`/sitzungen/${meetingId}`);
   revalidatePath(`/sitzungen/${meetingId}/protokoll`);
   redirect(`/sitzungen/${meetingId}?guest=1`);
