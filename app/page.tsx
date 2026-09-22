@@ -390,12 +390,12 @@ export default async function DashboardPage() {
         {canResolutions && (
           <article className="panel compact-board-card">
             <div className="panel-head">
-              <div><span className="eyebrow">Vorstandsarbeit</span><h2>Aktuelle Beschlüsse</h2></div>
+              <div><span className="eyebrow">Vorstandsarbeit</span><h2>Offene Beschlüsse</h2></div>
               <Link href="/beschluesse" className="text-link">Alle anzeigen →</Link>
             </div>
             <div className="compact-resolution-list">
               {data.resolutions.length===0 ? (
-                <div className="compact-empty">Noch keine Beschlüsse vorhanden.</div>
+                <div className="compact-empty">Keine offenen Beschlüsse.</div>
               ) : data.resolutions.map((resolution)=>(
                 <Link
                   href={resolution.number ? "/beschluesse?q="+encodeURIComponent(resolution.number) : "/beschluesse"}
@@ -423,7 +423,12 @@ export default async function DashboardPage() {
               {data.reviewDocuments.length===0 ? (
                 <div className="compact-empty">Keine Dokumente zur Prüfung.</div>
               ) : data.reviewDocuments.map((doc)=>(
-                <Link href={"/dokumente/"+doc.id} key={doc.id}>
+                <Link
+                  href={doc.category==="Protokoll" && doc.meetingId
+                    ? "/sitzungen/"+doc.meetingId+"/protokoll"
+                    : "/dokumente/"+doc.id}
+                  key={doc.id}
+                >
                   <span className="document-mini-icon">▤</span>
                   <div>
                     <strong>{doc.title}</strong>
