@@ -29,6 +29,7 @@ import { MeetingAutoNotes } from "@/components/meeting-auto-notes";
 import { MeetingStartPanel } from "@/components/meeting-start-panel";
 import { MeetingLiveOptions } from "@/components/meeting-live-options";
 import { MeetingAgendaPlanner } from "@/components/meeting-agenda-planner";
+import { MeetingFocusMode } from "@/components/meeting-focus-mode";
 import {
   removeMeetingAttachmentAction,
   uploadMeetingAttachmentAction,
@@ -480,6 +481,7 @@ export default async function MeetingDetailPage({
 
   return (
     <div className={`page-stack meeting-control-page meeting-phase-${workflowPhase}`}>
+      {meetingRunning && <MeetingFocusMode />}
       <section className="meeting-control-hero">
         <div>
           <Link href="/sitzungen" className="back-link">← Sitzungen</Link>
