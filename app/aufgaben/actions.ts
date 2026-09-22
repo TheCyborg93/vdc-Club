@@ -48,6 +48,65 @@ export async function createTaskAction(formData: FormData) {
   redirect("/aufgaben?created=1");
 }
 
+export async function updateTaskDetailsAction(formData: FormData) {
+  const actor=await requirePermission("tasks.write");
+  const sql=getDb();
+  if (!sql) redirect("/aufgaben?error=database");
+
+  const id=value(formData,"id");
+  const title=value(formData,"title");
+  const description=value(formData,"description");
+  const category=value(formData,"category");
+  const priorityRaw=value(formData,"priority");
+  const priority=allowedPriorities.has(priorityRaw) ? priorityRaw : "medium";
+  const dueDate=value(formData,"dueDate");
+  const ownerMemberId=value(formData,"ownerMemberId");
+
+  if (!id || !title) redirect("/aufgaben?error=missing");
+
+  const beforeRows=await sql`
+    SELECT
+      id::text,title,description,category,priority,due_date::text,
+      owner_member_id::text,source_type,source_id::text
+    FROM tasks
+    WHERE id=${id}::uuid
+      AND deleted_at IS NULL
+    LIMIT 1
+  `;
+  const before=beforeRows[0];
+  if (!before) redirect("/aufgaben?error=missing");
+
+  const rows=await sql`
+    UPDATE tasks
+    SET
+      title=${title},
+      description=${description || null},
+      category=${category || null},
+      priority=${priority},
+      due_date=${dueDate || null}::date,
+      owner_member_id=${ownerMemberId || null}::uuid,
+      updated_at=now()
+    WHERE id=${id}::uuid
+      AND deleted_at IS NULL
+    RETURNING
+      title,description,category,priority,due_date::text,
+      owner_member_id::text
+  `;
+  const after=rows[0];
+  if (!after) redirect("/aufgaben?error=missing");
+
+  await writeAudit(actor.id,"task.details_updated","task",id,{
+    before,
+    after,
+  });
+
+  revalidatePath("/aufgaben");
+  revalidatePath("/beschluesse");
+  revalidatePath("/hinweise");
+  revalidatePath("/");
+  redirect("/aufgaben?saved=1");
+}
+
 export async function updateTaskStatusAction(formData: FormData) {
   const actor=await requirePermission("tasks.write");
   const sql=getDb();
