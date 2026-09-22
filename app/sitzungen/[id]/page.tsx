@@ -422,9 +422,21 @@ export default async function MeetingDetailPage({
     unresolvedAttendanceCount===0 &&
     incompleteVoteCount===0 &&
     spontaneousBasisMissing===0;
+  const formalCheckCount=[
+    officersComplete,
+    meeting.invitation_timely!=null,
+    meeting.agenda_sent_with_invitation!=null,
+    meeting.quorum_confirmed!=null,
+  ].filter(Boolean).length;
+  const workflowPhase=
+    meeting.status==="planned" || meeting.status==="cancelled"
+      ? 1
+      : meeting.status==="running"
+        ? (completionReady ? 3 : 2)
+        : 4;
 
   return (
-    <div className="page-stack meeting-control-page">
+    <div className={`page-stack meeting-control-page meeting-phase-${workflowPhase}`}>
       <section className="meeting-control-hero">
         <div>
           <Link href="/sitzungen" className="back-link">← Sitzungen</Link>
@@ -475,19 +487,54 @@ export default async function MeetingDetailPage({
         </div>
       </section>
 
+      <nav className="meeting-workflow-bar" aria-label="Sitzungsablauf">
+        <a href="#vorbereitung" className={workflowPhase===1 ? "is-current" : workflowPhase>1 ? "is-done" : ""}>
+          <b>1</b>
+          <span><strong>Vorbereitung</strong><small>Formalia & Personen</small></span>
+        </a>
+        <a href="#live" className={workflowPhase===2 ? "is-current" : workflowPhase>2 ? "is-done" : ""}>
+          <b>2</b>
+          <span><strong>Live-Sitzung</strong><small>TOPs & Beschlüsse</small></span>
+        </a>
+        <a href="#abschluss" className={workflowPhase===3 ? "is-current" : workflowPhase>3 ? "is-done" : ""}>
+          <b>3</b>
+          <span><strong>Abschluss</strong><small>Vollständigkeit prüfen</small></span>
+        </a>
+        <Link href={`/sitzungen/${id}/protokoll`} className={workflowPhase===4 ? "is-current" : ""}>
+          <b>4</b>
+          <span><strong>Protokoll</strong><small>Prüfung & Archiv</small></span>
+        </Link>
+      </nav>
+
       {query.error && <div className="form-error">{errors[query.error] ?? "Die Aktion konnte nicht ausgeführt werden."}</div>}
       {(query.agenda || query.resolution || query.created || query.saved || query.status || query.officers || query.formalities || query.guest || query.exclusion || query.formal || query.attachment || query.attachment_deleted) && <div className="form-success">Sitzung wurde aktualisiert.</div>}
       {query.notes && <div className="form-success">Ergebnisnotiz wurde gespeichert.</div>}
       {query.agenda_deleted && <div className="form-success">TOP wurde gelöscht.</div>}
 
       <section className="meeting-control-stats">
-        <article><span>TOPs</span><strong>{agenda.length}</strong><small>{openAgendaCount} offen</small></article>
-        <article><span>Anwesend</span><strong>{presentCount}/{attendees.length}</strong><small>{unresolvedAttendanceCount ? unresolvedAttendanceCount+" ungeklärt" : "vollständig erfasst"}</small></article>
-        <article><span>Beschlüsse</span><strong>{agenda.filter((row)=>row.resolution_id).length}</strong><small>in dieser Sitzung</small></article>
-        <article><span>Status</span><strong>{meetingStatusLabel(meeting.status)}</strong><small>{meeting.ended_at ? "beendet "+formatDateTime(meeting.ended_at) : "aktueller Sitzungsstand"}</small></article>
+        <article className={formalCheckCount===4 ? "is-ready" : "needs-attention"}>
+          <span>Formalia</span>
+          <strong>{formalCheckCount}/4</strong>
+          <small>{formalCheckCount===4 ? "vollständig" : "noch ergänzen"}</small>
+        </article>
+        <article className={openAgendaCount===0 ? "is-ready" : ""}>
+          <span>Tagesordnung</span>
+          <strong>{agenda.length}</strong>
+          <small>{openAgendaCount} offen</small>
+        </article>
+        <article className={unresolvedAttendanceCount===0 && attendees.length>0 ? "is-ready" : ""}>
+          <span>Teilnahme</span>
+          <strong>{presentCount}/{attendees.length}</strong>
+          <small>{presentVoterCount} stimmberechtigt anwesend</small>
+        </article>
+        <article>
+          <span>Beschlüsse</span>
+          <strong>{agenda.filter((row)=>row.resolution_id).length}</strong>
+          <small>{incompleteVoteCount ? incompleteVoteCount+" unvollständig" : "formal geprüft"}</small>
+        </article>
       </section>
 
-      <section className="meeting-formalities-panel">
+      <section className="meeting-formalities-panel" id="vorbereitung">
         <article className="panel">
           <div className="panel-head">
             <div>
@@ -670,7 +717,7 @@ export default async function MeetingDetailPage({
         </article>
       </section>
 
-      <section className="meeting-session-shell">
+      <section className="meeting-session-shell" id="live">
         <aside className="meeting-top-rail">
           <div className="meeting-top-rail-head">
             <div><span className="eyebrow">Tagesordnung</span><h2>TOPs ({agenda.length})</h2></div>
@@ -1130,7 +1177,7 @@ export default async function MeetingDetailPage({
       </section>
 
       {meetingRunning && canWrite && (
-        <section className="meeting-close-check">
+        <section className="meeting-close-check" id="abschluss">
           <div className="meeting-close-head">
             <div>
               <span className="eyebrow">Abschlussprüfung</span>
