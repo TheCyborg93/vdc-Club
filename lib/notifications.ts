@@ -307,6 +307,30 @@ export async function getNotifications(
     `);
   }
 
+  if (hasPermission(user.roles,"surveys.write")) {
+    rows.push(...await sql`
+      SELECT
+        'survey-deadline:' || id::text || ':' || COALESCE(ends_at::text,'none') AS key,
+        CASE
+          WHEN ends_at<now() THEN 'Umfrage-Frist abgelaufen: ' || title
+          ELSE 'Umfrage endet bald: ' || title
+        END AS title,
+        CASE
+          WHEN ends_at<now() THEN 'Öffentlichen Rücklauf formal beenden'
+          ELSE 'Endet am ' || to_char(ends_at AT TIME ZONE 'Europe/Berlin','DD.MM.YYYY HH24:MI')
+        END AS detail,
+        '/umfragen/' || id::text AS href,
+        CASE WHEN ends_at<now() THEN 'critical' ELSE 'warning' END AS severity,
+        ends_at AS sort_at
+      FROM surveys
+      WHERE status='active'
+        AND ends_at IS NOT NULL
+        AND ends_at<=now()+interval '7 days'
+      ORDER BY ends_at
+      LIMIT 12
+    `);
+  }
+
   if (hasPermission(user.roles,"sponsors.read")) {
     rows.push(...await sql`
       SELECT
