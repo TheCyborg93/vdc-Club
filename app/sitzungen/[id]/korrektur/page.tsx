@@ -52,6 +52,10 @@ const errors:Record<string,string>={
   missing:"Bitte alle Pflichtfelder und einen Änderungsgrund ausfüllen.",
   votes:"Die Stimmenangaben sind ungültig oder passen nicht zu den Stimmberechtigten.",
   rollcall:"Bei namentlicher Abstimmung müssen die Abstimmungsdetails ausgefüllt sein.",
+  person_exists:"Diese Person ist bereits als Teilnehmer eingetragen.",
+  officer_remove:"Sitzungsleitung oder Protokollführung zuerst auf eine andere Person ändern.",
+  resolution_exists:"Für diesen TOP existiert bereits ein Beschluss.",
+  resolution_task:"Der Beschluss kann nicht entfernt werden, solange eine aktive Folgeaufgabe damit verknüpft ist.",
 };
 
 export default async function MeetingCorrectionPage({
@@ -149,6 +153,9 @@ export default async function MeetingCorrectionPage({
   const generalAttachments=attachments.filter((doc)=>!doc.agenda_item_id);
   const attendeeIds=new Set(attendees.map((row)=>String(row.member_id)));
   const availableMembers=members.filter((row)=>!attendeeIds.has(String(row.id)));
+  const presentVotingCount=attendees.filter(
+    (row)=>row.attendance==="present" && row.voting_eligible===true,
+  ).length;
   if (!canWrite) redirect(`/sitzungen/${id}/protokoll?error=forbidden`);
 
   return (
@@ -501,6 +508,43 @@ export default async function MeetingCorrectionPage({
                   )}
                 </div>
 
+                {!item.resolution_id && canResolve && (
+                  <form action={addResolutionCorrectionAction} className="meeting-correction-form resolution-correction-form">
+                    <input type="hidden" name="meetingId" value={id} />
+                    <input type="hidden" name="agendaItemId" value={String(item.id)} />
+                    <span className="eyebrow">Beschluss nachtragen</span>
+                    <label>Titel<input name="title" defaultValue={String(item.title)} required /></label>
+                    <label>Beschlusstext<textarea name="decisionText" rows={4} required placeholder="Der Vorstand beschließt …" /></label>
+                    <div className="form-grid">
+                      <label>Abstimmungsart
+                        <select name="voteMethod" defaultValue="show_of_hands">
+                          <option value="show_of_hands">Handzeichen</option>
+                          <option value="open">Offen</option>
+                          <option value="roll_call">Namentlich</option>
+                          <option value="secret">Geheim</option>
+                          <option value="electronic">Elektronisch</option>
+                        </select>
+                      </label>
+                      <label>Ergebnis
+                        <select name="decisionOutcome" defaultValue="accepted">
+                          <option value="accepted">Angenommen</option>
+                          <option value="rejected">Abgelehnt</option>
+                        </select>
+                      </label>
+                    </div>
+                    <label>Namentliche Details<textarea name="voteDetails" rows={2} /></label>
+                    <div className="vote-input-grid">
+                      <label>Stimmberechtigt<input name="eligibleVoters" type="number" min="0" defaultValue={presentVotingCount} /></label>
+                      <label>Ausgeschlossen<input name="excludedVoters" type="number" min="0" defaultValue="0" /></label>
+                      <label>Ja<input name="votesYes" type="number" min="0" defaultValue="0" /></label>
+                      <label>Nein<input name="votesNo" type="number" min="0" defaultValue="0" /></label>
+                      <label>Enthaltung<input name="votesAbstain" type="number" min="0" defaultValue={presentVotingCount} /></label>
+                    </div>
+                    <label className="correction-reason">Änderungsgrund<input name="reason" required placeholder="Warum wird der Beschluss nachgetragen?" /></label>
+                    <button className="mini-button">Beschluss nachtragen</button>
+                  </form>
+                )}
+
                 {item.resolution_id && canResolve && (
                   <form action={correctResolutionAction} className="meeting-correction-form resolution-correction-form">
                     <input type="hidden" name="meetingId" value={id} />
@@ -535,6 +579,15 @@ export default async function MeetingCorrectionPage({
                     </div>
                     <label className="correction-reason">Änderungsgrund<input name="reason" required /></label>
                     <button className="mini-button">Beschluss korrigieren</button>
+                  </form>
+                )}
+
+                {item.resolution_id && canResolve && (
+                  <form action={removeResolutionCorrectionAction} className="meeting-resolution-remove-form">
+                    <input type="hidden" name="meetingId" value={id} />
+                    <input type="hidden" name="resolutionId" value={String(item.resolution_id)} />
+                    <input name="reason" required placeholder="Grund für das Entfernen des Beschlusses" />
+                    <button className="meeting-agenda-delete">Beschluss entfernen</button>
                   </form>
                 )}
               </div>
