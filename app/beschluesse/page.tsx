@@ -13,12 +13,14 @@ const statusLabels:Record<string,string>={
   in_progress:"In Umsetzung",
   implemented:"Umgesetzt",
   withdrawn:"Aufgehoben",
+  rejected:"Abgelehnt",
 };
 
 const errorLabels:Record<string,string>={
   database:"Die Datenbank ist nicht verfügbar.",
   missing:"Der Beschluss wurde nicht gefunden.",
   withdrawn:"Ein aufgehobener Beschluss bleibt historisch abgeschlossen. Für eine neue Entscheidung bitte einen neuen Beschluss erfassen.",
+  rejected:"Ein abgelehnter Antrag bleibt als Abstimmungsergebnis unveränderbar dokumentiert.",
 };
 
 export const dynamic="force-dynamic";
@@ -52,7 +54,7 @@ export default async function ResolutionsPage({
   const params=await searchParams;
 
   const q=(params.q ?? "").trim();
-  const status=["open","in_progress","implemented","withdrawn"].includes(params.status ?? "")
+  const status=["open","in_progress","implemented","withdrawn","rejected"].includes(params.status ?? "")
     ? String(params.status)
     : "";
   const yearNum=/^\d{4}$/.test(params.year ?? "") ? Number(params.year) : null;
@@ -68,6 +70,10 @@ export default async function ResolutionsPage({
             r.votes_yes,
             r.votes_no,
             r.votes_abstain,
+            r.vote_method,
+            r.eligible_voters,
+            r.excluded_voters,
+            r.decision_outcome,
             r.status,
             r.decided_at,
             r.implemented_at,
@@ -113,7 +119,8 @@ export default async function ResolutionsPage({
             count(*) FILTER (WHERE status='implemented')::int AS implemented,
             count(*) FILTER (WHERE status='in_progress')::int AS progress,
             count(*) FILTER (WHERE status='open')::int AS open,
-            count(*) FILTER (WHERE status='withdrawn')::int AS withdrawn
+            count(*) FILTER (WHERE status='withdrawn')::int AS withdrawn,
+            count(*) FILTER (WHERE status='rejected')::int AS rejected
           FROM resolutions
           WHERE
             (${q}='' OR
@@ -135,7 +142,7 @@ export default async function ResolutionsPage({
           ORDER BY year DESC
         `,
       ])
-    : [[],[{total:0,implemented:0,progress:0,open:0,withdrawn:0}],[],[]];
+    : [[],[{total:0,implemented:0,progress:0,open:0,withdrawn:0,rejected:0}],[],[]];
 
   const count=counts[0] ?? {};
   const canWrite=hasPermission(actor.roles,"resolutions.write");
@@ -212,6 +219,7 @@ export default async function ResolutionsPage({
               <option value="in_progress">In Umsetzung</option>
               <option value="implemented">Umgesetzt</option>
               <option value="withdrawn">Aufgehoben</option>
+              <option value="rejected">Abgelehnt</option>
             </select>
           </label>
           <button className="mini-button">Filtern</button>
@@ -257,9 +265,13 @@ export default async function ResolutionsPage({
               <p className="resolution-text">{String(resolution.decision_text)}</p>
 
               <div className="resolution-meta-grid">
+                <div><span>Ergebnis</span><strong>{resolution.decision_outcome==="accepted" ? "Angenommen" : resolution.decision_outcome==="rejected" ? "Abgelehnt" : "–"}</strong></div>
+                <div><span>Stimmberechtigt</span><strong>{Number(resolution.eligible_voters ?? 0)}</strong></div>
+                <div><span>Ausgeschlossen</span><strong>{Number(resolution.excluded_voters ?? 0)}</strong></div>
                 <div><span>Ja</span><strong>{Number(resolution.votes_yes)}</strong></div>
                 <div><span>Nein</span><strong>{Number(resolution.votes_no)}</strong></div>
                 <div><span>Enthaltung</span><strong>{Number(resolution.votes_abstain)}</strong></div>
+                <div><span>Abstimmungsart</span><strong>{String(resolution.vote_method ?? "–")}</strong></div>
                 <div>
                   <span>Umgesetzt am</span>
                   <strong>{resolution.implemented_at ? formatDate(resolution.implemented_at) : "–"}</strong>
@@ -294,7 +306,7 @@ export default async function ResolutionsPage({
                     <Link href="/aufgaben" className="mini-button">Aufgaben öffnen</Link>
                   </div>
                 </div>
-              ) : canCreateTasks && !["implemented","withdrawn"].includes(String(resolution.status)) ? (
+              ) : canCreateTasks && !["implemented","withdrawn","rejected"].includes(String(resolution.status)) ? (
                 <details className="resolution-task-create">
                   <summary>Folgeaufgabe anlegen</summary>
                   <form action={createResolutionTaskAction} className="form-stack">
@@ -334,7 +346,7 @@ export default async function ResolutionsPage({
                 </details>
               ) : null}
 
-              {canWrite && (
+              {canWrite && resolution.status!=="rejected" && (
                 <details className="resolution-implementation-edit">
                   <summary>Umsetzungsnotiz bearbeiten</summary>
                   <form action={updateResolutionImplementationAction} className="form-stack">
@@ -357,7 +369,7 @@ export default async function ResolutionsPage({
                 </details>
               )}
 
-              {canWrite && resolution.status!=="withdrawn" && (
+              {canWrite && !["withdrawn","rejected"].includes(String(resolution.status)) && (
                 <div className="resolution-actions">
                   {resolution.status!=="open" && (
                     <form action={updateResolutionStatusAction}>
