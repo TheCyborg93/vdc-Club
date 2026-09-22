@@ -433,6 +433,273 @@ export async function correctMeetingGuestAction(formData:FormData) {
   redirect(`/sitzungen/${meetingId}/korrektur?saved=guest`);
 }
 
+export async function addAgendaItemCorrectionAction(formData:FormData) {
+  const actor=await requirePermission("meetings.write");
+  const sql=getDb();
+  if (!sql) redirect("/sitzungen?error=database");
+
+  const meetingId=value(formData,"meetingId");
+  const title=value(formData,"title");
+  const description=value(formData,"description");
+  const reason=value(formData,"changeReason");
+  const typeRaw=value(formData,"agendaType");
+  const agendaType=["information","consultation","decision"].includes(typeRaw) ? typeRaw : "consultation";
+  const statusRaw=value(formData,"status");
+  const status=["done","deferred"].includes(statusRaw) ? statusRaw : "done";
+  const announced=value(formData,"announcedWithInvitation")==="true";
+  const basis=value(formData,"decisionBasisNote");
+
+  if (!meetingId || !title || !reason) {
+    redirect(`/sitzungen/${meetingId}/korrektur?error=missing`);
+  }
+  if (!await ensureEditableMeeting(sql,meetingId)) {
+    redirect(`/sitzungen/${meetingId}/protokoll?error=minutes_locked`);
+  }
+
+  const rows=await sql`
+    INSERT INTO agenda_items(
+      meeting_id,position,title,description,status,
+      announced_with_invitation,decision_basis_note,agenda_type,
+      result_code,completed_at
+    )
+    VALUES(
+      ${meetingId}::uuid,
+      COALESCE((SELECT max(position) FROM agenda_items WHERE meeting_id=${meetingId}::uuid),0)+1,
+      ${title},
+      ${description || null},
+      ${status},
+      ${announced},
+      ${basis || null},
+      ${agendaType},
+      CASE WHEN ${status}='deferred' THEN 'deferred' ELSE 'completed' END,
+      now()
+    )
+    RETURNING id::text,position,title,description,status,
+      announced_with_invitation,decision_basis_note,agenda_type
+  `;
+  const after=rows[0];
+
+  await sql`
+    INSERT INTO meeting_change_log(
+      meeting_id,entity_type,entity_id,action,before_data,after_data,reason,changed_by
+    )
+    VALUES(
+      ${meetingId}::uuid,'agenda_item',${String(after.id)}::uuid,'added_after_meeting',
+      NULL,${json(after)}::jsonb,${reason},${actor.id}::uuid
+    )
+  `;
+
+  await writeAudit(actor.id,"agenda.added_after_meeting","agenda_item",String(after.id),{meetingId,reason});
+  revalidatePath(`/sitzungen/${meetingId}/protokoll`);
+  revalidatePath(`/sitzungen/${meetingId}/korrektur`);
+  redirect(`/sitzungen/${meetingId}/korrektur?saved=agenda_added`);
+}
+
+export async function removeAgendaItemCorrectionAction(formData:FormData) {
+  const actor=await requirePermission("meetings.write");
+  const sql=getDb();
+  if (!sql) redirect("/sitzungen?error=database");
+
+  const meetingId=value(formData,"meetingId");
+  const agendaItemId=value(formData,"agendaItemId");
+  const reason=value(formData,"changeReason");
+  if (!meetingId || !agendaItemId || !reason) {
+    redirect(`/sitzungen/${meetingId}/korrektur?error=missing`);
+  }
+  if (!await ensureEditableMeeting(sql,meetingId)) {
+    redirect(`/sitzungen/${meetingId}/protokoll?error=minutes_locked`);
+  }
+
+  const dependencyRows=await sql`
+    SELECT
+      (SELECT count(*) FROM resolutions r WHERE r.agenda_item_id=${agendaItemId}::uuid)::int AS resolutions,
+      (SELECT count(*) FROM documents d WHERE d.agenda_item_id=${agendaItemId}::uuid AND d.deleted_at IS NULL)::int AS documents,
+      (SELECT count(*) FROM agenda_vote_exclusions ave WHERE ave.agenda_item_id=${agendaItemId}::uuid)::int AS exclusions,
+      (SELECT count(*) FROM tasks t WHERE t.source_id=${agendaItemId}::uuid AND t.deleted_at IS NULL)::int AS tasks
+  `;
+  const deps=dependencyRows[0] ?? {};
+  if (
+    Number(deps.resolutions ?? 0)>0 ||
+    Number(deps.documents ?? 0)>0 ||
+    Number(deps.exclusions ?? 0)>0 ||
+    Number(deps.tasks ?? 0)>0
+  ) {
+    redirect(`/sitzungen/${meetingId}/korrektur?error=agenda_dependencies`);
+  }
+
+  const rows=await sql`
+    DELETE FROM agenda_items
+    WHERE id=${agendaItemId}::uuid
+      AND meeting_id=${meetingId}::uuid
+    RETURNING id::text,position,title,description,notes,status,
+      announced_with_invitation,decision_basis_note,agenda_type
+  `;
+  const before=rows[0];
+  if (!before) redirect(`/sitzungen/${meetingId}/korrektur?error=missing`);
+
+  await sql`
+    UPDATE agenda_items
+    SET position=position+10000
+    WHERE meeting_id=${meetingId}::uuid
+  `;
+  await sql`
+    WITH ordered AS (
+      SELECT id,row_number() OVER (ORDER BY position)::int AS new_position
+      FROM agenda_items
+      WHERE meeting_id=${meetingId}::uuid
+    )
+    UPDATE agenda_items ai
+    SET position=ordered.new_position,updated_at=now()
+    FROM ordered
+    WHERE ai.id=ordered.id
+  `;
+
+  await sql`
+    INSERT INTO meeting_change_log(
+      meeting_id,entity_type,entity_id,action,before_data,after_data,reason,changed_by
+    )
+    VALUES(
+      ${meetingId}::uuid,'agenda_item',${agendaItemId}::uuid,'removed_after_meeting',
+      ${json(before)}::jsonb,NULL,${reason},${actor.id}::uuid
+    )
+  `;
+
+  await writeAudit(actor.id,"agenda.removed_after_meeting","agenda_item",agendaItemId,{meetingId,reason});
+  revalidatePath(`/sitzungen/${meetingId}/protokoll`);
+  revalidatePath(`/sitzungen/${meetingId}/korrektur`);
+  redirect(`/sitzungen/${meetingId}/korrektur?saved=agenda_removed`);
+}
+
+export async function addVoteExclusionCorrectionAction(formData:FormData) {
+  const actor=await requirePermission("meetings.write");
+  const sql=getDb();
+  if (!sql) redirect("/sitzungen?error=database");
+
+  const meetingId=value(formData,"meetingId");
+  const agendaItemId=value(formData,"agendaItemId");
+  const memberId=value(formData,"memberId");
+  const exclusionReason=value(formData,"exclusionReason");
+  const changeReason=value(formData,"changeReason");
+  if (!meetingId || !agendaItemId || !memberId || !exclusionReason || !changeReason) {
+    redirect(`/sitzungen/${meetingId}/korrektur?error=missing`);
+  }
+  if (!await ensureEditableMeeting(sql,meetingId)) {
+    redirect(`/sitzungen/${meetingId}/protokoll?error=minutes_locked`);
+  }
+
+  const beforeRows=await sql`
+    SELECT id::text,member_id::text,person_name,reason
+    FROM agenda_vote_exclusions
+    WHERE agenda_item_id=${agendaItemId}::uuid
+      AND member_id=${memberId}::uuid
+    LIMIT 1
+  `;
+  const before=beforeRows[0] ?? null;
+
+  const rows=await sql`
+    INSERT INTO agenda_vote_exclusions(agenda_item_id,member_id,reason,created_by)
+    SELECT ${agendaItemId}::uuid,${memberId}::uuid,${exclusionReason},${actor.id}::uuid
+    WHERE EXISTS(
+      SELECT 1
+      FROM agenda_items ai
+      JOIN meeting_attendees ma
+        ON ma.meeting_id=ai.meeting_id
+       AND ma.member_id=${memberId}::uuid
+       AND ma.attendance='present'
+       AND ma.voting_eligible=true
+      WHERE ai.id=${agendaItemId}::uuid
+        AND ai.meeting_id=${meetingId}::uuid
+    )
+    ON CONFLICT (agenda_item_id,member_id)
+    WHERE member_id IS NOT NULL
+    DO UPDATE SET reason=EXCLUDED.reason,created_by=EXCLUDED.created_by,created_at=now()
+    RETURNING id::text,member_id::text,person_name,reason
+  `;
+  const after=rows[0];
+  if (!after) redirect(`/sitzungen/${meetingId}/korrektur?error=exclusion_person`);
+
+  await sql`
+    UPDATE resolutions r
+    SET excluded_voters=(
+      SELECT count(*)::int
+      FROM agenda_vote_exclusions ave
+      WHERE ave.agenda_item_id=${agendaItemId}::uuid
+    )
+    WHERE r.agenda_item_id=${agendaItemId}::uuid
+  `;
+
+  await sql`
+    INSERT INTO meeting_change_log(
+      meeting_id,entity_type,entity_id,action,before_data,after_data,reason,changed_by
+    )
+    VALUES(
+      ${meetingId}::uuid,'agenda_item',${agendaItemId}::uuid,
+      ${before ? "vote_exclusion_corrected_after_meeting" : "vote_exclusion_added_after_meeting"},
+      ${json(before)}::jsonb,${json(after)}::jsonb,${changeReason},${actor.id}::uuid
+    )
+  `;
+
+  await writeAudit(actor.id,"agenda.vote_exclusion_corrected_after_meeting","agenda_item",agendaItemId,{
+    meetingId,memberId,changeReason,
+  });
+  revalidatePath(`/sitzungen/${meetingId}/protokoll`);
+  revalidatePath(`/sitzungen/${meetingId}/korrektur`);
+  redirect(`/sitzungen/${meetingId}/korrektur?saved=exclusion`);
+}
+
+export async function removeVoteExclusionCorrectionAction(formData:FormData) {
+  const actor=await requirePermission("meetings.write");
+  const sql=getDb();
+  if (!sql) redirect("/sitzungen?error=database");
+
+  const meetingId=value(formData,"meetingId");
+  const agendaItemId=value(formData,"agendaItemId");
+  const exclusionId=value(formData,"exclusionId");
+  const changeReason=value(formData,"changeReason");
+  if (!meetingId || !agendaItemId || !exclusionId || !changeReason) {
+    redirect(`/sitzungen/${meetingId}/korrektur?error=missing`);
+  }
+  if (!await ensureEditableMeeting(sql,meetingId)) {
+    redirect(`/sitzungen/${meetingId}/protokoll?error=minutes_locked`);
+  }
+
+  const rows=await sql`
+    DELETE FROM agenda_vote_exclusions
+    WHERE id=${exclusionId}::uuid
+      AND agenda_item_id=${agendaItemId}::uuid
+    RETURNING id::text,member_id::text,person_name,reason
+  `;
+  const before=rows[0];
+  if (!before) redirect(`/sitzungen/${meetingId}/korrektur?error=missing`);
+
+  await sql`
+    UPDATE resolutions r
+    SET excluded_voters=(
+      SELECT count(*)::int
+      FROM agenda_vote_exclusions ave
+      WHERE ave.agenda_item_id=${agendaItemId}::uuid
+    )
+    WHERE r.agenda_item_id=${agendaItemId}::uuid
+  `;
+
+  await sql`
+    INSERT INTO meeting_change_log(
+      meeting_id,entity_type,entity_id,action,before_data,after_data,reason,changed_by
+    )
+    VALUES(
+      ${meetingId}::uuid,'agenda_item',${agendaItemId}::uuid,'vote_exclusion_removed_after_meeting',
+      ${json(before)}::jsonb,NULL,${changeReason},${actor.id}::uuid
+    )
+  `;
+
+  await writeAudit(actor.id,"agenda.vote_exclusion_removed_after_meeting","agenda_item",agendaItemId,{
+    meetingId,exclusionId,changeReason,
+  });
+  revalidatePath(`/sitzungen/${meetingId}/protokoll`);
+  revalidatePath(`/sitzungen/${meetingId}/korrektur`);
+  redirect(`/sitzungen/${meetingId}/korrektur?saved=exclusion_removed`);
+}
+
 export async function correctAgendaItemAction(formData:FormData) {
   const actor=await requirePermission("meetings.write");
   const sql=getDb();
