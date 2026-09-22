@@ -275,7 +275,6 @@ export async function saveAgendaNotesInlineAction(
 
   if (!rows.length) return {ok:false,error:"locked"};
 
-  await writeAudit(actor.id,"agenda.notes_autosaved","agenda_item",agendaItemId,{meetingId});
   revalidatePath(`/sitzungen/${meetingId}`);
   revalidatePath(`/sitzungen/${meetingId}/protokoll`);
 
@@ -677,7 +676,7 @@ export async function updateMeetingOfficersAction(formData: FormData) {
       updated_at=now()
     WHERE id=${meetingId}::uuid
       AND deleted_at IS NULL
-      AND minutes_status <> 'archived'
+      AND minutes_status='draft'
     RETURNING id::text
   `;
 
