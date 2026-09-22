@@ -1,4 +1,35 @@
 import Link from "next/link";
+import { css } from "styled-system/css";
+
+const nav=css({
+  display:"grid",
+  gridTemplateColumns:{base:"repeat(2,minmax(0,1fr))",md:"repeat(3,minmax(0,1fr))",xl:"repeat(6,minmax(0,1fr))"},
+  gap:"1",
+  p:"1",
+  border:"1px solid",
+  borderColor:"surface.border",
+  borderRadius:"l2",
+  background:"surface.bg",
+});
+
+const itemStyle=css({
+  display:"grid",
+  placeItems:"center",
+  minH:"9",
+  px:"2",
+  borderRadius:"l1",
+  color:"fg.muted",
+  fontSize:"xs",
+  fontWeight:"800",
+  textAlign:"center",
+  _hover:{background:"surface.hover",color:"fg"},
+});
+
+const activeStyle=css({
+  background:"brand.subtle",
+  color:"brand.hover",
+  boxShadow:"inset 0 0 0 1px rgba(196,51,30,.18)",
+});
 
 export function FinanceNav({
   active,
@@ -15,13 +46,9 @@ export function FinanceNav({
   ] as const;
 
   return (
-    <nav className="finance-tabs" aria-label="Finanzen">
+    <nav className={nav} aria-label="Finanzen">
       {items.map((item)=>(
-        <Link
-          key={item.key}
-          href={item.href}
-          className={active===item.key ? "active" : ""}
-        >
+        <Link key={item.key} href={item.href} className={[itemStyle,active===item.key ? activeStyle : ""].join(" ")}>
           {item.label}
         </Link>
       ))}
