@@ -5,7 +5,6 @@ import { hasPermission, requirePermission } from "@/lib/permissions";
 import { meetingStatusLabel } from "@/lib/ui-labels";
 import {
   approveMeetingMinutesAction,
-  archiveMeetingMinutesAction,
   returnMeetingMinutesAction,
   submitMeetingMinutesAction,
 } from "@/app/sitzungen/actions";
@@ -433,28 +432,6 @@ export default async function MinutesPage({
             </article>
           )}
 
-          {minutesStatus==="approved" && (
-            <article className="panel">
-              <span className="eyebrow">Freigegeben</span>
-              <h2>Protokoll ist final</h2>
-              <p>
-                Freigegeben {meeting.minutes_approved_at ? formatShortDateTime(meeting.minutes_approved_at) : ""}
-                {meeting.approved_by_name ? " von "+String(meeting.approved_by_name) : ""}.
-              </p>
-              {canWrite && (
-                <form action={archiveMeetingMinutesAction}>
-                  <input type="hidden" name="meetingId" value={id} />
-                  <ConfirmSubmitButton
-                    message="Freigegebenes Protokoll jetzt endgültig archivieren?"
-                    className="primary-button"
-                  >
-                    Protokoll archivieren
-                  </ConfirmSubmitButton>
-                </form>
-              )}
-            </article>
-          )}
-
           {minutesStatus==="archived" && (
             <article className="panel">
               <span className="eyebrow">Archiviert</span>
@@ -512,7 +489,7 @@ export default async function MinutesPage({
       </div>
 
       <article className="minutes-document">
-        {minutesStatus!=="approved" && minutesStatus!=="archived" && (
+        {minutesStatus!=="archived" && (
           <div className="minutes-draft-watermark">
             {minutesStatus==="review" ? "IN PRÜFUNG" : "ENTWURF"}
           </div>
