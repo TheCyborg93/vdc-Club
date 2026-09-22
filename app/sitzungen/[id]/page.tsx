@@ -27,6 +27,7 @@ import { moveToTrashAction } from "@/app/admin/papierkorb/actions";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 import { MeetingAutoNotes } from "@/components/meeting-auto-notes";
 import { MeetingStartPanel } from "@/components/meeting-start-panel";
+import { MeetingLiveOptions } from "@/components/meeting-live-options";
 import {
   removeMeetingAttachmentAction,
   uploadMeetingAttachmentAction,
@@ -1217,62 +1218,86 @@ export default async function MeetingDetailPage({
       )}
 
       {meetingRunning && canWrite && (
-        <section className="meeting-close-check" id="abschluss">
-          <div className="meeting-close-head">
+        <details className="meeting-close-drawer" id="abschluss">
+          <summary>
             <div>
-              <span className="eyebrow">Abschlussprüfung</span>
-              <h2>Sitzung sauber abschließen</h2>
+              <span className="eyebrow">Sitzung beenden</span>
+              <strong>Abschlussprüfung öffnen</strong>
+              <small>{completionReady ? "Alles vollständig – Sitzung kann beendet werden." : openAgendaCount+" TOP(s) bzw. Angaben noch offen."}</small>
             </div>
             <span className={completionReady ? "formal-state formal-ok" : "formal-state formal-open"}>
-              {completionReady ? "Bereit" : "Noch offen"}
+              {completionReady ? "Bereit" : "Prüfen"}
             </span>
+          </summary>
+
+          <div className="meeting-close-body">
+            <div className="meeting-close-grid">
+              <div className={officersComplete ? "is-ok" : "is-open"}>
+                <b>{officersComplete ? "✓" : "!"}</b>
+                <span>Leitung & Protokollführung</span>
+              </div>
+              <div className={formalitiesDocumented ? "is-ok" : "is-open"}>
+                <b>{formalitiesDocumented ? "✓" : "!"}</b>
+                <span>Einladung & Beschlussfähigkeit</span>
+              </div>
+              <div className={unresolvedAttendanceCount===0 ? "is-ok" : "is-open"}>
+                <b>{unresolvedAttendanceCount===0 ? "✓" : "!"}</b>
+                <span>Mitglieder-Anwesenheit</span>
+              </div>
+              <div className={unresolvedGuestAttendanceCount===0 ? "is-ok" : "is-open"}>
+                <b>{unresolvedGuestAttendanceCount===0 ? "✓" : "!"}</b>
+                <span>Gast-Anwesenheit</span>
+              </div>
+              <div className={openAgendaCount===0 ? "is-ok" : "is-open"}>
+                <b>{openAgendaCount===0 ? "✓" : "!"}</b>
+                <span>Alle TOPs erledigt/vertagt</span>
+              </div>
+              <div className={incompleteVoteCount===0 ? "is-ok" : "is-open"}>
+                <b>{incompleteVoteCount===0 ? "✓" : "!"}</b>
+                <span>Abstimmungen vollständig</span>
+              </div>
+              <div className={spontaneousBasisMissing===0 ? "is-ok" : "is-open"}>
+                <b>{spontaneousBasisMissing===0 ? "✓" : "!"}</b>
+                <span>Spontane Beschluss-TOPs begründet</span>
+              </div>
+            </div>
+
+            {!completionReady && firstOpenAgenda && (
+              <div className="meeting-close-help">
+                <span>Es ist noch mindestens ein TOP offen.</span>
+                <Link href={`/sitzungen/${id}?top=${String(firstOpenAgenda.id)}#live`} className="mini-button">
+                  Offenen TOP öffnen
+                </Link>
+              </div>
+            )}
+
+            <form action={updateMeetingStatusAction} className="meeting-close-form">
+              <input type="hidden" name="meetingId" value={id} />
+              <input type="hidden" name="status" value="completed" />
+              <label>
+                Abschlussbemerkung
+                <textarea
+                  name="minutesClosing"
+                  rows={3}
+                  defaultValue={meeting.minutes_closing ? String(meeting.minutes_closing) : ""}
+                  placeholder="Optional: Zusammenfassung oder Hinweis zum Sitzungsende"
+                />
+              </label>
+              <label>
+                Nächster Sitzungstermin
+                <input name="nextMeetingAt" type="datetime-local" defaultValue={dateTimeLocal(meeting.next_meeting_at)} />
+              </label>
+              <div className="meeting-close-submit">
+                <span>Endzeit wird automatisch gespeichert.</span>
+                <button className="primary-button" disabled={!completionReady}>Sitzung jetzt beenden</button>
+              </div>
+            </form>
           </div>
+        </details>
+      )}
 
-          <div className="meeting-close-grid">
-            <div className={officersComplete ? "is-ok" : "is-open"}>
-              <b>{officersComplete ? "✓" : "!"}</b>
-              <span>Sitzungsleitung & Protokollführung</span>
-            </div>
-            <div className={formalitiesDocumented ? "is-ok" : "is-open"}>
-              <b>{formalitiesDocumented ? "✓" : "!"}</b>
-              <span>Einladung / Tagesordnung / Beschlussfähigkeit dokumentiert</span>
-            </div>
-            <div className={unresolvedAttendanceCount===0 ? "is-ok" : "is-open"}>
-              <b>{unresolvedAttendanceCount===0 ? "✓" : "!"}</b>
-              <span>Mitglieder-Anwesenheit vollständig</span>
-            </div>
-            <div className={unresolvedGuestAttendanceCount===0 ? "is-ok" : "is-open"}>
-              <b>{unresolvedGuestAttendanceCount===0 ? "✓" : "!"}</b>
-              <span>Gast-Anwesenheit vollständig</span>
-            </div>
-            <div className={openAgendaCount===0 ? "is-ok" : "is-open"}>
-              <b>{openAgendaCount===0 ? "✓" : "!"}</b>
-              <span>Alle TOPs erledigt oder vertagt</span>
-            </div>
-            <div className={incompleteVoteCount===0 ? "is-ok" : "is-open"}>
-              <b>{incompleteVoteCount===0 ? "✓" : "!"}</b>
-              <span>Abstimmungen vollständig</span>
-            </div>
-            <div className={spontaneousBasisMissing===0 ? "is-ok" : "is-open"}>
-              <b>{spontaneousBasisMissing===0 ? "✓" : "!"}</b>
-              <span>Spontane Beschluss-TOPs begründet</span>
-            </div>
-          </div>
-
-          {agenda.filter((row)=>row.resolution_id).length>0 && meeting.quorum_confirmed!==true && (
-            <div className="form-error">
-              Beschlüsse sind erfasst, aber die Beschlussfähigkeit ist nicht bestätigt.
-            </div>
-          )}
-
-          <form action={updateMeetingStatusAction} className="meeting-close-action">
-            <input type="hidden" name="meetingId" value={id} />
-            <input type="hidden" name="status" value="completed" />
-            <button className="light-button" disabled={!completionReady}>
-              Sitzung jetzt beenden
-            </button>
-          </form>
-        </section>
+      {meetingRunning && canWrite && (
+        <MeetingLiveOptions meetingId={id} attendees={attendees} guests={guests} />
       )}
 
       {carryovers.length>0 && canWrite && ["planned","running"].includes(String(meeting.status)) && (
