@@ -50,6 +50,14 @@ const errors:Record<string,string>={
   meeting_not_completed:"Die Sitzung muss zuerst beendet werden, bevor das Protokoll zur Prüfung eingereicht werden kann.",
   officers_missing:"Sitzungsleitung und Protokollführung müssen vor der Einreichung festgelegt werden.",
   return_note:"Bitte einen Grund für die Rückgabe angeben.",
+  protocol_formalities:"Die Formalien sind nach der Nachbearbeitung noch nicht vollständig.",
+  protocol_officers_present:"Sitzungsleitung und Protokollführung müssen für die Sitzung als anwesend dokumentiert sein.",
+  protocol_attendance:"Bei mindestens einer eingeladenen Person oder einem Gast ist die Anwesenheit noch ungeklärt.",
+  protocol_agenda:"Mindestens ein Tagesordnungspunkt ist noch nicht erledigt oder vertagt.",
+  protocol_decision:"Mindestens ein erledigter Beschluss-TOP hat noch keine dokumentierte Abstimmung.",
+  protocol_votes:"Mindestens eine Abstimmung ist unvollständig oder die Stimmenzahl ist nicht plausibel.",
+  protocol_spontaneous:"Bei einem nachträglich ergänzten Beschluss-TOP fehlt die formale Begründung.",
+  protocol_quorum:"Es sind Beschlüsse vorhanden, obwohl die Beschlussfähigkeit nicht bestätigt ist.",
 };
 
 function formatDateTime(value: unknown) {
