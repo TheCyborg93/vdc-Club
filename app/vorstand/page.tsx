@@ -208,6 +208,50 @@ export default async function BoardPage() {
         </article>
       </section>
 
+      <section className="board-work-hub">
+        <div className="board-work-head">
+          <div>
+            <span className="eyebrow">Vorstandsarbeit</span>
+            <h2>Direkt weiterarbeiten</h2>
+            <p>Die laufenden Vorgänge des Vorstands – ohne Umweg in die einzelnen Module.</p>
+          </div>
+        </div>
+        <div className="board-work-grid">
+          {canMeetings && (
+            <Link href="/sitzungen">
+              <span>Sitzungen</span>
+              <strong>{workOverview.meetings}</strong>
+              <small>geplant oder laufend</small>
+              <b>Öffnen →</b>
+            </Link>
+          )}
+          {canResolutions && (
+            <Link href="/beschluesse">
+              <span>Beschlüsse</span>
+              <strong>{workOverview.resolutions}</strong>
+              <small>offen oder in Umsetzung</small>
+              <b>Öffnen →</b>
+            </Link>
+          )}
+          {canTasks && (
+            <Link href="/aufgaben">
+              <span>Aufgaben</span>
+              <strong>{workOverview.tasks}</strong>
+              <small>aktive Aufgaben</small>
+              <b>Öffnen →</b>
+            </Link>
+          )}
+          {canDocuments && (
+            <Link href="/dokumente?view=review">
+              <span>Dokumente</span>
+              <strong>{workOverview.documents}</strong>
+              <small>zur Prüfung</small>
+              <b>Öffnen →</b>
+            </Link>
+          )}
+        </div>
+      </section>
+
       <article className="panel">
         <div className="panel-head">
           <div>
