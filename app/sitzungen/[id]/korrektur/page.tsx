@@ -9,6 +9,12 @@ import {
   correctMeetingGuestAction,
   correctResolutionAction,
 } from "@/app/sitzungen/correction-actions";
+import {
+  removeMeetingAttachmentAction,
+  removeMeetingGeneralAttachmentAction,
+  uploadMeetingAttachmentAction,
+  uploadMeetingGeneralAttachmentAction,
+} from "@/app/sitzungen/attachment-actions";
 
 export const dynamic="force-dynamic";
 
@@ -56,7 +62,7 @@ export default async function MeetingCorrectionPage({
   const {id}=await params;
   const query=await searchParams;
 
-  const [meetingRows,attendees,guests,agenda,changes]=await Promise.all([
+  const [meetingRows,attendees,guests,agenda,attachments,changes]=await Promise.all([
     sql`
       SELECT
         m.*,
@@ -100,6 +106,15 @@ export default async function MeetingCorrectionPage({
     `,
     sql`
       SELECT
+        d.id::text,d.agenda_item_id::text,d.title,d.original_filename
+      FROM documents d
+      WHERE d.meeting_id=${id}::uuid
+        AND d.category='Sitzungsanlage'
+        AND d.deleted_at IS NULL
+      ORDER BY d.created_at
+    `,
+    sql`
+      SELECT
         l.id::text,l.entity_type,l.action,l.reason,l.created_at,
         u.display_name AS changed_by_name
       FROM meeting_change_log l
@@ -118,6 +133,8 @@ export default async function MeetingCorrectionPage({
 
   const canWrite=hasPermission(actor.roles,"meetings.write");
   const canResolve=hasPermission(actor.roles,"resolutions.write");
+  const canDocumentsWrite=hasPermission(actor.roles,"documents.write");
+  const generalAttachments=attachments.filter((doc)=>!doc.agenda_item_id);
   if (!canWrite) redirect(`/sitzungen/${id}/protokoll?error=forbidden`);
 
   return (
@@ -248,6 +265,49 @@ export default async function MeetingCorrectionPage({
 
       <section className="panel meeting-correction-section">
         <div className="panel-head">
+          <div><span className="eyebrow">Unterlagen</span><h2>Sitzungsanlagen</h2></div>
+          <span className="count-chip">{generalAttachments.length}</span>
+        </div>
+
+        {generalAttachments.length===0 ? (
+          <div className="empty-state">Keine allgemeinen Sitzungsanlagen.</div>
+        ) : (
+          <div className="meeting-attachment-list">
+            {generalAttachments.map((doc)=>(
+              <div key={String(doc.id)}>
+                <div>
+                  <strong>{String(doc.title)}</strong>
+                  <span>{doc.original_filename ? String(doc.original_filename) : "Dokument"}</span>
+                </div>
+                <div>
+                  <Link href={"/api/documents/"+String(doc.id)+"/file"} target="_blank" className="mini-button">Öffnen</Link>
+                  {canDocumentsWrite && (
+                    <form action={removeMeetingGeneralAttachmentAction}>
+                      <input type="hidden" name="meetingId" value={id} />
+                      <input type="hidden" name="documentId" value={String(doc.id)} />
+                      <input type="hidden" name="returnTo" value={`/sitzungen/${id}/korrektur`} />
+                      <button className="mini-button">Entfernen</button>
+                    </form>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {canDocumentsWrite && (
+          <form action={uploadMeetingGeneralAttachmentAction} className="meeting-general-attachment-upload" encType="multipart/form-data">
+            <input type="hidden" name="meetingId" value={id} />
+            <input type="hidden" name="returnTo" value={`/sitzungen/${id}/korrektur`} />
+            <label>Titel<input name="title" placeholder="Optional" /></label>
+            <label>Datei<input name="file" type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.jpg,.jpeg,.png,.webp" required /></label>
+            <button className="mini-button">Sitzungsanlage hochladen</button>
+          </form>
+        )}
+      </section>
+
+      <section className="panel meeting-correction-section">
+        <div className="panel-head">
           <div><span className="eyebrow">Tagesordnung</span><h2>TOPs & Ergebnisse</h2></div>
           <span className="count-chip">{agenda.length}</span>
         </div>
@@ -298,6 +358,49 @@ export default async function MeetingCorrectionPage({
                   <label className="correction-reason">Änderungsgrund<input name="reason" required /></label>
                   <button className="mini-button">TOP korrigieren</button>
                 </form>
+
+                <div className="meeting-correction-attachments">
+                  <span className="eyebrow">TOP-Anlagen</span>
+                  {attachments.filter((doc)=>String(doc.agenda_item_id)===String(item.id)).length===0 ? (
+                    <div className="empty-state">Keine Anlagen zu diesem TOP.</div>
+                  ) : (
+                    <div className="meeting-attachment-list">
+                      {attachments
+                        .filter((doc)=>String(doc.agenda_item_id)===String(item.id))
+                        .map((doc)=>(
+                          <div key={String(doc.id)}>
+                            <div>
+                              <strong>{String(doc.title)}</strong>
+                              <span>{doc.original_filename ? String(doc.original_filename) : "Dokument"}</span>
+                            </div>
+                            <div>
+                              <Link href={"/api/documents/"+String(doc.id)+"/file"} target="_blank" className="mini-button">Öffnen</Link>
+                              {canDocumentsWrite && (
+                                <form action={removeMeetingAttachmentAction}>
+                                  <input type="hidden" name="meetingId" value={id} />
+                                  <input type="hidden" name="agendaItemId" value={String(item.id)} />
+                                  <input type="hidden" name="documentId" value={String(doc.id)} />
+                                  <input type="hidden" name="returnTo" value={`/sitzungen/${id}/korrektur`} />
+                                  <button className="mini-button">Entfernen</button>
+                                </form>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+                  )}
+
+                  {canDocumentsWrite && (
+                    <form action={uploadMeetingAttachmentAction} className="meeting-general-attachment-upload" encType="multipart/form-data">
+                      <input type="hidden" name="meetingId" value={id} />
+                      <input type="hidden" name="agendaItemId" value={String(item.id)} />
+                      <input type="hidden" name="returnTo" value={`/sitzungen/${id}/korrektur`} />
+                      <label>Titel<input name="title" placeholder="Optional" /></label>
+                      <label>Datei<input name="file" type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.jpg,.jpeg,.png,.webp" required /></label>
+                      <button className="mini-button">TOP-Anlage hochladen</button>
+                    </form>
+                  )}
+                </div>
 
                 {item.resolution_id && canResolve && (
                   <form action={correctResolutionAction} className="meeting-correction-form resolution-correction-form">
