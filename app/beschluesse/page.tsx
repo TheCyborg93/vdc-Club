@@ -177,7 +177,7 @@ function resolutionTone(status:string,outcome:unknown):"neutral"|"brand"|"succes
   return "info";
 }
 
-function taskTone(status:unknown):"neutral"|"success"|"warning"|"danger"|"info" {
+function taskTone(status:unknown):"neutral"|"brand"|"success"|"warning"|"danger"|"info" {
   if (status==="done") return "success";
   if (status==="in_progress") return "brand";
   if (status==="blocked") return "danger";
