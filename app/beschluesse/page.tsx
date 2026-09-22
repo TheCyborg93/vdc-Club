@@ -69,6 +69,10 @@ export default async function ResolutionsPage({
     ? String(params.status)
     : "";
   const yearNum=/^\d{4}$/.test(params.year ?? "") ? Number(params.year) : null;
+  const requestedView=["active","overdue","implemented","all"].includes(params.view ?? "")
+    ? String(params.view)
+    : "active";
+  const view=status ? "all" : requestedView;
 
   const [resolutions,counts,members,years]=sql
     ? await Promise.all([
