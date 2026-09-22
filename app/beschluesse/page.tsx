@@ -29,6 +29,7 @@ const errorLabels:Record<string,string>={
   missing:"Der Beschluss wurde nicht gefunden.",
   withdrawn:"Ein aufgehobener Beschluss bleibt historisch abgeschlossen. Für eine neue Entscheidung bitte einen neuen Beschluss erfassen.",
   rejected:"Ein abgelehnter Antrag bleibt als Abstimmungsergebnis unveränderbar dokumentiert.",
+  task_unavailable:"Es konnte keine Folgeaufgabe angelegt werden. Der Beschluss ist bereits abgeschlossen oder es existiert bereits eine aktive Folgeaufgabe.",
 };
 
 export const dynamic="force-dynamic";
@@ -106,9 +107,8 @@ export default async function ResolutionsPage({
             WHERE tx.source_type='resolution'
               AND tx.source_id=r.id
               AND tx.deleted_at IS NULL
-            ORDER BY
-              CASE WHEN tx.status='cancelled' THEN 1 ELSE 0 END,
-              tx.created_at DESC
+              AND tx.status<>'cancelled'
+            ORDER BY tx.created_at DESC
             LIMIT 1
           ) t ON true
           LEFT JOIN members owner ON owner.id=t.owner_member_id
