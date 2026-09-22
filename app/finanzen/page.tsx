@@ -50,12 +50,12 @@ const attentionCopy=css({
 const eyebrow=css({color:"brand.hover",fontSize:"[9px]",fontWeight:"900",letterSpacing:"0.13em",textTransform:"uppercase"});
 const attentionActions=css({display:"flex",gap:"2",flexWrap:"wrap"});
 const primaryLink=css({
-  display:"inline-flex",alignItems:"center",justifyContent:"center",minH:"10",px:"4",
+  display:"inline-flex",alignItems:"center",justifyContent:"center",minH:{base:"[44px]",md:"10"},px:"4",
   border:"1px solid",borderColor:"brand.solid",borderRadius:"l1",background:"brand.solid",
   color:"warmWhite",fontSize:"sm",fontWeight:"850",_hover:{background:"brand.hover"},
 });
 const outlineLink=css({
-  display:"inline-flex",alignItems:"center",justifyContent:"center",minH:"10",px:"4",
+  display:"inline-flex",alignItems:"center",justifyContent:"center",minH:{base:"[44px]",md:"10"},px:"4",
   border:"1px solid",borderColor:"surface.border",borderRadius:"l1",background:"surface.raised",
   color:"fg",fontSize:"sm",fontWeight:"850",_hover:{borderColor:"brand.border",background:"surface.hover"},
 });
@@ -71,12 +71,12 @@ const quickLink=css({
 });
 const grid=css({display:"grid",gridTemplateColumns:{base:"1fr",xl:"repeat(2,minmax(0,1fr))"},gap:"3",alignItems:"start"});
 const sectionHead=css({
-  display:"flex",alignItems:"center",justifyContent:"space-between",gap:"3",mb:"3",
+  display:"flex",flexDirection:{base:"column",sm:"row"},alignItems:{base:"stretch",sm:"center"},justifyContent:"space-between",gap:"3",mb:"3",
   "& h2":{mt:"1",fontSize:"lg",fontWeight:"900"},
 });
 const list=css({display:"grid"});
 const entryRow=css({
-  display:"grid",gridTemplateColumns:"[34px] minmax(0,1fr) auto",gap:"2.5",alignItems:"center",
+  display:"grid",gridTemplateColumns:{base:"[34px] minmax(0,1fr)",sm:"[34px] minmax(0,1fr) auto"},gap:"2.5",alignItems:"center",
   py:"2.5",borderTop:"1px solid",borderColor:"surface.border",_first:{borderTop:"0"},
 });
 const entryIcon=css({display:"grid",placeItems:"center",w:"8.5",h:"8.5",borderRadius:"pill",background:"surface.raised"});
@@ -86,7 +86,7 @@ const entryMain=css({
   minW:"0","& strong":{display:"block",fontSize:"xs",fontWeight:"850"},
   "& span":{display:"block",mt:"1",color:"fg.muted",fontSize:"[10px]",lineHeight:"1.45"},
 });
-const entryAmount=css({fontSize:"xs",fontWeight:"900",whiteSpace:"nowrap"});
+const entryAmount=css({gridColumn:{base:"2",sm:"auto"},fontSize:"xs",fontWeight:"900",whiteSpace:"nowrap",textAlign:{sm:"right"}});
 const negative=css({color:"status.danger"});
 const positive=css({color:"status.success"});
 const budgetList=css({display:"grid",gap:"2"});
@@ -95,7 +95,7 @@ const budgetRow=css({
 });
 const overBudget=css({borderColor:"rgba(228,121,114,.22)",background:"rgba(228,121,114,.035)"});
 const budgetHead=css({
-  display:"flex",justifyContent:"space-between",gap:"3",alignItems:"start",
+  display:"flex",flexDirection:{base:"column",sm:"row"},justifyContent:"space-between",gap:"3",alignItems:{base:"stretch",sm:"start"},
   "& strong":{display:"block",fontSize:"xs",fontWeight:"900"},"& span":{display:"block",mt:"1",color:"fg.muted",fontSize:"[10px]"},
 });
 const budgetMeta=css({display:"flex",justifyContent:"space-between",gap:"2",color:"fg.muted",fontSize:"[10px]",flexWrap:"wrap"});
@@ -111,7 +111,7 @@ const budgetDrawer=css({
 const form=css({display:"grid",gap:"2.5",p:"2.5"});
 const field=css({display:"grid",gap:"1.5",color:"fg.muted",fontSize:"xs",fontWeight:"750"});
 const control=css({
-  w:"full",minH:"10",px:"3",py:"2",border:"1px solid",borderColor:"surface.border",borderRadius:"l1",
+  w:"full",minH:"[44px]",px:"3",py:"2",border:"1px solid",borderColor:"surface.border",borderRadius:"l1",
   background:"surface.bg",color:"fg",outline:"none",_focus:{borderColor:"brand.solid",boxShadow:"focus"},
 });
 
