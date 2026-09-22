@@ -7,6 +7,7 @@ import {
   updateResolutionStatusAction,
 } from "@/app/beschluesse/actions";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
+import { taskStatusLabel } from "@/lib/ui-labels";
 
 const voteMethodLabels:Record<string,string>={
   open:"Offen",
@@ -90,6 +91,7 @@ export default async function ResolutionsPage({
             r.implementation_notes,
             m.id::text AS meeting_id,
             m.title AS meeting_title,
+            m.status AS meeting_status,
             ai.position AS agenda_position,
             ai.title AS agenda_title,
             t.id::text AS task_id,
@@ -290,7 +292,13 @@ export default async function ResolutionsPage({
                 <div>
                   <h2>{String(resolution.title)}</h2>
                   {resolution.meeting_id && (
-                    <Link href={"/sitzungen/"+String(resolution.meeting_id)}>
+                    <Link
+                      href={
+                        resolution.meeting_status==="completed"
+                          ? "/sitzungen/"+String(resolution.meeting_id)+"/protokoll"
+                          : "/sitzungen/"+String(resolution.meeting_id)
+                      }
+                    >
                       {String(resolution.meeting_title)}
                       {resolution.agenda_position
                         ? " · TOP "+String(resolution.agenda_position)
@@ -351,7 +359,7 @@ export default async function ResolutionsPage({
                   </div>
                   <div className="resolution-task-actions">
                     <b className={"status-badge status-"+String(resolution.task_status)}>
-                      {String(resolution.task_status)}
+                      {taskStatusLabel(resolution.task_status)}
                     </b>
                     <Link href="/aufgaben" className="mini-button">Aufgaben öffnen</Link>
                   </div>
