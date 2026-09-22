@@ -1256,13 +1256,6 @@ export async function updateMeetingOfficersAction(formData: FormData) {
   redirect(`/sitzungen/${meetingId}?officers=1`);
 }
 
-export async function updateMeetingMinutesTextAction(formData: FormData) {
-  await requirePermission("meetings.write");
-  const meetingId=value(formData,"meetingId");
-  if (!meetingId) redirect("/sitzungen?error=missing");
-  redirect(`/sitzungen/${meetingId}/korrektur`);
-}
-
 export async function submitMeetingMinutesAction(formData: FormData) {
   const actor=await requirePermission("meetings.write");
   const sql=getDb();
