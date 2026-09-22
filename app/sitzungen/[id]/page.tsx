@@ -11,10 +11,12 @@ import {
   updateAgendaStatusAction,
   updateAttendanceAction,
   updateMeetingDetailsAction,
+  updateMeetingOfficersAction,
   updateMeetingStatusAction,
 } from "@/app/sitzungen/actions";
 import { moveToTrashAction } from "@/app/admin/papierkorb/actions";
 import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
+import { MeetingAutoNotes } from "@/components/meeting-auto-notes";
 import { meetingStatusLabel,taskStatusLabel } from "@/lib/ui-labels";
 
 const attendanceLabels:Record<string,string>={
@@ -22,6 +24,13 @@ const attendanceLabels:Record<string,string>={
   present:"Anwesend",
   absent:"Abwesend",
   excused:"Entschuldigt",
+};
+
+const minutesStatusLabels:Record<string,string>={
+  draft:"Entwurf",
+  review:"In Prüfung",
+  approved:"Freigegeben",
+  archived:"Archiviert",
 };
 
 const agendaLabels:Record<string,string>={
@@ -88,6 +97,7 @@ export default async function MeetingDetailPage({
     notes?:string;
     saved?:string;
     status?:string;
+    officers?:string;
   }>;
 }) {
   const actor=await requirePermission("meetings.read");
@@ -107,6 +117,9 @@ export default async function MeetingDetailPage({
         m.status,
         m.notes,
         m.ended_at,
+        m.chair_member_id::text,
+        m.minute_taker_member_id::text,
+        m.minutes_status,
         e.id::text AS event_id
       FROM meetings m
       LEFT JOIN club_events e ON e.id=m.event_id
@@ -171,6 +184,7 @@ export default async function MeetingDetailPage({
   const canWrite=hasPermission(actor.roles,"meetings.write");
   const canResolve=hasPermission(actor.roles,"resolutions.write");
   const canCreateTasks=hasPermission(actor.roles,"tasks.write");
+  const minutesStatus=String(meeting.minutes_status ?? "draft");
 
   const invitedIds=new Set(attendees.map((row)=>String(row.member_id)));
   const availableMembers=members.filter((row)=>!invitedIds.has(String(row.id)));
@@ -209,7 +223,9 @@ export default async function MeetingDetailPage({
         </div>
 
         <div className="meeting-control-tools">
-          <Link href={`/sitzungen/${id}/protokoll`} className="ghost-button">Protokoll</Link>
+          <Link href={`/sitzungen/${id}/protokoll`} className="ghost-button">
+            Schriftführer · {minutesStatusLabels[minutesStatus] ?? minutesStatus}
+          </Link>
           <b className={`status-badge status-${meeting.status}`}>{meetingStatusLabel(meeting.status)}</b>
 
           {canWrite && meeting.status==="planned" && (
@@ -244,7 +260,7 @@ export default async function MeetingDetailPage({
       </section>
 
       {query.error && <div className="form-error">{errors[query.error] ?? "Die Aktion konnte nicht ausgeführt werden."}</div>}
-      {(query.agenda || query.resolution || query.created || query.saved || query.status) && <div className="form-success">Sitzung wurde aktualisiert.</div>}
+      {(query.agenda || query.resolution || query.created || query.saved || query.status || query.officers) && <div className="form-success">Sitzung wurde aktualisiert.</div>}
       {query.notes && <div className="form-success">Ergebnisnotiz wurde gespeichert.</div>}
       {query.agenda_deleted && <div className="form-success">TOP wurde gelöscht.</div>}
 
@@ -253,6 +269,64 @@ export default async function MeetingDetailPage({
         <article><span>Anwesend</span><strong>{presentCount}/{attendees.length}</strong><small>{unresolvedAttendanceCount ? unresolvedAttendanceCount+" ungeklärt" : "vollständig erfasst"}</small></article>
         <article><span>Beschlüsse</span><strong>{agenda.filter((row)=>row.resolution_id).length}</strong><small>in dieser Sitzung</small></article>
         <article><span>Status</span><strong>{meetingStatusLabel(meeting.status)}</strong><small>{meeting.ended_at ? "beendet "+formatDateTime(meeting.ended_at) : "aktueller Sitzungsstand"}</small></article>
+      </section>
+
+      <section className="meeting-secretary-setup">
+        <article className="panel">
+          <div className="panel-head">
+            <div>
+              <span className="eyebrow">Protokollorganisation</span>
+              <h2>Sitzungsleitung & Protokollführung</h2>
+            </div>
+            <b className={"minutes-status minutes-"+minutesStatus}>
+              {minutesStatusLabels[minutesStatus] ?? minutesStatus}
+            </b>
+          </div>
+
+          {canWrite && minutesStatus!=="archived" ? (
+            <form action={updateMeetingOfficersAction} className="meeting-officer-form">
+              <input type="hidden" name="meetingId" value={id} />
+              <label>
+                Sitzungsleitung
+                <select name="chairMemberId" defaultValue={String(meeting.chair_member_id ?? "")}>
+                  <option value="">Noch nicht festgelegt</option>
+                  {members.map((member)=>(
+                    <option key={String(member.id)} value={String(member.id)}>
+                      {String(member.first_name)} {String(member.last_name)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Protokollführung
+                <select
+                  name="minuteTakerMemberId"
+                  defaultValue={String(meeting.minute_taker_member_id ?? actor.memberId ?? "")}
+                >
+                  <option value="">Noch nicht festgelegt</option>
+                  {members.map((member)=>(
+                    <option key={String(member.id)} value={String(member.id)}>
+                      {String(member.first_name)} {String(member.last_name)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button className="mini-button" type="submit">Rollen speichern</button>
+            </form>
+          ) : (
+            <div className="meeting-officer-readonly">
+              <span>Die Rollen können im archivierten Protokoll nicht mehr verändert werden.</span>
+            </div>
+          )}
+
+          <div className="meeting-protocol-shortcut">
+            <div>
+              <strong>Schriftführer-Arbeitsplatz</strong>
+              <span>Einleitung, Abschluss, Prüfung, Freigabe und Archivierung des Protokolls.</span>
+            </div>
+            <Link href={`/sitzungen/${id}/protokoll`} className="primary-button">Protokoll öffnen</Link>
+          </div>
+        </article>
       </section>
 
       <section className="meeting-session-shell">
@@ -314,17 +388,11 @@ export default async function MeetingDetailPage({
                   )}
 
                   {meetingRunning && canWrite ? (
-                    <form action={updateAgendaNotesAction} className="meeting-focus-note-form">
-                      <input type="hidden" name="meetingId" value={id} />
-                      <input type="hidden" name="agendaItemId" value={String(preferredAgenda.id)} />
-                      <textarea
-                        name="notes"
-                        rows={4}
-                        defaultValue={preferredAgenda.notes ? String(preferredAgenda.notes) : ""}
-                        placeholder="Diskussion, Ergebnis und wichtige Hinweise festhalten …"
-                      />
-                      <button className="mini-button">Notiz speichern</button>
-                    </form>
+                    <MeetingAutoNotes
+                      meetingId={id}
+                      agendaItemId={String(preferredAgenda.id)}
+                      initialValue={preferredAgenda.notes ? String(preferredAgenda.notes) : ""}
+                    />
                   ) : preferredAgenda.notes ? (
                     <div className="meeting-read-note">{String(preferredAgenda.notes)}</div>
                   ) : null}
