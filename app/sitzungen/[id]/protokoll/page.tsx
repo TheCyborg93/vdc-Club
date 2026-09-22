@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { getDb } from "@/lib/db";
 import { hasPermission, requirePermission } from "@/lib/permissions";
 import { meetingStatusLabel } from "@/lib/ui-labels";
@@ -230,6 +230,7 @@ export default async function MinutesPage({
   const minutesStatus=String(meeting.minutes_status ?? "draft");
   const officersComplete=Boolean(meeting.chair_member_id && meeting.minute_taker_member_id);
   const meetingComplete=String(meeting.status)==="completed";
+  if (!meetingComplete) redirect(`/sitzungen/${id}`);
   const resolutionCount=agenda.filter((row)=>row.resolution_number).length;
   const deferredCount=agenda.filter((row)=>row.status==="deferred").length;
   const formalReady=
@@ -246,15 +247,15 @@ export default async function MinutesPage({
         <section className="secretary-workspace-head">
           <div>
             <Link href={`/sitzungen/${id}`} className="back-link">← Sitzung</Link>
-            <span className="eyebrow">Schriftführer-Arbeitsplatz</span>
-            <h1>Protokoll bearbeiten</h1>
+            <span className="eyebrow">Sitzungsprotokoll</span>
+            <h1>Protokoll prüfen</h1>
             <p>{String(meeting.title)} · Version {Number(meeting.minutes_version ?? 1)}</p>
           </div>
           <div className="secretary-workspace-actions">
             <span className={"minutes-status minutes-"+minutesStatus}>
               {minutesStatusLabels[minutesStatus] ?? minutesStatus}
             </span>
-            <a href="#druckansicht" className="ghost-button">Druckansicht</a>
+            <a href="#protokoll-vorschau" className="ghost-button">Protokoll ansehen</a>
           </div>
         </section>
 
@@ -350,7 +351,16 @@ export default async function MinutesPage({
         )}
 
         {canWrite && minutesStatus==="draft" && (
-          <article className="panel secretary-editor">
+          <details className="secretary-editor-drawer" id="nachbearbeiten">
+            <summary>
+              <div>
+                <span className="eyebrow">Optional</span>
+                <strong>Protokoll nachbearbeiten</strong>
+                <small>Nur Einleitung und Abschluss ergänzen – TOPs, Teilnahme und Beschlüsse kommen automatisch aus der Sitzung.</small>
+              </div>
+              <b>+</b>
+            </summary>
+            <article className="panel secretary-editor">
             <div className="panel-head">
               <div>
                 <span className="eyebrow">Protokolltext</span>
@@ -380,7 +390,8 @@ export default async function MinutesPage({
               </label>
               <button className="mini-button">Protokolltext speichern</button>
             </form>
-          </article>
+            </article>
+          </details>
         )}
 
         <section className="secretary-approval-panel">
@@ -471,10 +482,12 @@ export default async function MinutesPage({
             </article>
           )}
 
-          <article className="panel minutes-history-panel">
-            <div className="panel-head">
-              <div><span className="eyebrow">Historie</span><h2>Protokollverlauf</h2></div>
-            </div>
+          <details className="panel minutes-history-panel">
+            <summary>
+              <div><span className="eyebrow">Historie</span><strong>Protokollverlauf</strong></div>
+              <b>{revisions.length}</b>
+            </summary>
+            <div className="minutes-history-content">
             {revisions.length===0 ? (
               <div className="empty-state">Noch keine Freigabeversion vorhanden.</div>
             ) : (
@@ -494,16 +507,26 @@ export default async function MinutesPage({
                 ))}
               </div>
             )}
-          </article>
+            </div>
+          </details>
         </section>
       </div>
 
+      <details className="minutes-preview-drawer" id="protokoll-vorschau">
+        <summary className="no-print">
+          <div>
+            <span className="eyebrow">Vorschau</span>
+            <strong>Fertiges Protokoll ansehen</strong>
+            <small>Die Druckfassung wird vollständig aus den Sitzungsdaten aufgebaut.</small>
+          </div>
+          <b>+</b>
+        </summary>
       <div className="minutes-toolbar no-print">
         <Link href={`/sitzungen/${id}`} className="ghost-button">← Sitzung</Link>
         <span>Finale Druckansicht · im Browser „Drucken“ → „Als PDF sichern“.</span>
       </div>
 
-      <article className="minutes-document" id="druckansicht">
+      <article className="minutes-document">
         {minutesStatus!=="approved" && minutesStatus!=="archived" && (
           <div className="minutes-draft-watermark">
             {minutesStatus==="review" ? "IN PRÜFUNG" : "ENTWURF"}
@@ -733,6 +756,7 @@ export default async function MinutesPage({
           </div>
         </footer>
       </article>
+      </details>
     </main>
   );
 }
