@@ -177,6 +177,100 @@ export default async function MeetingCorrectionPage({
   const presentVotingCount=attendees.filter(
     (row)=>row.attendance==="present" && row.voting_eligible===true,
   ).length;
+
+  const formalReady=
+    Boolean(meeting.invited_at) &&
+    Boolean(String(meeting.invitation_method ?? "").trim()) &&
+    meeting.invitation_timely!=null &&
+    meeting.agenda_sent_with_invitation!=null &&
+    meeting.quorum_confirmed!=null &&
+    Boolean(meeting.chair_member_id && meeting.minute_taker_member_id);
+  const chairPresent=attendees.some(
+    (row)=>row.attendance==="present" && String(row.member_id)===String(meeting.chair_member_id),
+  );
+  const minuteTakerPresent=attendees.some(
+    (row)=>row.attendance==="present" && String(row.member_id)===String(meeting.minute_taker_member_id),
+  );
+  const unresolvedAttendeeCount=attendees.filter((row)=>row.attendance==="invited").length;
+  const unresolvedGuestCount=guests.filter((row)=>row.attendance==="invited").length;
+  const unfinishedAgendaCount=agenda.filter(
+    (row)=>!["done","deferred"].includes(String(row.status)),
+  ).length;
+  const decisionWithoutResolutionCount=agenda.filter(
+    (row)=>row.agenda_type==="decision" && row.status==="done" && !row.resolution_id,
+  ).length;
+  const invalidVoteAgendaIds=new Set(
+    agenda
+      .filter((row)=>{
+        if (!row.resolution_id) return false;
+        const eligible=row.eligible_voters==null ? null : Number(row.eligible_voters);
+        const total=Number(row.votes_yes ?? 0)+Number(row.votes_no ?? 0)+Number(row.votes_abstain ?? 0);
+        const exclusionCount=exclusions.filter(
+          (entry)=>String(entry.agenda_item_id)===String(row.id),
+        ).length;
+        return !row.vote_method ||
+          !row.decision_outcome ||
+          eligible==null ||
+          eligible!==total ||
+          Number(row.excluded_voters ?? 0)!==exclusionCount ||
+          (row.vote_method==="roll_call" && !String(row.vote_details ?? "").trim());
+      })
+      .map((row)=>String(row.id)),
+  );
+  const spontaneousAgendaIds=new Set(
+    agenda
+      .filter(
+        (row)=>row.resolution_id &&
+          row.announced_with_invitation===false &&
+          !String(row.decision_basis_note ?? "").trim(),
+      )
+      .map((row)=>String(row.id)),
+  );
+  const decisionMissingAgendaIds=new Set(
+    agenda
+      .filter((row)=>row.agenda_type==="decision" && row.status==="done" && !row.resolution_id)
+      .map((row)=>String(row.id)),
+  );
+  const unfinishedAgendaIds=new Set(
+    agenda
+      .filter((row)=>!["done","deferred"].includes(String(row.status)))
+      .map((row)=>String(row.id)),
+  );
+  const agendaIssueIds=new Set([
+    ...invalidVoteAgendaIds,
+    ...spontaneousAgendaIds,
+    ...decisionMissingAgendaIds,
+    ...unfinishedAgendaIds,
+  ]);
+  const resolutionCount=agenda.filter((row)=>row.resolution_id).length;
+  const protocolReady=
+    formalReady &&
+    chairPresent &&
+    minuteTakerPresent &&
+    unresolvedAttendeeCount===0 &&
+    unresolvedGuestCount===0 &&
+    unfinishedAgendaCount===0 &&
+    decisionWithoutResolutionCount===0 &&
+    invalidVoteAgendaIds.size===0 &&
+    spontaneousAgendaIds.size===0 &&
+    (resolutionCount===0 || meeting.quorum_confirmed===true);
+  const issueCount=
+    (!formalReady ? 1 : 0) +
+    (!chairPresent || !minuteTakerPresent ? 1 : 0) +
+    unresolvedAttendeeCount +
+    unresolvedGuestCount +
+    unfinishedAgendaCount +
+    decisionWithoutResolutionCount +
+    invalidVoteAgendaIds.size +
+    spontaneousAgendaIds.size +
+    (resolutionCount>0 && meeting.quorum_confirmed!==true ? 1 : 0);
+  const attendanceNeedsAttention=
+    !chairPresent ||
+    !minuteTakerPresent ||
+    unresolvedAttendeeCount>0 ||
+    unresolvedGuestCount>0;
+  const agendaNeedsAttention=agendaIssueIds.size>0;
+
   if (!canWrite) redirect(`/sitzungen/${id}/protokoll?error=forbidden`);
 
   return (
@@ -194,11 +288,61 @@ export default async function MeetingCorrectionPage({
       {query.error && <div className="form-error">{errors[query.error] ?? "Änderung konnte nicht gespeichert werden."}</div>}
       {query.saved && <div className="form-success">Korrektur wurde gespeichert und im Änderungsverlauf protokolliert.</div>}
 
-      <section className="panel meeting-correction-section">
-        <div className="panel-head">
-          <div><span className="eyebrow">Sitzung</span><h2>Rahmen & Protokolltexte</h2></div>
+      <section className={"meeting-correction-guide "+(protocolReady ? "is-ready" : "needs-attention")}>
+        <div className="meeting-correction-guide-head">
+          <div>
+            <span className="eyebrow">Korrekturassistent</span>
+            <h2>{protocolReady ? "Protokoll ist vollständig" : issueCount+" Punkt(e) noch prüfen"}</h2>
+            <p>
+              {protocolReady
+                ? "Alle Pflichtprüfungen sind erfüllt. Du kannst direkt zurück zum Protokoll und es zur Freigabe einreichen."
+                : "Öffne nur die Bereiche mit Hinweis. Bereits vollständige Bereiche bleiben kompakt geschlossen."}
+            </p>
+          </div>
+          <Link href={`/sitzungen/${id}/protokoll`} className={protocolReady ? "primary-button" : "ghost-button"}>
+            {protocolReady ? "Zurück & einreichen" : "Zur Protokollübersicht"}
+          </Link>
         </div>
 
+        <nav className="meeting-correction-guide-grid" aria-label="Nachbearbeitungsbereiche">
+          <a href="#korrektur-formalia" className={!formalReady ? "has-issue" : "is-ok"}>
+            <b>{formalReady ? "✓" : "!"}</b>
+            <span><strong>Formalia</strong><small>{formalReady ? "vollständig" : "Angaben prüfen"}</small></span>
+          </a>
+          <a href="#korrektur-teilnahme" className={attendanceNeedsAttention ? "has-issue" : "is-ok"}>
+            <b>{attendanceNeedsAttention ? "!" : "✓"}</b>
+            <span>
+              <strong>Teilnahme</strong>
+              <small>{attendanceNeedsAttention ? "Anwesenheit/Rollen prüfen" : "vollständig"}</small>
+            </span>
+          </a>
+          <a href="#korrektur-tops" className={agendaNeedsAttention ? "has-issue" : "is-ok"}>
+            <b>{agendaNeedsAttention ? "!" : "✓"}</b>
+            <span>
+              <strong>TOPs & Beschlüsse</strong>
+              <small>{agendaNeedsAttention ? agendaIssueIds.size+" TOP(s) prüfen" : "vollständig"}</small>
+            </span>
+          </a>
+          <a href="#korrektur-anlagen" className="is-neutral">
+            <b>↗</b>
+            <span><strong>Anlagen</strong><small>{attachments.length} hinterlegt</small></span>
+          </a>
+        </nav>
+      </section>
+
+      <details className="panel meeting-correction-section meeting-correction-group" id="korrektur-formalia" open={!formalReady}>
+        <summary className="meeting-correction-group-summary">
+          <div>
+            <span className="eyebrow">Sitzung</span>
+            <strong>Rahmen & Protokolltexte</strong>
+            <small>{formalReady ? "Formalia vollständig" : "Formalia benötigen Aufmerksamkeit"}</small>
+          </div>
+          <span className={formalReady ? "correction-state is-ok" : "correction-state has-issue"}>
+            {formalReady ? "Vollständig" : "Prüfen"}
+          </span>
+        </summary>
+
+        <div className="meeting-correction-group-body">
         <form action={correctCompletedMeetingAction} className="meeting-correction-form">
           <input type="hidden" name="meetingId" value={id} />
           <div className="form-grid">
@@ -272,8 +416,21 @@ export default async function MeetingCorrectionPage({
           <label className="correction-reason">Änderungsgrund<input name="reason" required placeholder="Warum wird die fertige Sitzung korrigiert?" /></label>
           <button className="primary-button">Sitzungsdaten korrigieren</button>
         </form>
-      </section>
+        </div>
+      </details>
 
+      <details className="panel meeting-correction-group" id="korrektur-teilnahme" open={attendanceNeedsAttention}>
+        <summary className="meeting-correction-group-summary">
+          <div>
+            <span className="eyebrow">Teilnahme</span>
+            <strong>Vorstand & Gäste</strong>
+            <small>{attendees.length} Vorstand · {guests.length} Gäste</small>
+          </div>
+          <span className={attendanceNeedsAttention ? "correction-state has-issue" : "correction-state is-ok"}>
+            {attendanceNeedsAttention ? "Prüfen" : "Vollständig"}
+          </span>
+        </summary>
+        <div className="meeting-correction-group-body">
       <section className="meeting-correction-grid">
         <article className="panel">
           <div className="panel-head">
@@ -389,12 +546,19 @@ export default async function MeetingCorrectionPage({
           )}
         </article>
       </section>
-
-      <section className="panel meeting-correction-section">
-        <div className="panel-head">
-          <div><span className="eyebrow">Unterlagen</span><h2>Sitzungsanlagen</h2></div>
-          <span className="count-chip">{generalAttachments.length}</span>
         </div>
+      </details>
+
+      <details className="panel meeting-correction-section meeting-correction-group" id="korrektur-anlagen">
+        <summary className="meeting-correction-group-summary">
+          <div>
+            <span className="eyebrow">Unterlagen</span>
+            <strong>Sitzungsanlagen</strong>
+            <small>{generalAttachments.length} allgemeine Anlage(n)</small>
+          </div>
+          <span className="correction-state is-neutral">Optional</span>
+        </summary>
+        <div className="meeting-correction-group-body">
 
         {generalAttachments.length===0 ? (
           <div className="empty-state">Keine allgemeinen Sitzungsanlagen.</div>
@@ -433,24 +597,40 @@ export default async function MeetingCorrectionPage({
             <button className="mini-button">Sitzungsanlage hochladen</button>
           </form>
         )}
-      </section>
-
-      <section className="panel meeting-correction-section">
-        <div className="panel-head">
-          <div><span className="eyebrow">Tagesordnung</span><h2>TOPs & Ergebnisse</h2></div>
-          <span className="count-chip">{agenda.length}</span>
         </div>
+      </details>
+
+      <details className="panel meeting-correction-section meeting-correction-group" id="korrektur-tops" open={agendaNeedsAttention}>
+        <summary className="meeting-correction-group-summary">
+          <div>
+            <span className="eyebrow">Tagesordnung</span>
+            <strong>TOPs & Ergebnisse</strong>
+            <small>{agenda.length} TOP(s) · {resolutionCount} Beschluss/Beschlüsse</small>
+          </div>
+          <span className={agendaNeedsAttention ? "correction-state has-issue" : "correction-state is-ok"}>
+            {agendaNeedsAttention ? agendaIssueIds.size+" prüfen" : "Vollständig"}
+          </span>
+        </summary>
+        <div className="meeting-correction-group-body">
 
         <div className="meeting-correction-agenda">
           {agenda.map((item)=>(
-            <details key={String(item.id)}>
+            <details
+              key={String(item.id)}
+              open={agendaIssueIds.has(String(item.id))}
+              className={agendaIssueIds.has(String(item.id)) ? "has-correction-issue" : ""}
+            >
               <summary>
                 <div>
                   <b>TOP {String(item.position).padStart(2,"0")}</b>
                   <strong>{String(item.title)}</strong>
                   <span>{String(item.agenda_type)} · {String(item.status)}</span>
                 </div>
-                <span>{item.resolution_id ? "Beschluss vorhanden" : ""}</span>
+                <span className={agendaIssueIds.has(String(item.id)) ? "correction-top-issue" : ""}>
+                  {agendaIssueIds.has(String(item.id))
+                    ? "Prüfen"
+                    : item.resolution_id ? "Beschluss vorhanden" : ""}
+                </span>
               </summary>
 
               <div className="meeting-correction-agenda-body">
@@ -738,13 +918,19 @@ export default async function MeetingCorrectionPage({
             <button className="mini-button">TOP nachtragen</button>
           </form>
         </details>
-      </section>
-
-      <section className="panel meeting-change-history">
-        <div className="panel-head">
-          <div><span className="eyebrow">Nachvollziehbarkeit</span><h2>Änderungsverlauf</h2></div>
-          <span className="count-chip">{changes.length}</span>
         </div>
+      </details>
+
+      <details className="panel meeting-change-history meeting-correction-group" id="korrektur-verlauf">
+        <summary className="meeting-correction-group-summary">
+          <div>
+            <span className="eyebrow">Nachvollziehbarkeit</span>
+            <strong>Änderungsverlauf</strong>
+            <small>{changes.length} protokollierte Änderung(en)</small>
+          </div>
+          <span className="correction-state is-neutral">Historie</span>
+        </summary>
+        <div className="meeting-correction-group-body">
 
         {changes.length===0 ? (
           <div className="empty-state">Noch keine nachträglichen Korrekturen.</div>
@@ -761,6 +947,22 @@ export default async function MeetingCorrectionPage({
             ))}
           </div>
         )}
+        </div>
+      </details>
+
+      <section className={"meeting-correction-finish "+(protocolReady ? "is-ready" : "needs-attention")}>
+        <div>
+          <span className="eyebrow">Nachbearbeitung abschließen</span>
+          <strong>{protocolReady ? "Alle Prüfungen erfüllt" : issueCount+" Punkt(e) sind noch offen"}</strong>
+          <small>
+            {protocolReady
+              ? "Zurück zum Protokoll und zur Prüfung einreichen."
+              : "Die offenen Bereiche sind oben markiert und automatisch aufgeklappt."}
+          </small>
+        </div>
+        <Link href={`/sitzungen/${id}/protokoll`} className={protocolReady ? "primary-button" : "ghost-button"}>
+          Zurück zum Protokoll
+        </Link>
       </section>
     </div>
   );
