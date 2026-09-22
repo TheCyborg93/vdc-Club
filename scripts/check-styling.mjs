@@ -21,6 +21,7 @@ function walk(dir){
     else {
       const rel=path.relative(root,full).replaceAll("\\","/");
       if(rel.endsWith(".css") && !allowedCss.has(rel)) failures.push(`Nicht erlaubte CSS-Datei: ${rel}`);
+      if(rel==="scripts/check-styling.mjs") continue;
       if(/\.(ts|tsx|js|jsx|mjs|cjs)$/.test(rel)){
         const text=fs.readFileSync(full,"utf8");
         if(/<style\s+jsx|styled-jsx/.test(text)) failures.push(`styled-jsx gefunden: ${rel}`);
