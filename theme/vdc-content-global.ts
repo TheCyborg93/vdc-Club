@@ -43,7 +43,7 @@ export const vdcContentGlobalCss = {
 
   ".search-page":{display:"grid",gap:{base:"4",md:"5"}},
   ".global-search-panel":{borderColor:"brand.border !important"},
-  ".global-search-form":{display:"grid",gridTemplateColumns:{base:"1fr",md:"minmax(0,1fr) auto"},gap:"2.5","& input":{width:"full",minHeight:"10",px:"3",border:"1px solid",borderColor:"surface.border",borderRadius:"l1",background:"surface.bg",color:"fg",outline:"none",_focus:{borderColor:"brand.solid",boxShadow:"focus"}}},
+  ".global-search-form":{display:"grid",gridTemplateColumns:{base:"1fr",md:"minmax(0,1fr) auto"},gap:"2.5","& input":{width:"full",minHeight:{base:"[44px]",md:"10"},px:"3",border:"1px solid",borderColor:"surface.border",borderRadius:"l1",background:"surface.bg",color:"fg",outline:"none",_focus:{borderColor:"brand.solid",boxShadow:"focus"}}},
   ".search-summary":{display:"flex",gap:"1.5",flexWrap:"wrap",color:"fg.muted",fontSize:"xs"},
   ".search-result-group":{display:"grid",gap:"2.5"},
   ".search-result-list":{display:"grid"},
