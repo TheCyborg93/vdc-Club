@@ -8,8 +8,6 @@ import { getNotifications } from "@/lib/notifications";
 import { PwaInstallPrompt } from "@/components/pwa-install-prompt";
 import { ensureIntegrationsFresh } from "@/lib/club-sync";
 import "./panda.css";
-import "./globals.css";
-import "./vdc-theme.css";
 
 export const metadata: Metadata = {
   title: {
