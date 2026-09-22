@@ -12,6 +12,7 @@ import { ConfirmSubmitButton } from "@/components/confirm-submit-button";
 export const dynamic="force-dynamic";
 
 const statusLabels:Record<string,string>={
+  draft:"Entwurf",
   active:"Aktiv",
   review:"Zu prüfen",
   expired:"Abgelaufen",
@@ -279,6 +280,7 @@ export default async function DocumentDetailPage({
                 </label>
                 <label>Status
                   <select name="status" defaultValue={String(doc.status)}>
+                    <option value="draft">Entwurf</option>
                     <option value="active">Aktiv</option>
                     <option value="review">Zu prüfen</option>
                     <option value="expired">Abgelaufen</option>
