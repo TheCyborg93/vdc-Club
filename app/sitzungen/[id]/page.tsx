@@ -32,7 +32,9 @@ import { MeetingAgendaPlanner } from "@/components/meeting-agenda-planner";
 import { MeetingFocusMode } from "@/components/meeting-focus-mode";
 import {
   removeMeetingAttachmentAction,
+  removeMeetingGeneralAttachmentAction,
   uploadMeetingAttachmentAction,
+  uploadMeetingGeneralAttachmentAction,
 } from "@/app/sitzungen/attachment-actions";
 import { meetingStatusLabel,taskStatusLabel } from "@/lib/ui-labels";
 
@@ -310,7 +312,6 @@ export default async function MeetingDetailPage({
         d.storage_ref
       FROM documents d
       WHERE d.meeting_id=${id}::uuid
-        AND d.agenda_item_id IS NOT NULL
         AND d.category='Sitzungsanlage'
         AND d.deleted_at IS NULL
       ORDER BY d.created_at
@@ -457,6 +458,7 @@ export default async function MeetingDetailPage({
   const preferredExclusions=preferredAgenda
     ? exclusions.filter((row)=>String(row.agenda_item_id)===String(preferredAgenda.id))
     : [];
+  const generalAttachments=attachments.filter((row)=>!row.agenda_item_id);
   const preferredAttachments=preferredAgenda
     ? attachments.filter((row)=>String(row.agenda_item_id)===String(preferredAgenda.id))
     : [];
@@ -1349,6 +1351,54 @@ export default async function MeetingDetailPage({
               </article>
             ))}
           </div>
+        </section>
+      )}
+
+      {["planned","cancelled"].includes(String(meeting.status)) && (
+        <section className="panel meeting-general-attachments">
+          <div className="panel-head">
+            <div>
+              <span className="eyebrow">Unterlagen</span>
+              <h2>Sitzungsanlagen</h2>
+            </div>
+            <span className="count-chip">{generalAttachments.length}</span>
+          </div>
+
+          {generalAttachments.length===0 ? (
+            <div className="empty-state">Keine allgemeinen Sitzungsunterlagen hinterlegt.</div>
+          ) : (
+            <div className="meeting-attachment-list">
+              {generalAttachments.map((doc)=>(
+                <div key={String(doc.id)}>
+                  <div>
+                    <strong>{String(doc.title)}</strong>
+                    <span>{doc.original_filename ? String(doc.original_filename) : "Dokument"}</span>
+                  </div>
+                  <div>
+                    <Link href={"/api/documents/"+String(doc.id)+"/file"} target="_blank" className="mini-button">Öffnen</Link>
+                    {canDocumentsWrite && meeting.status==="planned" && (
+                      <form action={removeMeetingGeneralAttachmentAction}>
+                        <input type="hidden" name="meetingId" value={id} />
+                        <input type="hidden" name="documentId" value={String(doc.id)} />
+                        <input type="hidden" name="returnTo" value={`/sitzungen/${id}`} />
+                        <button className="mini-button">Entfernen</button>
+                      </form>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {canDocumentsWrite && meeting.status==="planned" && (
+            <form action={uploadMeetingGeneralAttachmentAction} className="meeting-general-attachment-upload" encType="multipart/form-data">
+              <input type="hidden" name="meetingId" value={id} />
+              <input type="hidden" name="returnTo" value={`/sitzungen/${id}`} />
+              <label>Titel<input name="title" placeholder="Optional" /></label>
+              <label>Datei<input name="file" type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.jpg,.jpeg,.png,.webp" required /></label>
+              <button className="mini-button">Anlage hochladen</button>
+            </form>
+          )}
         </section>
       )}
 
