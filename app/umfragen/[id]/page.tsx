@@ -157,6 +157,10 @@ export default async function SurveyDetailPage({
   const canWrite = hasPermission(user.roles, "surveys.write");
   const responseCount = Number(responseRows[0]?.count ?? 0);
   const isAnonymous = Boolean(survey.is_anonymous);
+  const deadlinePassed=
+    survey.status==="active" &&
+    Boolean(survey.ends_at) &&
+    new Date(String(survey.ends_at)).getTime()<=Date.now();
 
   const counts = new Map(choiceRows.map((row) => [String(row.option_id), Number(row.count)]));
 
@@ -213,6 +217,27 @@ export default async function SurveyDetailPage({
       )}
       {query.error === "not_editable" && (
         <div className="form-error">Nur unveröffentlichte Entwürfe ohne Antworten können bearbeitet werden.</div>
+      )}
+      {query.error === "deadline_passed" && (
+        <div className="form-error">Die hinterlegte Frist ist bereits abgelaufen. Passe die Frist an, bevor die Umfrage wieder geöffnet wird.</div>
+      )}
+      {query.error === "invalid_transition" && (
+        <div className="form-error">Dieser Statuswechsel ist für die Umfrage nicht zulässig.</div>
+      )}
+      {deadlinePassed && (
+        <div className="survey-deadline-warning">
+          <div>
+            <strong>Frist abgelaufen</strong>
+            <span>Der öffentliche Link nimmt bereits keine Antworten mehr an. Beende die Umfrage jetzt auch formal.</span>
+          </div>
+          {canWrite && (
+            <form action={updateSurveyStatusAction}>
+              <input type="hidden" name="id" value={id} />
+              <input type="hidden" name="status" value="closed" />
+              <button className="primary-button">Umfrage beenden</button>
+            </form>
+          )}
+        </div>
       )}
 
       <section className="stat-grid">
@@ -281,7 +306,7 @@ export default async function SurveyDetailPage({
                 </form>
               )}
 
-              {survey.status === "active" && (
+              {survey.status === "active" && !deadlinePassed && (
                 <form action={updateSurveyStatusAction}>
                   <input type="hidden" name="id" value={id} />
                   <input type="hidden" name="status" value="closed" />
