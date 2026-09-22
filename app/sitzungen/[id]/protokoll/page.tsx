@@ -230,9 +230,18 @@ export default async function MinutesPage({
   const minutesStatus=String(meeting.minutes_status ?? "draft");
   const officersComplete=Boolean(meeting.chair_member_id && meeting.minute_taker_member_id);
   const meetingComplete=String(meeting.status)==="completed";
+  const resolutionCount=agenda.filter((row)=>row.resolution_number).length;
+  const deferredCount=agenda.filter((row)=>row.status==="deferred").length;
+  const formalReady=
+    Boolean(meeting.invited_at) &&
+    Boolean(String(meeting.invitation_method ?? "").trim()) &&
+    meeting.invitation_timely!=null &&
+    meeting.agenda_sent_with_invitation!=null &&
+    meeting.quorum_confirmed!=null &&
+    officersComplete;
 
   return (
-    <main className="minutes-page secretary-workspace-page">
+    <main className="minutes-page secretary-workspace-page minutes-page-v2">
       <div className="secretary-workspace no-print">
         <section className="secretary-workspace-head">
           <div>
@@ -306,6 +315,29 @@ export default async function MinutesPage({
           <article>
             <span>Version</span>
             <strong>v{Number(meeting.minutes_version ?? 1)}</strong>
+          </article>
+        </section>
+
+        <section className="minutes-quality-strip">
+          <article className={formalReady ? "is-ready" : "needs-attention"}>
+            <span>Formalia</span>
+            <strong>{formalReady ? "Vollständig" : "Prüfen"}</strong>
+            <small>Einladung, Rollen, Beschlussfähigkeit</small>
+          </article>
+          <article>
+            <span>Teilnahme</span>
+            <strong>{present.length}</strong>
+            <small>{votingPresent.length} stimmberechtigt · {guests.length} Gäste</small>
+          </article>
+          <article>
+            <span>TOPs</span>
+            <strong>{agenda.length}</strong>
+            <small>{deferredCount} vertagt</small>
+          </article>
+          <article>
+            <span>Beschlüsse</span>
+            <strong>{resolutionCount}</strong>
+            <small>{attachments.length} Anlagen</small>
           </article>
         </section>
 
@@ -468,7 +500,7 @@ export default async function MinutesPage({
 
       <div className="minutes-toolbar no-print">
         <Link href={`/sitzungen/${id}`} className="ghost-button">← Sitzung</Link>
-        <span>Zum PDF-Export im Browser „Drucken“ → „Als PDF sichern“ verwenden.</span>
+        <span>Finale Druckansicht · im Browser „Drucken“ → „Als PDF sichern“.</span>
       </div>
 
       <article className="minutes-document" id="druckansicht">
