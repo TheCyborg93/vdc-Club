@@ -3,11 +3,17 @@ import { redirect } from "next/navigation";
 import { getDb } from "@/lib/db";
 import { hasPermission, requirePermission } from "@/lib/permissions";
 import {
+  addMeetingAttendeeCorrectionAction,
+  addMeetingGuestCorrectionAction,
+  addResolutionCorrectionAction,
   correctAgendaItemAction,
   correctCompletedMeetingAction,
   correctMeetingAttendeeAction,
   correctMeetingGuestAction,
   correctResolutionAction,
+  removeMeetingAttendeeCorrectionAction,
+  removeMeetingGuestCorrectionAction,
+  removeResolutionCorrectionAction,
 } from "@/app/sitzungen/correction-actions";
 import {
   removeMeetingAttachmentAction,
@@ -62,7 +68,7 @@ export default async function MeetingCorrectionPage({
   const {id}=await params;
   const query=await searchParams;
 
-  const [meetingRows,attendees,guests,agenda,attachments,changes]=await Promise.all([
+  const [meetingRows,members,attendees,guests,agenda,attachments,changes]=await Promise.all([
     sql`
       SELECT
         m.*,
@@ -76,6 +82,12 @@ export default async function MeetingCorrectionPage({
       WHERE m.id=${id}::uuid
         AND m.deleted_at IS NULL
       LIMIT 1
+    `,
+    sql`
+      SELECT id::text,first_name,last_name
+      FROM members
+      WHERE status='active'
+      ORDER BY last_name,first_name
     `,
     sql`
       SELECT
@@ -135,6 +147,8 @@ export default async function MeetingCorrectionPage({
   const canResolve=hasPermission(actor.roles,"resolutions.write");
   const canDocumentsWrite=hasPermission(actor.roles,"documents.write");
   const generalAttachments=attachments.filter((doc)=>!doc.agenda_item_id);
+  const attendeeIds=new Set(attendees.map((row)=>String(row.member_id)));
+  const availableMembers=members.filter((row)=>!attendeeIds.has(String(row.id)));
   if (!canWrite) redirect(`/sitzungen/${id}/protokoll?error=forbidden`);
 
   return (
@@ -174,6 +188,28 @@ export default async function MeetingCorrectionPage({
                 <option value="in_person">Präsenz</option>
                 <option value="hybrid">Hybrid</option>
                 <option value="online">Online</option>
+              </select>
+            </label>
+          </div>
+          <div className="form-grid">
+            <label>Sitzungsleitung
+              <select name="chairMemberId" defaultValue={String(meeting.chair_member_id ?? "")} required>
+                <option value="" disabled>Bitte auswählen</option>
+                {attendees.map((row)=>(
+                  <option key={String(row.member_id)} value={String(row.member_id)}>
+                    {String(row.first_name)} {String(row.last_name)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>Protokollführung
+              <select name="minuteTakerMemberId" defaultValue={String(meeting.minute_taker_member_id ?? "")} required>
+                <option value="" disabled>Bitte auswählen</option>
+                {attendees.map((row)=>(
+                  <option key={String(row.member_id)} value={String(row.member_id)}>
+                    {String(row.first_name)} {String(row.last_name)}
+                  </option>
+                ))}
               </select>
             </label>
           </div>
@@ -236,6 +272,42 @@ export default async function MeetingCorrectionPage({
               </form>
             ))}
           </div>
+          <div className="meeting-correction-remove-list">
+            {attendees.map((row)=>(
+              <form action={removeMeetingAttendeeCorrectionAction} key={"remove-"+String(row.member_id)}>
+                <input type="hidden" name="meetingId" value={id} />
+                <input type="hidden" name="memberId" value={String(row.member_id)} />
+                <span>{String(row.first_name)} {String(row.last_name)}</span>
+                <input name="reason" required placeholder="Grund für Entfernung" />
+                <button className="meeting-agenda-delete">Entfernen</button>
+              </form>
+            ))}
+          </div>
+
+          {availableMembers.length>0 && (
+            <form action={addMeetingAttendeeCorrectionAction} className="meeting-correction-add-form">
+              <input type="hidden" name="meetingId" value={id} />
+              <select name="memberId" defaultValue="" required>
+                <option value="" disabled>Mitglied nachtragen</option>
+                {availableMembers.map((member)=>(
+                  <option key={String(member.id)} value={String(member.id)}>
+                    {String(member.first_name)} {String(member.last_name)}
+                  </option>
+                ))}
+              </select>
+              <select name="attendance" defaultValue="present">
+                <option value="present">Anwesend</option>
+                <option value="excused">Entschuldigt</option>
+                <option value="absent">Abwesend</option>
+              </select>
+              <select name="votingEligible" defaultValue="true">
+                <option value="true">Stimmberechtigt</option>
+                <option value="false">Nicht stimmberechtigt</option>
+              </select>
+              <input name="reason" required placeholder="Änderungsgrund" />
+              <button className="mini-button">Person nachtragen</button>
+            </form>
+          )}
         </article>
 
         <article className="panel">
@@ -260,6 +332,33 @@ export default async function MeetingCorrectionPage({
               </form>
             ))}
           </div>
+
+          <form action={addMeetingGuestCorrectionAction} className="meeting-correction-add-form">
+            <input type="hidden" name="meetingId" value={id} />
+            <input name="name" required placeholder="Gast nachtragen" />
+            <input name="organization" placeholder="Organisation / Funktion" />
+            <select name="attendance" defaultValue="present">
+              <option value="present">Anwesend</option>
+              <option value="absent">Abwesend</option>
+            </select>
+            <input name="note" placeholder="Hinweis" />
+            <input name="reason" required placeholder="Änderungsgrund" />
+            <button className="mini-button">Gast nachtragen</button>
+          </form>
+
+          {guests.length>0 && (
+            <div className="meeting-correction-remove-list">
+              {guests.map((row)=>(
+                <form action={removeMeetingGuestCorrectionAction} key={"remove-guest-"+String(row.id)}>
+                  <input type="hidden" name="meetingId" value={id} />
+                  <input type="hidden" name="guestId" value={String(row.id)} />
+                  <span>{String(row.name)}</span>
+                  <input name="reason" required placeholder="Grund für Entfernung" />
+                  <button className="meeting-agenda-delete">Entfernen</button>
+                </form>
+              ))}
+            </div>
+          )}
         </article>
       </section>
 
