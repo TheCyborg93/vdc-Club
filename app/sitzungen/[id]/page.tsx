@@ -1201,6 +1201,13 @@ export default async function MeetingDetailPage({
               </div>
             )}
 
+            <div className="meeting-close-summary">
+              <div><span>TOPs</span><strong>{agenda.length}</strong></div>
+              <div><span>Beschlüsse</span><strong>{agenda.filter((row)=>row.resolution_id).length}</strong></div>
+              <div><span>Aufgaben</span><strong>{agenda.filter((row)=>row.task_id).length}</strong></div>
+              <div><span>Vertagt</span><strong>{agenda.filter((row)=>row.status==="deferred").length}</strong></div>
+            </div>
+
             <form action={updateMeetingStatusAction} className="meeting-close-form">
               <input type="hidden" name="meetingId" value={id} />
               <input type="hidden" name="status" value="completed" />
@@ -1216,6 +1223,10 @@ export default async function MeetingDetailPage({
               <label>
                 Nächster Sitzungstermin
                 <input name="nextMeetingAt" type="datetime-local" defaultValue={dateTimeLocal(meeting.next_meeting_at)} />
+              </label>
+              <label className="checkbox-row meeting-next-create">
+                <input type="checkbox" name="createNextMeeting" defaultChecked />
+                <span>Wenn ein Termin gesetzt ist, direkt als neue Vorstandssitzung mit Vorstand, Vorsitz und Schriftführer anlegen.</span>
               </label>
               <div className="meeting-close-submit">
                 <span>Endzeit wird automatisch gespeichert.</span>
