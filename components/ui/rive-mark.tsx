@@ -1,6 +1,7 @@
 "use client";
 
 import { useRive } from "@rive-app/react-canvas";
+import { useReducedMotion } from "motion/react";
 import { css } from "styled-system/css";
 
 const frame = css({
@@ -19,10 +20,11 @@ export function VdcRiveMark({
   stateMachines?: string | string[];
   autoplay?: boolean;
 }) {
+  const reducedMotion = useReducedMotion();
   const { RiveComponent } = useRive({
     src,
     stateMachines,
-    autoplay,
+    autoplay: reducedMotion ? false : autoplay,
     automaticallyHandleEvents: true,
   });
 
