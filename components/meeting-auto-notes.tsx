@@ -33,12 +33,17 @@ export function MeetingAutoNotes({
     const timer=window.setTimeout(()=>{
       saveChain.current=saveChain.current.then(async ()=>{
         setState("saving");
-        const result=await saveAgendaNotesInlineAction(meetingId,agendaItemId,snapshot);
-
-        if (sequence!==saveSequence.current || snapshot!==latestValue.current) {
-          return;
+        try {
+          const result=await saveAgendaNotesInlineAction(meetingId,agendaItemId,snapshot);
+          if (sequence!==saveSequence.current || snapshot!==latestValue.current) {
+            return;
+          }
+          setState(result.ok ? "saved" : "error");
+        } catch {
+          if (sequence===saveSequence.current && snapshot===latestValue.current) {
+            setState("error");
+          }
         }
-        setState(result.ok ? "saved" : "error");
       });
     },800);
 
