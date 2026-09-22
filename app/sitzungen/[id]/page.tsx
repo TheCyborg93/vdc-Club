@@ -220,6 +220,7 @@ export default async function MeetingDetailPage({
         r.votes_no,
         r.votes_abstain,
         r.vote_method,
+        r.vote_details,
         r.eligible_voters,
         r.excluded_voters,
         r.decision_outcome,
@@ -377,7 +378,11 @@ export default async function MeetingDetailPage({
     if (!row.resolution_id) return false;
     const eligible=row.eligible_voters==null ? null : Number(row.eligible_voters);
     const total=Number(row.votes_yes ?? 0)+Number(row.votes_no ?? 0)+Number(row.votes_abstain ?? 0);
-    return !row.vote_method || !row.decision_outcome || eligible==null || eligible!==total;
+    return !row.vote_method ||
+      !row.decision_outcome ||
+      eligible==null ||
+      eligible!==total ||
+      (row.vote_method==="roll_call" && !String(row.vote_details ?? "").trim());
   }).length;
   const spontaneousBasisMissing=agenda.filter(
     (row)=>row.resolution_id && row.announced_with_invitation===false && !String(row.decision_basis_note ?? "").trim(),
@@ -902,6 +907,9 @@ export default async function MeetingDetailPage({
                         <span>Enthaltung <b>{Number(preferredAgenda.votes_abstain)}</b></span>
                         {preferredAgenda.task_id && (
                           <span>Aufgabe <b>{taskStatusLabel(preferredAgenda.task_status)}</b></span>
+                        )}
+                        {preferredAgenda.vote_details && (
+                          <span>Namentlich <b>{String(preferredAgenda.vote_details)}</b></span>
                         )}
                       </div>
                     </div>
