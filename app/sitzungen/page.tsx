@@ -56,8 +56,16 @@ function readiness(row:Record<string,unknown>) {
 function MeetingCard({meeting}:{meeting:Record<string,unknown>}) {
   const ready=readiness(meeting);
   const running=meeting.status==="running";
+  const completed=meeting.status==="completed";
+  const minutesStatus=String(meeting.minutes_status ?? "draft");
+  const href=completed
+    ? `/sitzungen/${String(meeting.id)}/protokoll`
+    : `/sitzungen/${String(meeting.id)}`;
+  const legacyApproved=minutesStatus==="approved";
+  const displayMinutesStatus=legacyApproved ? "archived" : minutesStatus;
+
   return (
-    <Link href={`/sitzungen/${String(meeting.id)}`} className={`meeting-overview-card ${running ? "is-running" : ""}`}>
+    <Link href={href} className={`meeting-overview-card ${running ? "is-running" : ""} ${completed ? "is-completed" : ""}`}>
       <div className="meeting-overview-main">
         <div className="meeting-overview-title">
           <span className={`meeting-status-indicator meeting-${String(meeting.status)}`} />
@@ -78,22 +86,40 @@ function MeetingCard({meeting}:{meeting:Record<string,unknown>}) {
         </div>
       </div>
 
-      <div className="meeting-overview-readiness">
-        <div>
-          <span>Vorbereitung</span>
-          <strong>{ready}/8</strong>
-        </div>
-        <div className="meeting-mini-progress" aria-hidden="true">
-          <i style={{width:`${Math.round((ready/8)*100)}%`}} />
-        </div>
+      <div className={"meeting-overview-readiness "+(completed ? "is-protocol" : "")}>
+        {completed ? (
+          <>
+            <div>
+              <span>Protokoll</span>
+              <strong>{minutesStatusLabels[displayMinutesStatus] ?? displayMinutesStatus}</strong>
+            </div>
+            <small>
+              {displayMinutesStatus==="archived"
+                ? "Finale Fassung"
+                : displayMinutesStatus==="review"
+                  ? "Wartet auf Freigabe"
+                  : "Nachbearbeitung offen"}
+            </small>
+          </>
+        ) : (
+          <>
+            <div>
+              <span>Vorbereitung</span>
+              <strong>{ready}/8</strong>
+            </div>
+            <div className="meeting-mini-progress" aria-hidden="true">
+              <i style={{width:`${Math.round((ready/8)*100)}%`}} />
+            </div>
+          </>
+        )}
       </div>
 
       <div className="meeting-overview-state">
         <b className={`status-badge status-${String(meeting.status)}`}>
           {meetingStatusLabel(meeting.status)}
         </b>
-        <span className={`minutes-status minutes-${String(meeting.minutes_status)}`}>
-          Protokoll · {minutesStatusLabels[String(meeting.minutes_status)] ?? String(meeting.minutes_status)}
+        <span className={`minutes-status minutes-${displayMinutesStatus}`}>
+          Protokoll · {minutesStatusLabels[displayMinutesStatus] ?? displayMinutesStatus}
         </span>
       </div>
     </Link>
@@ -217,8 +243,8 @@ export default async function MeetingsPage({
         </article>
         <article>
           <span>Protokolle</span>
-          <strong>{Number(count.minutes_open ?? 0)}</strong>
-          <small>{Number(count.minutes_review ?? 0)} in Prüfung</small>
+          <strong>{Number(count.minutes_open ?? 0)+Number(count.minutes_review ?? 0)}</strong>
+          <small>{Number(count.minutes_open ?? 0)} Entwurf · {Number(count.minutes_review ?? 0)} in Prüfung</small>
         </article>
       </section>
 
