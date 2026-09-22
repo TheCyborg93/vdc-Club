@@ -1329,3 +1329,44 @@ export async function carryForwardTaskAction(formData:FormData) {
   revalidatePath(`/sitzungen/${meetingId}`);
   redirect(`/sitzungen/${meetingId}?top=${String(rows[0].id)}&agenda=1`);
 }
+
+
+export async function updateAgendaFormalAction(formData:FormData) {
+  const actor=await requirePermission("meetings.write");
+  const sql=getDb();
+  if (!sql) redirect("/sitzungen?error=database");
+
+  const meetingId=value(formData,"meetingId");
+  const agendaItemId=value(formData,"agendaItemId");
+  const announcementStatus=value(formData,"announcementStatus");
+  const announcedWithInvitation=announcementStatus!=="spontaneous";
+  const decisionBasisNote=value(formData,"decisionBasisNote");
+
+  const rows=await sql`
+    UPDATE agenda_items ai
+    SET
+      announced_with_invitation=${announcedWithInvitation},
+      decision_basis_note=${decisionBasisNote || null}
+    FROM meetings m
+    WHERE ai.id=${agendaItemId}::uuid
+      AND ai.meeting_id=${meetingId}::uuid
+      AND m.id=ai.meeting_id
+      AND m.deleted_at IS NULL
+      AND m.status IN ('planned','running')
+      AND NOT EXISTS (
+        SELECT 1 FROM resolutions r WHERE r.agenda_item_id=ai.id
+      )
+    RETURNING ai.id::text
+  `;
+
+  if (!rows.length) redirect(`/sitzungen/${meetingId}?top=${agendaItemId}&error=meeting_locked`);
+
+  await writeAudit(actor.id,"agenda.formal_status_updated","agenda_item",agendaItemId,{
+    announcedWithInvitation,
+    decisionBasisNote:decisionBasisNote || null,
+  });
+
+  revalidatePath(`/sitzungen/${meetingId}`);
+  revalidatePath(`/sitzungen/${meetingId}/protokoll`);
+  redirect(`/sitzungen/${meetingId}?top=${agendaItemId}&formal=1`);
+}
