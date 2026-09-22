@@ -395,6 +395,8 @@ export default async function MeetingDetailPage({
   ).length;
   const officersComplete=Boolean(meeting.chair_member_id && meeting.minute_taker_member_id);
   const formalitiesDocumented=
+    Boolean(meeting.invited_at) &&
+    Boolean(String(meeting.invitation_method ?? "").trim()) &&
     meeting.invitation_timely!=null &&
     meeting.agenda_sent_with_invitation!=null &&
     meeting.quorum_confirmed!=null;
@@ -431,6 +433,8 @@ export default async function MeetingDetailPage({
     spontaneousBasisMissing===0;
   const formalCheckCount=[
     officersComplete,
+    Boolean(meeting.invited_at),
+    Boolean(String(meeting.invitation_method ?? "").trim()),
     meeting.invitation_timely!=null,
     meeting.agenda_sent_with_invitation!=null,
     meeting.quorum_confirmed!=null,
@@ -521,8 +525,8 @@ export default async function MeetingDetailPage({
       <section className="meeting-control-stats">
         <article className={formalCheckCount===4 ? "is-ready" : "needs-attention"}>
           <span>Formalia</span>
-          <strong>{formalCheckCount}/4</strong>
-          <small>{formalCheckCount===4 ? "vollständig" : "noch ergänzen"}</small>
+          <strong>{formalCheckCount}/6</strong>
+          <small>{formalCheckCount===6 ? "vollständig" : "noch ergänzen"}</small>
         </article>
         <article className={openAgendaCount===0 ? "is-ready" : ""}>
           <span>Tagesordnung</span>
