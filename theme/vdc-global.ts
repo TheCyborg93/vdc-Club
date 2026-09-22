@@ -146,7 +146,7 @@ export const vdcGlobalCss = {
   ".form-stack label, .form-grid label": { display: "grid", gap: "1.5", color: "fg.muted", fontSize: "xs", fontWeight: "750" },
   ".form-stack input, .form-stack select, .form-stack textarea, .form-grid input, .form-grid select, .form-grid textarea": {
     width: "full",
-    minHeight: "10",
+    minHeight: { base: "[44px]", md: "10" },
     paddingInline: "3",
     paddingBlock: "2",
     border: "1px solid",
