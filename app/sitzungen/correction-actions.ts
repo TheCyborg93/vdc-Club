@@ -782,8 +782,6 @@ export async function addResolutionCorrectionAction(formData:FormData) {
   const voteMethod=["open","show_of_hands","roll_call","secret","electronic"].includes(voteMethodRaw)
     ? voteMethodRaw : "show_of_hands";
   const voteDetails=value(formData,"voteDetails");
-  const eligible=Number(value(formData,"eligibleVoters") || "0");
-  const excluded=Number(value(formData,"excludedVoters") || "0");
   const yes=Number(value(formData,"votesYes") || "0");
   const no=Number(value(formData,"votesNo") || "0");
   const abstain=Number(value(formData,"votesAbstain") || "0");
@@ -793,7 +791,7 @@ export async function addResolutionCorrectionAction(formData:FormData) {
   if (!meetingId || !agendaItemId || !reason || !title || !decisionText || !outcome) {
     redirect(`/sitzungen/${meetingId}/korrektur?error=missing`);
   }
-  if ([eligible,excluded,yes,no,abstain].some((number)=>!Number.isFinite(number) || number<0) || yes+no+abstain!==eligible) {
+  if ([yes,no,abstain].some((number)=>!Number.isFinite(number) || number<0)) {
     redirect(`/sitzungen/${meetingId}/korrektur?error=votes`);
   }
   if (voteMethod==="roll_call" && !voteDetails) {
@@ -804,13 +802,33 @@ export async function addResolutionCorrectionAction(formData:FormData) {
   }
 
   const agendaRows=await sql`
-    SELECT id::text,agenda_type
-    FROM agenda_items
-    WHERE id=${agendaItemId}::uuid
-      AND meeting_id=${meetingId}::uuid
+    SELECT
+      ai.id::text,
+      ai.agenda_type,
+      (
+        SELECT count(*)::int
+        FROM meeting_attendees ma
+        WHERE ma.meeting_id=ai.meeting_id
+          AND ma.attendance='present'
+          AND ma.voting_eligible=true
+      ) AS present_voting_count,
+      (
+        SELECT count(*)::int
+        FROM agenda_vote_exclusions ave
+        WHERE ave.agenda_item_id=ai.id
+      ) AS excluded_voters
+    FROM agenda_items ai
+    WHERE ai.id=${agendaItemId}::uuid
+      AND ai.meeting_id=${meetingId}::uuid
     LIMIT 1
   `;
   if (!agendaRows.length) redirect(`/sitzungen/${meetingId}/korrektur?error=missing`);
+
+  const excluded=Number(agendaRows[0].excluded_voters ?? 0);
+  const eligible=Math.max(0,Number(agendaRows[0].present_voting_count ?? 0)-excluded);
+  if (yes+no+abstain!==eligible) {
+    redirect(`/sitzungen/${meetingId}/korrektur?error=votes`);
+  }
 
   const rows=await sql`
     WITH counter AS (
@@ -937,8 +955,6 @@ export async function correctResolutionAction(formData:FormData) {
     ? voteMethodRaw
     : "show_of_hands";
   const voteDetails=value(formData,"voteDetails");
-  const eligible=Number(value(formData,"eligibleVoters") || "0");
-  const excluded=Number(value(formData,"excludedVoters") || "0");
   const yes=Number(value(formData,"votesYes") || "0");
   const no=Number(value(formData,"votesNo") || "0");
   const abstain=Number(value(formData,"votesAbstain") || "0");
@@ -947,10 +963,7 @@ export async function correctResolutionAction(formData:FormData) {
   if (!meetingId || !resolutionId || !reason || !title || !decisionText || !outcome) {
     redirect(`/sitzungen/${meetingId}/korrektur?error=missing`);
   }
-  if ([eligible,excluded,yes,no,abstain].some((number)=>!Number.isFinite(number) || number<0)) {
-    redirect(`/sitzungen/${meetingId}/korrektur?error=votes`);
-  }
-  if (yes+no+abstain!==eligible) {
+  if ([yes,no,abstain].some((number)=>!Number.isFinite(number) || number<0)) {
     redirect(`/sitzungen/${meetingId}/korrektur?error=votes`);
   }
   if (voteMethod==="roll_call" && !voteDetails) {
@@ -963,7 +976,7 @@ export async function correctResolutionAction(formData:FormData) {
 
   const beforeRows=await sql`
     SELECT
-      title,decision_text,vote_method,vote_details,eligible_voters,excluded_voters,
+      agenda_item_id::text,title,decision_text,vote_method,vote_details,eligible_voters,excluded_voters,
       votes_yes,votes_no,votes_abstain,decision_outcome,status
     FROM resolutions
     WHERE id=${resolutionId}::uuid
@@ -971,6 +984,28 @@ export async function correctResolutionAction(formData:FormData) {
     LIMIT 1
   `;
   const before=beforeRows[0];
+  if (!before) redirect(`/sitzungen/${meetingId}/korrektur?error=missing`);
+
+  const voterRows=await sql`
+    SELECT
+      (
+        SELECT count(*)::int
+        FROM meeting_attendees ma
+        WHERE ma.meeting_id=${meetingId}::uuid
+          AND ma.attendance='present'
+          AND ma.voting_eligible=true
+      ) AS present_voting_count,
+      (
+        SELECT count(*)::int
+        FROM agenda_vote_exclusions ave
+        WHERE ave.agenda_item_id=${String(before.agenda_item_id)}::uuid
+      ) AS excluded_voters
+  `;
+  const excluded=Number(voterRows[0]?.excluded_voters ?? 0);
+  const eligible=Math.max(0,Number(voterRows[0]?.present_voting_count ?? 0)-excluded);
+  if (yes+no+abstain!==eligible) {
+    redirect(`/sitzungen/${meetingId}/korrektur?error=votes`);
+  }
 
   const rows=await sql`
     UPDATE resolutions
