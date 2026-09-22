@@ -249,6 +249,39 @@ export async function updateAgendaNotesAction(formData: FormData) {
   redirect(`/sitzungen/${meetingId}?top=${agendaItemId}&notes=1`);
 }
 
+export async function saveAgendaNotesInlineAction(
+  meetingId:string,
+  agendaItemId:string,
+  notes:string,
+) {
+  const actor=await requirePermission("meetings.write");
+  const sql=getDb();
+  if (!sql) return {ok:false,error:"database"};
+
+  const rows=await sql`
+    UPDATE agenda_items
+    SET notes=${notes.trim() || null}
+    WHERE id=${agendaItemId}::uuid
+      AND meeting_id=${meetingId}::uuid
+      AND EXISTS (
+        SELECT 1
+        FROM meetings m
+        WHERE m.id=${meetingId}::uuid
+          AND m.deleted_at IS NULL
+          AND m.status='running'
+      )
+    RETURNING id::text
+  `;
+
+  if (!rows.length) return {ok:false,error:"locked"};
+
+  await writeAudit(actor.id,"agenda.notes_autosaved","agenda_item",agendaItemId,{meetingId});
+  revalidatePath(`/sitzungen/${meetingId}`);
+  revalidatePath(`/sitzungen/${meetingId}/protokoll`);
+
+  return {ok:true,savedAt:new Date().toISOString()};
+}
+
 export async function deleteAgendaItemAction(formData: FormData) {
   const actor=await requirePermission("meetings.write");
   const sql=getDb();
