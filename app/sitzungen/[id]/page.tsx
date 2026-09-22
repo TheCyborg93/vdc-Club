@@ -1460,48 +1460,60 @@ export default async function MeetingDetailPage({
           </article>
         )}
 
-        {canWrite && meetingEditable && (
-          <article className="panel">
-            <div className="panel-head">
-              <div><span className="eyebrow">Sitzung</span><h2>Details bearbeiten</h2></div>
+        <details className="meeting-prep-more">
+          <summary>
+            <div>
+              <strong>Weitere Einstellungen</strong>
+              <span>Sitzungsdaten ändern oder Sitzung verwalten</span>
             </div>
-            <form action={updateMeetingDetailsAction} className="form-stack">
-              <input type="hidden" name="meetingId" value={id} />
-              <label>Titel<input name="title" defaultValue={String(meeting.title)} required /></label>
-              <label>Start<input name="startsAt" type="datetime-local" defaultValue={dateTimeLocal(meeting.starts_at)} required /></label>
-              <label>Ort<input name="location" defaultValue={meeting.location ? String(meeting.location) : ""} /></label>
-              <label>Vorbereitung / Notiz<textarea name="notes" rows={3} defaultValue={meeting.notes ? String(meeting.notes) : ""} /></label>
-              <button className="mini-button">Sitzungsdaten speichern</button>
-            </form>
-          </article>
-        )}
+            <b>•••</b>
+          </summary>
 
-        {meeting.notes && !meetingEditable && (
-          <article className="panel">
-            <div className="panel-head">
-              <div><span className="eyebrow">Vorbereitung</span><h2>Sitzungsnotiz</h2></div>
-            </div>
-            <p>{String(meeting.notes)}</p>
-          </article>
-        )}
+          <div className="meeting-prep-more-body">
+            {canWrite && meetingEditable && (
+              <article className="panel">
+                <div className="panel-head">
+                  <div><span className="eyebrow">Sitzung</span><h2>Details bearbeiten</h2></div>
+                </div>
+                <form action={updateMeetingDetailsAction} className="form-stack">
+                  <input type="hidden" name="meetingId" value={id} />
+                  <label>Titel<input name="title" defaultValue={String(meeting.title)} required /></label>
+                  <label>Start<input name="startsAt" type="datetime-local" defaultValue={dateTimeLocal(meeting.starts_at)} required /></label>
+                  <label>Ort<input name="location" defaultValue={meeting.location ? String(meeting.location) : ""} /></label>
+                  <label>Vorbereitung / Notiz<textarea name="notes" rows={3} defaultValue={meeting.notes ? String(meeting.notes) : ""} /></label>
+                  <button className="mini-button">Sitzungsdaten speichern</button>
+                </form>
+              </article>
+            )}
 
-        {canWrite && ["planned","cancelled"].includes(String(meeting.status)) && (
-          <article className="panel meeting-danger-panel">
-            <div className="panel-head">
-              <div><span className="eyebrow">Verwaltung</span><h2>Sitzung entfernen</h2></div>
-            </div>
-            <p>Nur geplante oder abgesagte Sitzungen ohne Beschlüsse und Dokumente können in den Papierkorb verschoben werden.</p>
-            <form action={moveToTrashAction}>
-              <input type="hidden" name="type" value="meeting" />
-              <input type="hidden" name="id" value={id} />
-              <ConfirmSubmitButton
-                message={"Sitzung „"+String(meeting.title)+"“ in den Papierkorb verschieben?"}
-              >
-                Sitzung löschen
-              </ConfirmSubmitButton>
-            </form>
-          </article>
-        )}
+            {meeting.notes && !meetingEditable && (
+              <article className="panel">
+                <div className="panel-head">
+                  <div><span className="eyebrow">Vorbereitung</span><h2>Sitzungsnotiz</h2></div>
+                </div>
+                <p>{String(meeting.notes)}</p>
+              </article>
+            )}
+
+            {canWrite && ["planned","cancelled"].includes(String(meeting.status)) && (
+              <article className="panel meeting-danger-panel">
+                <div className="panel-head">
+                  <div><span className="eyebrow">Verwaltung</span><h2>Sitzung entfernen</h2></div>
+                </div>
+                <p>Nur geplante oder abgesagte Sitzungen ohne Beschlüsse und Dokumente können in den Papierkorb verschoben werden.</p>
+                <form action={moveToTrashAction}>
+                  <input type="hidden" name="type" value="meeting" />
+                  <input type="hidden" name="id" value={id} />
+                  <ConfirmSubmitButton
+                    message={"Sitzung „"+String(meeting.title)+"“ in den Papierkorb verschieben?"}
+                  >
+                    Sitzung löschen
+                  </ConfirmSubmitButton>
+                </form>
+              </article>
+            )}
+          </div>
+        </details>
         </section>
       )}
 
