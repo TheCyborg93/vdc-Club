@@ -835,3 +835,20 @@ body.meeting-focus-mode .meeting-control-hero{position:sticky;top:0;z-index:18;b
 .meeting-resolution-remove-form{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:7px;align-items:center;margin-top:9px;padding-top:9px;border-top:1px solid rgba(255,107,107,.12)}
 @media(max-width:900px){.meeting-correction-add-form{grid-template-columns:1fr 1fr}.meeting-correction-add-form>*:last-child{grid-column:1/-1}.meeting-correction-remove-list form{grid-template-columns:1fr auto}.meeting-correction-remove-list form input{grid-column:1/-1}.meeting-resolution-remove-form{grid-template-columns:1fr}}
 @media(max-width:620px){.meeting-correction-add-form{grid-template-columns:1fr}.meeting-correction-add-form>*:last-child{grid-column:auto}.meeting-correction-remove-list form{grid-template-columns:1fr}.meeting-correction-remove-list form input{grid-column:auto}.meeting-correction-remove-list form button,.meeting-resolution-remove-form button{width:100%}}
+
+
+/* Complete meeting correction controls */
+.meeting-correction-exclusions{display:grid;gap:8px;margin-top:10px;padding:10px;border:1px solid rgba(255,202,104,.12);border-radius:10px;background:rgba(255,202,104,.018)}
+.meeting-correction-exclusions .meeting-section-head{margin-bottom:0}
+.meeting-correction-exclusions .empty-state{padding:8px}
+.meeting-correction-exclusions .meeting-correction-add-form{margin-top:0;grid-template-columns:minmax(150px,1fr) minmax(180px,1.25fr) minmax(180px,1.25fr) auto}
+.meeting-correction-new-agenda{margin-top:12px;border:1px dashed rgba(68,224,176,.18);border-radius:11px;background:rgba(68,224,176,.012);overflow:hidden}
+.meeting-correction-new-agenda>summary{display:flex;justify-content:space-between;gap:12px;align-items:center;padding:10px 11px;list-style:none;cursor:pointer}
+.meeting-correction-new-agenda>summary::-webkit-details-marker{display:none}
+.meeting-correction-new-agenda>summary>div span,.meeting-correction-new-agenda>summary>div strong{display:block}
+.meeting-correction-new-agenda>summary>div strong{margin-top:2px;font-size:clamp(9px,.6vw,12px)}
+.meeting-correction-new-agenda>summary>b{color:var(--accent);font-size:18px}
+.meeting-correction-new-agenda[open]>summary{border-bottom:1px solid var(--line);background:rgba(68,224,176,.018)}
+.meeting-correction-new-agenda>.meeting-correction-form{padding:11px}
+@media(max-width:900px){.meeting-correction-exclusions .meeting-correction-add-form{grid-template-columns:1fr 1fr}.meeting-correction-exclusions .meeting-correction-add-form button{grid-column:1/-1}}
+@media(max-width:620px){.meeting-correction-exclusions .meeting-correction-add-form{grid-template-columns:1fr}.meeting-correction-exclusions .meeting-correction-add-form button{grid-column:auto}}
