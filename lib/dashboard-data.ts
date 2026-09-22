@@ -173,8 +173,11 @@ export async function getDashboardData(
         WHERE deleted_at IS NULL
           AND status IN ('open','in_progress','blocked')
         ORDER BY
+          CASE WHEN due_date<CURRENT_DATE THEN 0 ELSE 1 END,
+          CASE WHEN owner_member_id=${options.memberId || null}::uuid THEN 0 ELSE 1 END,
+          due_date NULLS LAST,
           CASE priority WHEN 'urgent' THEN 1 WHEN 'high' THEN 2 WHEN 'medium' THEN 3 ELSE 4 END,
-          due_date NULLS LAST
+          created_at DESC
         LIMIT 5
       `,
       sql`
@@ -247,7 +250,7 @@ export async function getDashboardData(
             'task',
             'Aufgabe überfällig: ' || t.title,
             'Fällig seit ' || to_char(t.due_date,'DD.MM.YYYY'),
-            '/aufgaben',
+            '/aufgaben?view=overdue',
             CASE WHEN t.priority IN ('urgent','high') THEN 'critical' ELSE 'warning' END,
             t.due_date::timestamp
           FROM tasks t
