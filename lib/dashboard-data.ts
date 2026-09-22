@@ -651,7 +651,7 @@ export async function getDashboardData(
     }
 
     const resolutionRows=await sql`
-      SELECT id::text,resolution_number,title,status,decided_at
+      SELECT id::text,resolution_number,title,status,decision_outcome,decided_at
       FROM resolutions
       ORDER BY
         CASE status WHEN 'open' THEN 0 WHEN 'in_progress' THEN 1 WHEN 'implemented' THEN 2 ELSE 3 END,
@@ -756,7 +756,7 @@ export async function getDashboardData(
         id:String(row.id),
         number:row.resolution_number ? String(row.resolution_number) : null,
         title:String(row.title),
-        status:String(row.status),
+        status:row.decision_outcome==="rejected" ? "rejected" : String(row.status),
         decidedAt:String(row.decided_at),
       })),
       reviewDocuments:reviewDocumentRows.map((row)=>({
