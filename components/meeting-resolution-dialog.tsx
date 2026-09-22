@@ -29,7 +29,6 @@ export function MeetingResolutionDialog({
   const [open,setOpen]=useState(false);
   const [voteMethod,setVoteMethod]=useState("show_of_hands");
   const [outcome,setOutcome]=useState("");
-  const [eligible,setEligible]=useState(eligibleVoters);
   const [yes,setYes]=useState(0);
   const [no,setNo]=useState(0);
   const [abstain,setAbstain]=useState(0);
@@ -88,7 +87,7 @@ export function MeetingResolutionDialog({
   },[open]);
 
   const total=yes+no+abstain;
-  const validTotal=total===eligible;
+  const validTotal=total===eligibleVoters;
 
   return (
     <>
@@ -172,9 +171,9 @@ export function MeetingResolutionDialog({
                       name="eligibleVoters"
                       type="number"
                       min="0"
-                      value={eligible}
-                      onChange={(event)=>setEligible(Math.max(0,Number(event.target.value)||0))}
-                      required
+                      value={eligibleVoters}
+                      readOnly
+                      aria-readonly="true"
                     />
                   </div>
                 </div>
@@ -187,7 +186,7 @@ export function MeetingResolutionDialog({
 
                 <div className={validTotal ? "meeting-vote-check is-valid" : "meeting-vote-check is-invalid"}>
                   <strong>{yes} + {no} + {abstain} = {total}</strong>
-                  <span>{validTotal ? "✓ passt zu "+eligible+" Stimmberechtigten" : "Stimmen müssen zusammen "+eligible+" ergeben"}</span>
+                  <span>{validTotal ? "✓ passt zu "+eligibleVoters+" Stimmberechtigten" : "Stimmen müssen zusammen "+eligibleVoters+" ergeben"}</span>
                 </div>
               </section>
 
