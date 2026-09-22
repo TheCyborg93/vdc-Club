@@ -1300,7 +1300,7 @@ export default async function MeetingDetailPage({
         <MeetingLiveOptions meetingId={id} attendees={attendees} guests={guests} />
       )}
 
-      {carryovers.length>0 && canWrite && ["planned","running"].includes(String(meeting.status)) && (
+      {carryovers.length>0 && canWrite && meeting.status==="planned" && (
         <section className="panel meeting-carryover-panel">
           <div className="panel-head">
             <div>
@@ -1335,11 +1335,12 @@ export default async function MeetingDetailPage({
         </section>
       )}
 
-      <section className="meeting-management-grid">
+      {["planned","cancelled"].includes(String(meeting.status)) && (
+        <section className="meeting-management-grid">
         <article className="panel">
           <div className="panel-head">
-            <div><span className="eyebrow">Teilnehmer</span><h2>Anwesenheit</h2></div>
-            <span className="count-chip">{presentCount}/{attendees.length}</span>
+            <div><span className="eyebrow">Teilnehmer</span><h2>Vorstand einladen</h2></div>
+            <span className="count-chip">{attendees.length}</span>
           </div>
 
           <div className="attendee-list">
@@ -1352,19 +1353,14 @@ export default async function MeetingDetailPage({
                 </div>
                 <div>
                   <strong>{String(attendee.first_name)} {String(attendee.last_name)}</strong>
-                  <span>{attendanceLabels[String(attendee.attendance)] ?? String(attendee.attendance)}</span>
+                  <span>{attendee.voting_eligible===false ? "Eingeladen · nicht stimmberechtigt" : "Eingeladen · stimmberechtigt"}</span>
                 </div>
 
-                {canWrite && ["planned","running"].includes(String(meeting.status)) && (
+                {canWrite && meeting.status==="planned" && (
                   <form action={updateAttendanceAction}>
                     <input type="hidden" name="meetingId" value={id} />
                     <input type="hidden" name="memberId" value={String(attendee.member_id)} />
-                    <select name="attendance" defaultValue={String(attendee.attendance)}>
-                      <option value="invited">Eingeladen</option>
-                      <option value="present">Anwesend</option>
-                      <option value="absent">Abwesend</option>
-                      <option value="excused">Entschuldigt</option>
-                    </select>
+                    <input type="hidden" name="attendance" value="invited" />
                     <select name="votingEligible" defaultValue={attendee.voting_eligible===false ? "false" : "true"}>
                       <option value="true">Stimmberechtigt</option>
                       <option value="false">Nicht stimmberechtigt</option>
@@ -1387,7 +1383,7 @@ export default async function MeetingDetailPage({
             ))}
           </div>
 
-          {canWrite && ["planned","running"].includes(String(meeting.status)) && availableMembers.length>0 && (
+          {canWrite && meeting.status==="planned" && availableMembers.length>0 && (
             <form action={addAttendeeAction} className="form-stack attendee-add-form">
               <input type="hidden" name="meetingId" value={id} />
               <label>Teilnehmer hinzufügen
@@ -1421,23 +1417,11 @@ export default async function MeetingDetailPage({
                   <span>
                     {guest.organization ? String(guest.organization) : "Gast"}
                     {" · "}
-                    {guest.attendance==="present" ? "Anwesend" : guest.attendance==="absent" ? "Abwesend" : "Eingeladen"}
+                    Eingeladen
                     {guest.note ? " · "+String(guest.note) : ""}
                   </span>
                 </div>
-                {canWrite && ["planned","running"].includes(String(meeting.status)) && (
-                  <form action={updateMeetingGuestAttendanceAction} className="meeting-guest-status-form">
-                    <input type="hidden" name="meetingId" value={id} />
-                    <input type="hidden" name="guestId" value={String(guest.id)} />
-                    <select name="attendance" defaultValue={String(guest.attendance)}>
-                      <option value="invited">Eingeladen</option>
-                      <option value="present">Anwesend</option>
-                      <option value="absent">Abwesend</option>
-                    </select>
-                    <button className="mini-button">Speichern</button>
-                  </form>
-                )}
-                {canWrite && ["planned","running"].includes(String(meeting.status)) && (
+                {canWrite && meeting.status==="planned" && (
                   <form action={deleteMeetingGuestAction}>
                     <input type="hidden" name="meetingId" value={id} />
                     <input type="hidden" name="guestId" value={String(guest.id)} />
@@ -1448,7 +1432,7 @@ export default async function MeetingDetailPage({
             ))}
           </div>
 
-          {canWrite && ["planned","running"].includes(String(meeting.status)) && (
+          {canWrite && meeting.status==="planned" && (
             <form action={addMeetingGuestAction} className="form-stack meeting-guest-form">
               <input type="hidden" name="meetingId" value={id} />
               <label>Name<input name="name" required /></label>
@@ -1459,7 +1443,7 @@ export default async function MeetingDetailPage({
           )}
         </article>
 
-        {canWrite && ["planned","running"].includes(String(meeting.status)) && (
+        {canWrite && meeting.status==="planned" && (
           <article className="panel">
             <div className="panel-head">
               <div><span className="eyebrow">Tagesordnung</span><h2>TOP hinzufügen</h2></div>
@@ -1468,21 +1452,9 @@ export default async function MeetingDetailPage({
               <input type="hidden" name="meetingId" value={id} />
               <label>Titel<input name="title" required /></label>
               <label>Sachverhalt / Vorbereitung<textarea name="description" rows={3} /></label>
-              <label>
-                Tagesordnungsstatus
-                <select name="announcementStatus" defaultValue="announced">
-                  <option value="announced">Mit Einladung angekündigt</option>
-                  <option value="spontaneous">Nachträglich / spontan ergänzt</option>
-                </select>
-              </label>
-              <label>
-                Begründung bei spontanem TOP
-                <textarea
-                  name="decisionBasisNote"
-                  rows={2}
-                  placeholder="Falls später ein Beschluss gefasst werden soll"
-                />
-              </label>
+              <small className="form-hint">
+                Vor Versand der Einladung = angekündigt. Danach hinzugefügte TOPs werden automatisch als nachträglich markiert.
+              </small>
               <button className="primary-button" type="submit">TOP hinzufügen</button>
             </form>
           </article>
@@ -1530,7 +1502,33 @@ export default async function MeetingDetailPage({
             </form>
           </article>
         )}
-      </section>
+        </section>
+      )}
+
+      {meeting.status==="planned" && canWrite && (
+        <MeetingStartPanel
+          meetingId={id}
+          attendees={attendees}
+          guests={guests}
+          ready={preparationReady}
+          missing={preparationMissing}
+          chairMemberId={String(meeting.chair_member_id ?? "")}
+          minuteTakerMemberId={String(meeting.minute_taker_member_id ?? "")}
+          quorumBasis={String(meeting.quorum_basis ?? "")}
+          quorumNote={String(meeting.quorum_note ?? "")}
+        />
+      )}
+
+      {meeting.status==="completed" && (
+        <section className="meeting-completed-next">
+          <div>
+            <span className="eyebrow">Sitzung abgeschlossen</span>
+            <h2>Als Nächstes: Protokoll prüfen</h2>
+            <p>Teilnahme, TOP-Ergebnisse, Beschlüsse und Anlagen wurden automatisch in das Protokoll übernommen.</p>
+          </div>
+          <Link href={`/sitzungen/${id}/protokoll`} className="primary-button">Protokoll öffnen</Link>
+        </section>
+      )}
     </div>
   );
 }
