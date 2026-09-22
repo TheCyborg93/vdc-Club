@@ -304,13 +304,16 @@ export default async function BoardPage() {
         )}
       </article>
 
-      <section className="panel board-priority-panel">
-        <div className="panel-head">
+      <details className="panel board-priority-panel board-secondary-drawer">
+        <summary>
           <div>
-            <span className="eyebrow">Priorität</span>
-            <h2>Rollenreihenfolge</h2>
+            <span className="eyebrow">Struktur</span>
+            <strong>Rollenreihenfolge</strong>
+            <small>Festlegung der angezeigten Hauptrolle</small>
           </div>
-        </div>
+          <b>+</b>
+        </summary>
+        <div className="board-secondary-body">
         <p className="board-priority-copy">
           Hat eine Person mehrere Rollen, wird die zuerst aufgeführte Rolle als Hauptrolle verwendet.
           Alle weiteren Rollen bleiben aktiv und werden als Zusatzrollen angezeigt.
@@ -326,16 +329,20 @@ export default async function BoardPage() {
             </div>
           ))}
         </div>
-      </section>
+        </div>
+      </details>
 
       {history.length > 0 && (
-        <article className="panel">
-          <div className="panel-head">
+        <details className="panel board-secondary-drawer">
+          <summary>
             <div>
               <span className="eyebrow">Historie</span>
-              <h2>Frühere erfasste Ämter</h2>
+              <strong>Frühere erfasste Ämter</strong>
+              <small>{history.length} Einträge</small>
             </div>
-          </div>
+            <b>+</b>
+          </summary>
+          <div className="board-secondary-body">
           <div className="data-list">
             {history.map((position) => (
               <div className="history-row" key={String(position.id)}>
@@ -347,7 +354,8 @@ export default async function BoardPage() {
               </div>
             ))}
           </div>
-        </article>
+          </div>
+        </details>
       )}
     </div>
   );
