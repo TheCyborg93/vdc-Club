@@ -852,3 +852,42 @@ body.meeting-focus-mode .meeting-control-hero{position:sticky;top:0;z-index:18;b
 .meeting-correction-new-agenda>.meeting-correction-form{padding:11px}
 @media(max-width:900px){.meeting-correction-exclusions .meeting-correction-add-form{grid-template-columns:1fr 1fr}.meeting-correction-exclusions .meeting-correction-add-form button{grid-column:1/-1}}
 @media(max-width:620px){.meeting-correction-exclusions .meeting-correction-add-form{grid-template-columns:1fr}.meeting-correction-exclusions .meeting-correction-add-form button{grid-column:auto}}
+
+
+/* Meeting mobile final polish */
+@media(max-width:720px){
+  .meeting-action-bar{
+    grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+    gap:6px;
+    padding:8px 8px calc(8px + env(safe-area-inset-bottom));
+  }
+  .meeting-action-center{
+    grid-column:1/-1;
+    grid-row:1;
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:6px;
+  }
+  .meeting-action-center:has(> :only-child){grid-template-columns:1fr}
+  .meeting-action-center form,
+  .meeting-action-center button{width:100%;min-width:0}
+  .meeting-action-bar>a:first-child,
+  .meeting-action-bar>span:first-child{grid-column:1;grid-row:2}
+  .meeting-action-bar>a:last-child,
+  .meeting-action-bar>span:last-child{grid-column:2;grid-row:2}
+  .meeting-action{min-height:42px;display:grid;place-items:center;padding:8px 9px}
+  .meeting-live-options>summary,
+  .meeting-close-drawer>summary{padding:12px}
+  .meeting-live-options-body>section{padding:11px}
+  .meeting-start-step{padding:13px 11px}
+  .meeting-start-step-head{flex-direction:column;gap:5px}
+  .meeting-correction-agenda>details>summary{align-items:flex-start}
+  .meeting-correction-agenda>details>summary>div{align-items:flex-start}
+  .meeting-correction-form .form-grid{grid-template-columns:1fr}
+  .meeting-general-attachment-upload label,
+  .meeting-correction-add-form input,
+  .meeting-correction-add-form select,
+  .meeting-correction-remove-list input{width:100%;min-width:0}
+  .meeting-resolution-modal-form{padding:13px 11px calc(13px + env(safe-area-inset-bottom))}
+  .meeting-resolution-modal>header{padding:13px 11px}
+}
