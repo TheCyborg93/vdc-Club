@@ -1112,27 +1112,92 @@ export default async function MeetingDetailPage({
       </section>
 
       {meetingRunning && canWrite && (
-        <section className="meeting-finish-strip">
-          <div>
-            <strong>Sitzung abschließen</strong>
-            <span>
-              {openAgendaCount>0
-                ? openAgendaCount+" offene/aktive TOPs müssen zuerst erledigt oder vertagt werden."
-                : unresolvedAttendanceCount>0
-                  ? unresolvedAttendanceCount+" Anwesenheiten sind noch ungeklärt."
-                  : "Alle Voraussetzungen sind erfüllt."}
+        <section className="meeting-close-check">
+          <div className="meeting-close-head">
+            <div>
+              <span className="eyebrow">Abschlussprüfung</span>
+              <h2>Sitzung sauber abschließen</h2>
+            </div>
+            <span className={completionReady ? "formal-state formal-ok" : "formal-state formal-open"}>
+              {completionReady ? "Bereit" : "Noch offen"}
             </span>
           </div>
-          <form action={updateMeetingStatusAction}>
+
+          <div className="meeting-close-grid">
+            <div className={officersComplete ? "is-ok" : "is-open"}>
+              <b>{officersComplete ? "✓" : "!"}</b>
+              <span>Sitzungsleitung & Protokollführung</span>
+            </div>
+            <div className={formalitiesDocumented ? "is-ok" : "is-open"}>
+              <b>{formalitiesDocumented ? "✓" : "!"}</b>
+              <span>Einladung / Tagesordnung / Beschlussfähigkeit dokumentiert</span>
+            </div>
+            <div className={unresolvedAttendanceCount===0 ? "is-ok" : "is-open"}>
+              <b>{unresolvedAttendanceCount===0 ? "✓" : "!"}</b>
+              <span>Anwesenheit vollständig</span>
+            </div>
+            <div className={openAgendaCount===0 ? "is-ok" : "is-open"}>
+              <b>{openAgendaCount===0 ? "✓" : "!"}</b>
+              <span>Alle TOPs erledigt oder vertagt</span>
+            </div>
+            <div className={incompleteVoteCount===0 ? "is-ok" : "is-open"}>
+              <b>{incompleteVoteCount===0 ? "✓" : "!"}</b>
+              <span>Abstimmungen vollständig</span>
+            </div>
+            <div className={spontaneousBasisMissing===0 ? "is-ok" : "is-open"}>
+              <b>{spontaneousBasisMissing===0 ? "✓" : "!"}</b>
+              <span>Spontane Beschluss-TOPs begründet</span>
+            </div>
+          </div>
+
+          {agenda.filter((row)=>row.resolution_id).length>0 && meeting.quorum_confirmed!==true && (
+            <div className="form-error">
+              Beschlüsse sind erfasst, aber die Beschlussfähigkeit ist nicht bestätigt.
+            </div>
+          )}
+
+          <form action={updateMeetingStatusAction} className="meeting-close-action">
             <input type="hidden" name="meetingId" value={id} />
             <input type="hidden" name="status" value="completed" />
-            <button
-              className="light-button"
-              disabled={openAgendaCount>0 || unresolvedAttendanceCount>0}
-            >
-              Sitzung beenden
+            <button className="light-button" disabled={!completionReady}>
+              Sitzung jetzt beenden
             </button>
           </form>
+        </section>
+      )}
+
+      {carryovers.length>0 && canWrite && ["planned","running"].includes(String(meeting.status)) && (
+        <section className="panel meeting-carryover-panel">
+          <div className="panel-head">
+            <div>
+              <span className="eyebrow">Aus letzter Sitzung offen</span>
+              <h2>Offene Punkte übernehmen</h2>
+            </div>
+            <span className="count-chip">{carryovers.length}</span>
+          </div>
+
+          <div className="meeting-carryover-list">
+            {carryovers.map((item)=>(
+              <article key={String(item.source_type)+"-"+String(item.source_id)}>
+                <div>
+                  <span>{String(item.source_type)==="agenda" ? "Vertagter TOP" : "Offene Aufgabe"}</span>
+                  <strong>{String(item.title)}</strong>
+                  {item.detail && <p>{String(item.detail)}</p>}
+                  <small>
+                    {item.owner_name ? "Verantwortlich: "+String(item.owner_name) : ""}
+                    {item.due_date ? (item.owner_name ? " · " : "")+"Frist "+String(item.due_date) : ""}
+                  </small>
+                </div>
+                <form action={String(item.source_type)==="agenda" ? carryForwardAgendaItemAction : carryForwardTaskAction}>
+                  <input type="hidden" name="meetingId" value={id} />
+                  {String(item.source_type)==="agenda"
+                    ? <input type="hidden" name="sourceAgendaItemId" value={String(item.source_id)} />
+                    : <input type="hidden" name="sourceTaskId" value={String(item.source_id)} />}
+                  <button className="mini-button">Als TOP übernehmen</button>
+                </form>
+              </article>
+            ))}
+          </div>
         </section>
       )}
 
@@ -1166,6 +1231,10 @@ export default async function MeetingDetailPage({
                       <option value="absent">Abwesend</option>
                       <option value="excused">Entschuldigt</option>
                     </select>
+                    <select name="votingEligible" defaultValue={attendee.voting_eligible===false ? "false" : "true"}>
+                      <option value="true">Stimmberechtigt</option>
+                      <option value="false">Nicht stimmberechtigt</option>
+                    </select>
                     <button className="mini-button">Speichern</button>
                   </form>
                 )}
@@ -1191,6 +1260,46 @@ export default async function MeetingDetailPage({
           )}
         </article>
 
+        <article className="panel">
+          <div className="panel-head">
+            <div><span className="eyebrow">Gäste</span><h2>Externe Teilnehmer</h2></div>
+            <span className="count-chip">{guests.length}</span>
+          </div>
+
+          <div className="meeting-guest-list">
+            {guests.length===0 ? (
+              <div className="empty-state">Keine Gäste dokumentiert.</div>
+            ) : guests.map((guest)=>(
+              <div key={String(guest.id)}>
+                <div>
+                  <strong>{String(guest.name)}</strong>
+                  <span>
+                    {guest.organization ? String(guest.organization) : "Gast"}
+                    {guest.note ? " · "+String(guest.note) : ""}
+                  </span>
+                </div>
+                {canWrite && ["planned","running"].includes(String(meeting.status)) && (
+                  <form action={deleteMeetingGuestAction}>
+                    <input type="hidden" name="meetingId" value={id} />
+                    <input type="hidden" name="guestId" value={String(guest.id)} />
+                    <button className="mini-button">Entfernen</button>
+                  </form>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {canWrite && ["planned","running"].includes(String(meeting.status)) && (
+            <form action={addMeetingGuestAction} className="form-stack meeting-guest-form">
+              <input type="hidden" name="meetingId" value={id} />
+              <label>Name<input name="name" required /></label>
+              <label>Organisation / Funktion<input name="organization" placeholder="Optional" /></label>
+              <label>Hinweis<input name="note" placeholder="Optional" /></label>
+              <button className="ghost-button">Gast hinzufügen</button>
+            </form>
+          )}
+        </article>
+
         {canWrite && ["planned","running"].includes(String(meeting.status)) && (
           <article className="panel">
             <div className="panel-head">
@@ -1199,7 +1308,22 @@ export default async function MeetingDetailPage({
             <form action={addAgendaItemAction} className="form-stack">
               <input type="hidden" name="meetingId" value={id} />
               <label>Titel<input name="title" required /></label>
-              <label>Beschreibung<textarea name="description" rows={3} /></label>
+              <label>Sachverhalt / Vorbereitung<textarea name="description" rows={3} /></label>
+              <label>
+                Tagesordnungsstatus
+                <select name="announcementStatus" defaultValue="announced">
+                  <option value="announced">Mit Einladung angekündigt</option>
+                  <option value="spontaneous">Nachträglich / spontan ergänzt</option>
+                </select>
+              </label>
+              <label>
+                Begründung bei spontanem TOP
+                <textarea
+                  name="decisionBasisNote"
+                  rows={2}
+                  placeholder="Falls später ein Beschluss gefasst werden soll"
+                />
+              </label>
               <button className="primary-button" type="submit">TOP hinzufügen</button>
             </form>
           </article>
