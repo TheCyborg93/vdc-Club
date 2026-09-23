@@ -6,8 +6,11 @@ import {
   addMeetingV3TemplateItemAction,
   createMeetingV3TemplateAction,
   deleteMeetingV3TemplateItemAction,
+  moveMeetingV3TemplateItemAction,
   setMeetingV3TemplateDefaultAction,
   toggleMeetingV3TemplateActiveAction,
+  updateMeetingV3TemplateAction,
+  updateMeetingV3TemplateItemAction,
 } from "@/app/sitzungen/template-actions";
 
 export const dynamic="force-dynamic";
@@ -103,23 +106,73 @@ export default async function MeetingTemplatesPage({
                 </div>
               </div>
 
+              {canWrite && (
+                <details className="meeting-v3-add-top">
+                  <summary>Vorlage bearbeiten</summary>
+                  <form action={updateMeetingV3TemplateAction} className="form-grid">
+                    <input type="hidden" name="templateId" value={String(template.id)}/>
+                    <label>Name<input name="name" required defaultValue={String(template.name)}/></label>
+                    <label className="meeting-v3-wide">Beschreibung<textarea name="description" rows={2} defaultValue={String(template.description ?? "")}/></label>
+                    <div className="meeting-v3-wide"><button className="ghost-button" type="submit">Vorlage speichern</button></div>
+                  </form>
+                </details>
+              )}
+
               <div className="meeting-v3-agenda-list">
                 {items.length===0 && <p className="empty-state">Noch keine TOPs in dieser Vorlage.</p>}
-                {items.map((item)=>(
+                {items.map((item,index)=>(
                   <div className="meeting-v3-agenda-item" key={String(item.id)}>
                     <b>{Number(item.position)}</b>
-                    <div>
+                    <div className="meeting-v3-agenda-item-main">
                       <strong>{String(item.title)}</strong>
                       <span>{meetingV3AgendaTypeLabels[String(item.agenda_type) as MeetingV3AgendaType]}</span>
                       {Boolean(item.description) && <small>{String(item.description)}</small>}
                       {Boolean(item.estimated_minutes) && <small>{Number(item.estimated_minutes)} Min.</small>}
+                      {Boolean(item.is_required) && <small>Pflicht-TOP</small>}
+
+                      {canWrite && (
+                        <details className="meeting-v3-agenda-edit">
+                          <summary>Bearbeiten</summary>
+                          <form action={updateMeetingV3TemplateItemAction} className="form-grid">
+                            <input type="hidden" name="templateId" value={String(template.id)}/>
+                            <input type="hidden" name="itemId" value={String(item.id)}/>
+                            <label>Titel<input name="title" required defaultValue={String(item.title)}/></label>
+                            <label>Typ
+                              <select name="agendaType" defaultValue={String(item.agenda_type)}>
+                                <option value="information">Information</option>
+                                <option value="consultation">Beratung</option>
+                                <option value="decision">Beschluss</option>
+                              </select>
+                            </label>
+                            <label>Zeitansatz<input name="estimatedMinutes" type="number" min="1" defaultValue={item.estimated_minutes ? Number(item.estimated_minutes) : undefined}/></label>
+                            <label className="meeting-v3-wide">Beschreibung<textarea name="description" rows={2} defaultValue={String(item.description ?? "")}/></label>
+                            <label className="meeting-v3-checkbox-row"><input type="checkbox" name="isRequired" value="yes" defaultChecked={Boolean(item.is_required)}/> Pflicht-TOP</label>
+                            <div className="meeting-v3-wide"><button className="ghost-button" type="submit">TOP speichern</button></div>
+                          </form>
+                        </details>
+                      )}
                     </div>
+
                     {canWrite && (
-                      <form action={deleteMeetingV3TemplateItemAction}>
-                        <input type="hidden" name="templateId" value={String(template.id)}/>
-                        <input type="hidden" name="itemId" value={String(item.id)}/>
-                        <button className="mini-button" type="submit">Entfernen</button>
-                      </form>
+                      <div className="meeting-v3-agenda-actions">
+                        <form action={moveMeetingV3TemplateItemAction}>
+                          <input type="hidden" name="templateId" value={String(template.id)}/>
+                          <input type="hidden" name="itemId" value={String(item.id)}/>
+                          <input type="hidden" name="direction" value="up"/>
+                          <button className="mini-button" type="submit" disabled={index===0} aria-label="Vorlagen-TOP nach oben">↑</button>
+                        </form>
+                        <form action={moveMeetingV3TemplateItemAction}>
+                          <input type="hidden" name="templateId" value={String(template.id)}/>
+                          <input type="hidden" name="itemId" value={String(item.id)}/>
+                          <input type="hidden" name="direction" value="down"/>
+                          <button className="mini-button" type="submit" disabled={index===items.length-1} aria-label="Vorlagen-TOP nach unten">↓</button>
+                        </form>
+                        <form action={deleteMeetingV3TemplateItemAction}>
+                          <input type="hidden" name="templateId" value={String(template.id)}/>
+                          <input type="hidden" name="itemId" value={String(item.id)}/>
+                          <button className="mini-button" type="submit">Entfernen</button>
+                        </form>
+                      </div>
                     )}
                   </div>
                 ))}
