@@ -356,6 +356,42 @@ export default async function MeetingV3LivePage({
               </details>
             )}
 
+            <details className="meeting-v3-live-tool-drawer">
+              <summary>
+                <div><span className="eyebrow">Anlagen</span><strong>Unterlagen zum aktuellen TOP</strong></div>
+                <span className="count-chip">{currentAttachments.length}</span>
+              </summary>
+              <div className="meeting-v3-live-tool-body">
+                {(currentAttachments.length>0 || generalAttachments.length>0) && (
+                  <div className="meeting-v3-live-attachment-list">
+                    {currentAttachments.map((attachment)=>(
+                      <div key={String(attachment.id)}>
+                        <div><strong>{String(attachment.title)}</strong><span>TOP-Anlage{attachment.original_filename ? " · "+String(attachment.original_filename) : ""}</span></div>
+                        {attachment.document_id && <Link href={"/api/documents/"+String(attachment.document_id)+"/file"} target="_blank" className="mini-button">Öffnen</Link>}
+                      </div>
+                    ))}
+                    {generalAttachments.map((attachment)=>(
+                      <div key={String(attachment.id)}>
+                        <div><strong>{String(attachment.title)}</strong><span>Allgemeine Sitzungsanlage{attachment.original_filename ? " · "+String(attachment.original_filename) : ""}</span></div>
+                        {attachment.document_id && <Link href={"/api/documents/"+String(attachment.document_id)+"/file"} target="_blank" className="mini-button">Öffnen</Link>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {canWrite && canDocuments && (
+                  <form action={uploadMeetingV3AttachmentAction} className="meeting-v3-live-tool-form" encType="multipart/form-data">
+                    <input type="hidden" name="meetingId" value={id}/>
+                    <input type="hidden" name="agendaItemId" value={String(current.id)}/>
+                    <input type="hidden" name="returnTo" value={"/sitzungen-neu/"+id+"/live"}/>
+                    <label>Titel<input name="title" placeholder="Optional – sonst Dateiname"/></label>
+                    <label>Datei<input name="file" type="file" required accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.jpg,.jpeg,.png,.webp"/></label>
+                    <div className="meeting-v3-live-tool-wide"><button className="ghost-button" type="submit">TOP-Anlage hochladen</button></div>
+                  </form>
+                )}
+              </div>
+            </details>
+
             {currentResolutions.length>0 && (
               <div className="meeting-v3-resolution-list">
                 {currentResolutions.map((resolution)=>(
@@ -544,6 +580,32 @@ export default async function MeetingV3LivePage({
                   </form>
                 ))}
               </div>
+
+              {guests.length>0 && (
+                <div className="meeting-v3-live-guests">
+                  <div className="meeting-v3-subhead">
+                    <div><span className="eyebrow">Gäste</span><strong>{presentGuests}/{guests.length} anwesend</strong></div>
+                  </div>
+                  <div className="meeting-v3-live-guest-list">
+                    {guests.map((guest)=>(
+                      <form action={updateMeetingV3GuestAction} className="meeting-v3-live-guest" key={String(guest.id)}>
+                        <input type="hidden" name="meetingId" value={id}/>
+                        <input type="hidden" name="guestId" value={String(guest.id)}/>
+                        <input type="hidden" name="returnTo" value={"/sitzungen-neu/"+id+"/live"}/>
+                        <div><strong>{String(guest.name)}</strong><span>{guest.organization ? String(guest.organization) : "Gast"}</span></div>
+                        <select name="attendance" defaultValue={String(guest.attendance)} aria-label={"Gaststatus "+String(guest.name)}>
+                          <option value="present">Anwesend</option>
+                          <option value="absent">Abwesend</option>
+                          <option value="late">Verspätet</option>
+                          <option value="left_early">Früher gegangen</option>
+                        </select>
+                        <input name="note" defaultValue={String(guest.note ?? "")} placeholder="Notiz"/>
+                        <button className="mini-button" type="submit">Speichern</button>
+                      </form>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               <form action={updateMeetingV3QuorumAction} className="meeting-v3-live-quorum">
                 <input type="hidden" name="meetingId" value={id}/>
