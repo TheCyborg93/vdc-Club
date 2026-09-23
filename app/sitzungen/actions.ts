@@ -774,6 +774,20 @@ export async function updateMeetingStatusAction(formData: FormData) {
         m.invitation_timely IS NOT NULL AS invitation_checked,
         m.agenda_sent_with_invitation IS NOT NULL AS agenda_checked,
         m.quorum_confirmed,
+        EXISTS(
+          SELECT 1
+          FROM meeting_attendees officer_chair
+          WHERE officer_chair.meeting_id=m.id
+            AND officer_chair.member_id=m.chair_member_id
+            AND officer_chair.attendance='present'
+        ) AS chair_present,
+        EXISTS(
+          SELECT 1
+          FROM meeting_attendees officer_taker
+          WHERE officer_taker.meeting_id=m.id
+            AND officer_taker.member_id=m.minute_taker_member_id
+            AND officer_taker.attendance='present'
+        ) AS minute_taker_present,
         count(ai.id) FILTER (WHERE ai.status IN ('open','active'))::int AS open_agenda,
         count(r.id)::int AS resolution_count,
         count(ai.id) FILTER (
@@ -848,6 +862,9 @@ export async function updateMeetingStatusAction(formData: FormData) {
     const check=checks[0] ?? {};
     if (!check.has_chair || !check.has_minute_taker) {
       redirect(`/sitzungen/${meetingId}?error=officers_missing`);
+    }
+    if (!check.chair_present || !check.minute_taker_present) {
+      redirect(`/sitzungen/${meetingId}?error=officers_not_present`);
     }
     if (
       !check.invitation_date_present ||
