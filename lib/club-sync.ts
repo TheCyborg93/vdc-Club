@@ -81,6 +81,8 @@ function normalizeTc(data: Record<string, unknown>) {
   const teams = asArray(data.teams);
   const matches = asArray(data.matches);
   const players = asArray(data.players);
+  const opponentTeams = asArray(data.opponentTeams);
+  const opponentPlayers = asArray(data.opponentPlayers);
 
   return {
     source: "vdc_tc",
@@ -102,6 +104,26 @@ function normalizeTc(data: Record<string, unknown>) {
       teamExternalId: text(player.currentTeamId) || text(player.baseTeamId) || null,
       active: true,
     })).filter((player) => player.externalId),
+    opponentTeams: opponentTeams.map((team) => {
+      const league = asRecord(team.league);
+      return {
+        externalId: text(team.id),
+        name: text(team.name) || "Gegner",
+        league: text(league.name) || null,
+        season: text(season.name) || null,
+        venue: text(team.venue) || null,
+        active: team.active !== false,
+      };
+    }).filter((team) => team.externalId),
+    opponentPlayers: opponentPlayers.map((player) => ({
+      externalId: text(player.id),
+      name: text(player.name) || "Spieler",
+      opponentTeamExternalId: text(player.teamId),
+      active: player.active !== false,
+      currentStats: player.stats ?? null,
+      historicalStats: Array.isArray(player.historicalStats) ? player.historicalStats : [],
+      updatedAt: text(player.updatedAt) || null,
+    })).filter((player) => player.externalId && player.opponentTeamExternalId),
     matches: matches.map((match) => {
       const home = asRecord(match.home);
       const away = asRecord(match.away);
