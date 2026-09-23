@@ -2149,8 +2149,28 @@ export async function cloneMeetingAsTemplateAction(formData:FormData) {
       SELECT
         ne.id,ne.title,ne.starts_at,ne.location,'planned',NULL,
         COALESCE(sm.meeting_mode,'in_person'),
-        sm.chair_member_id,
-        sm.minute_taker_member_id
+        CASE
+          WHEN ${copyParticipants}
+            AND sm.chair_member_id IS NOT NULL
+            AND EXISTS (
+              SELECT 1 FROM members active_chair
+              WHERE active_chair.id=sm.chair_member_id
+                AND active_chair.status='active'
+            )
+          THEN sm.chair_member_id
+          ELSE NULL
+        END,
+        CASE
+          WHEN ${copyParticipants}
+            AND sm.minute_taker_member_id IS NOT NULL
+            AND EXISTS (
+              SELECT 1 FROM members active_taker
+              WHERE active_taker.id=sm.minute_taker_member_id
+                AND active_taker.status='active'
+            )
+          THEN sm.minute_taker_member_id
+          ELSE NULL
+        END
       FROM new_event ne
       CROSS JOIN source_meeting sm
       RETURNING id
