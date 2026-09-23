@@ -581,7 +581,8 @@ export default async function MeetingDetailPage({
       </nav>
 
       {query.error && <div className="form-error">{errors[query.error] ?? "Die Aktion konnte nicht ausgeführt werden."}</div>}
-      {(query.agenda || query.resolution || query.created || query.saved || query.status || query.officers || query.formalities || query.guest || query.exclusion || query.formal || query.attachment || query.attachment_deleted || query.attendee_removed || query.started) && <div className="form-success">Sitzung wurde aktualisiert.</div>}
+      {query.template && <div className="form-success">Neue Sitzung wurde aus der Vorlage erstellt.</div>}
+      {!query.template && (query.agenda || query.resolution || query.created || query.saved || query.status || query.officers || query.formalities || query.guest || query.exclusion || query.formal || query.attachment || query.attachment_deleted || query.attendee_removed || query.started) && <div className="form-success">Sitzung wurde aktualisiert.</div>}
       {query.notes && <div className="form-success">Ergebnisnotiz wurde gespeichert.</div>}
       {query.agenda_deleted && <div className="form-success">TOP wurde gelöscht.</div>}
 
