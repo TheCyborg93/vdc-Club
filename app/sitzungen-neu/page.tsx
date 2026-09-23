@@ -32,7 +32,9 @@ function formatDateTime(value:unknown){
 function stateClass(state:string){
   if(state==="live") return "meeting-v3-state live";
   if(state==="ready") return "meeting-v3-state ready";
-  if(state==="minutes_review") return "meeting-v3-state review";
+  if(state==="closing") return "meeting-v3-state closing";
+  if(state==="minutes_draft") return "meeting-v3-state minutes_draft";
+  if(state==="minutes_review") return "meeting-v3-state minutes_review";
   if(state==="archived") return "meeting-v3-state archived";
   if(state==="cancelled") return "meeting-v3-state cancelled";
   return "meeting-v3-state";
@@ -177,7 +179,11 @@ export default async function MeetingV3Dashboard({
                 ? `/sitzungen-neu/${meetingId}/live`
                 : lifecycle==="ready"
                   ? `/sitzungen-neu/${meetingId}/start`
-                  : `/sitzungen-neu/${meetingId}`;
+                  : lifecycle==="closing"
+                    ? `/sitzungen-neu/${meetingId}/close`
+                    : lifecycle==="minutes_draft" || lifecycle==="minutes_review"
+                      ? `/sitzungen-neu/${meetingId}/minutes`
+                      : `/sitzungen-neu/${meetingId}`;
               return (
               <Link href={href} className="meeting-v3-card" key={meetingId}>
                 <div className="meeting-v3-card-main">
@@ -211,8 +217,14 @@ export default async function MeetingV3Dashboard({
             <span className="count-chip">{history.length}</span>
           </summary>
           <div className="meeting-v3-list">
-            {history.map((meeting)=>(
-              <Link href={`/sitzungen-neu/${String(meeting.id)}`} className="meeting-v3-card compact" key={String(meeting.id)}>
+            {history.map((meeting)=>{
+              const meetingId=String(meeting.id);
+              const lifecycle=String(meeting.lifecycle_state);
+              const href=lifecycle==="archived"
+                ? `/sitzungen-neu/${meetingId}/minutes`
+                : `/sitzungen-neu/${meetingId}`;
+              return (
+              <Link href={href} className="meeting-v3-card compact" key={meetingId}>
                 <div className="meeting-v3-card-main">
                   <strong>{String(meeting.title)}</strong>
                   <small>{formatDateTime(meeting.starts_at)}</small>
@@ -221,7 +233,8 @@ export default async function MeetingV3Dashboard({
                   {meetingV3StateLabels[String(meeting.lifecycle_state) as MeetingV3State] ?? String(meeting.lifecycle_state)}
                 </span>
               </Link>
-            ))}
+              );
+            })}
           </div>
         </details>
       )}
