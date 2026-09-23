@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getDb } from "@/lib/db";
 import { hasPermission,requirePermission } from "@/lib/permissions";
+import { MeetingV3AgendaSorter } from "@/components/meeting-v3-agenda-sorter";
 import {
   getMeetingV3Readiness,
   meetingV3AgendaTypeLabels,
@@ -487,6 +488,17 @@ export default async function MeetingV3DetailPage({
             <div><span className="eyebrow">5 · Tagesordnung</span><h2>TOPs planen</h2></div>
             <span className="count-chip">{agenda.length}</span>
           </div>
+          {editable && canWrite && agenda.length>1 && (
+            <MeetingV3AgendaSorter
+              meetingId={id}
+              items={agenda.map((item)=>({
+                id:String(item.id),
+                title:String(item.title),
+                position:Number(item.position),
+              }))}
+            />
+          )}
+
           <div className="meeting-v3-agenda-list">
             {agenda.map((item,index)=>(
               <div className="meeting-v3-agenda-item" key={String(item.id)}>
