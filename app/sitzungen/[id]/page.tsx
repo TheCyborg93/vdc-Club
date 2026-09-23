@@ -82,6 +82,8 @@ const errors:Record<string,string>={
   attendee:"Teilnehmer konnte nicht hinzugefügt werden.",
   attendee_remove_locked:"Teilnehmer können nur vor Sitzungsbeginn wieder entfernt werden.",
   resolution:"Für einen Beschluss werden Titel und Beschlusstext benötigt.",
+  resolution_exists:"Für diesen TOP wurde bereits ein Beschluss gespeichert.",
+  resolution_not_decision:"Eine Abstimmung kann nur bei einem Beschluss-TOP gespeichert werden.",
   protected_delete:"Diese Sitzung kann nicht gelöscht werden, weil sie bereits abgeschlossen ist oder Beschlüsse/Dokumente enthält.",
   agenda_delete:"Dieser TOP kann nicht gelöscht werden, weil bereits ein Beschluss dazu existiert oder die Sitzung abgeschlossen ist.",
   meeting_locked:"Diese Änderung ist im aktuellen Sitzungsstatus nicht möglich.",
