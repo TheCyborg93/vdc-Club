@@ -97,6 +97,7 @@ const errors:Record<string,string>={
   minutes_archived:"Die Sitzung kann nicht wieder geöffnet werden, weil das Protokoll bereits archiviert ist.",
   forbidden:"Diese Aktion ist für deine Rolle nicht freigegeben.",
   officers_missing:"Sitzungsleitung und Protokollführung müssen festgelegt sein.",
+  officers_not_present:"Sitzungsleitung und Protokollführung müssen zum Sitzungsabschluss als anwesend dokumentiert sein.",
   formalities_open:"Einladung, Tagesordnung und Beschlussfähigkeit müssen vollständig dokumentiert sein.",
   not_quorate_for_resolutions:"Beschlüsse können nur bei dokumentierter Beschlussfähigkeit abgeschlossen werden.",
   vote_incomplete:"Mindestens eine Abstimmung ist formal unvollständig oder die Stimmenzahl passt nicht.",
@@ -436,6 +437,13 @@ export default async function MeetingDetailPage({
     (row)=>row.resolution_id && row.announced_with_invitation===false && !String(row.decision_basis_note ?? "").trim(),
   ).length;
   const officersComplete=Boolean(meeting.chair_member_id && meeting.minute_taker_member_id);
+  const chairPresent=Boolean(meeting.chair_member_id) && attendees.some(
+    (row)=>String(row.member_id)===String(meeting.chair_member_id) && row.attendance==="present",
+  );
+  const minuteTakerPresent=Boolean(meeting.minute_taker_member_id) && attendees.some(
+    (row)=>String(row.member_id)===String(meeting.minute_taker_member_id) && row.attendance==="present",
+  );
+  const officersPresent=chairPresent && minuteTakerPresent;
   const invitationPrepared=
     Boolean(meeting.invited_at) &&
     Boolean(String(meeting.invitation_method ?? "").trim()) &&
@@ -487,6 +495,7 @@ export default async function MeetingDetailPage({
   const eligibleForCurrentVote=Math.max(0,presentVoterCount-preferredExclusions.length);
   const completionReady=
     officersComplete &&
+    officersPresent &&
     formalitiesDocumented &&
     (agenda.filter((row)=>row.resolution_id).length===0 || meeting.quorum_confirmed===true) &&
     openAgendaCount===0 &&
@@ -1183,7 +1192,11 @@ export default async function MeetingDetailPage({
             <div className="meeting-close-grid">
               <div className={officersComplete ? "is-ok" : "is-open"}>
                 <b>{officersComplete ? "✓" : "!"}</b>
-                <span>Leitung & Protokollführung</span>
+                <span>Leitung & Protokollführung festgelegt</span>
+              </div>
+              <div className={officersPresent ? "is-ok" : "is-open"}>
+                <b>{officersPresent ? "✓" : "!"}</b>
+                <span>Leitung & Protokollführung anwesend</span>
               </div>
               <div className={formalitiesDocumented ? "is-ok" : "is-open"}>
                 <b>{formalitiesDocumented ? "✓" : "!"}</b>
