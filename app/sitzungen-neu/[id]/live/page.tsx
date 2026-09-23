@@ -15,6 +15,7 @@ import {
   updateMeetingV3QuorumAction,
 } from "@/app/sitzungen-neu/live-actions";
 import { MeetingV3LiveNotes } from "@/components/meeting-v3-live-notes";
+import { beginMeetingV3ClosingAction } from "@/app/sitzungen-neu/closing-actions";
 import {
   addMeetingV3VoteExclusionAction,
   addSpontaneousMeetingV3AgendaAction,
@@ -37,6 +38,7 @@ const errors:Record<string,string>={
   named_votes:"Bei namentlicher Abstimmung muss für jede stimmberechtigte Person eine Stimme erfasst werden.",
   task_permission:"Du darfst keine Folgeaufgaben anlegen.",
   resolution_required:"Der TOP kann erst als Beschluss abgeschlossen werden, wenn ein Beschluss erfasst wurde.",
+  closing_not_ready:"Der Abschluss kann erst gestartet werden, wenn kein TOP mehr offen oder aktiv ist.",
 };
 
 const resultLabels:Record<string,string>={
@@ -461,7 +463,13 @@ export default async function MeetingV3LivePage({
           ) : (
             <div className="meeting-v3-live-complete-note">
               <strong>Die Tagesordnung ist vollständig bearbeitet.</strong>
-              <p>Als nächster V3-Schritt folgt der Abschluss-Assistent mit offenen Punkten, nächstem Termin und automatischem Protokollentwurf.</p>
+              <p>Jetzt folgt der Abschluss-Assistent mit Zusammenfassung, vertagten TOPs, nächstem Termin und automatischem Protokollentwurf.</p>
+              {canWrite && (
+                <form action={beginMeetingV3ClosingAction}>
+                  <input type="hidden" name="meetingId" value={id}/>
+                  <button className="primary-button" type="submit">Sitzungsabschluss starten</button>
+                </form>
+              )}
             </div>
           )}
         </section>
