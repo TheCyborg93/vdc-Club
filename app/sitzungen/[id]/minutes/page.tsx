@@ -131,7 +131,7 @@ export default async function MeetingV3MinutesPage({
 
       <section className="meeting-v3-minutes-toolbar">
         <div>
-          <span className="eyebrow">Protokoll V3 · Revision {Number(meeting.revision)}</span>
+          <span className="eyebrow">Protokoll · Revision {Number(meeting.revision)}</span>
           <h1>{String(meeting.title)}</h1>
           <p>{statusLabels[status] ?? status} · Snapshot vom {formatDateTime(meeting.revision_created_at)}</p>
         </div>
@@ -139,6 +139,7 @@ export default async function MeetingV3MinutesPage({
           <span className={`meeting-v3-state ${status==="archived" ? "archived" : status==="review" ? "minutes_review" : "minutes_draft"}`}>
             {statusLabels[status] ?? status}
           </span>
+          <a href={`/api/sitzungen/${id}/protokoll/pdf`} target="_blank" className="primary-button">PDF öffnen</a>
           <Link href={`/sitzungen/${id}`} className="ghost-button">Sitzungsakte</Link>
         </div>
       </section>
