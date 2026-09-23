@@ -15,8 +15,13 @@ import {
 } from "@/lib/meeting-v3";
 import {
   addMeetingV3AgendaAction,
+  addMeetingV3ParticipantAction,
+  deleteMeetingV3AgendaAction,
   markMeetingV3ReadyAction,
+  moveMeetingV3AgendaAction,
+  removeMeetingV3ParticipantAction,
   reopenMeetingV3PreparationAction,
+  updateMeetingV3AgendaAction,
   updateMeetingV3BasicsAction,
   updateMeetingV3InvitationAction,
   updateMeetingV3OfficersAction,
@@ -44,6 +49,9 @@ const errors:Record<string,string>={
   attachment_upload:"Die Anlage konnte nicht hochgeladen werden.",
   storage:"Der Dokumentenspeicher ist nicht konfiguriert.",
   permission:"Für Anlagen fehlt die Dokumentberechtigung.",
+  participant:"Der Teilnehmer konnte nicht hinzugefügt werden.",
+  participant_officer:"Sitzungsleitung oder Protokollführung kann nicht entfernt werden. Ändere zuerst die Verantwortlichen.",
+  agenda_linked:"Dieser TOP hat bereits Anlagen und kann deshalb nicht gelöscht werden.",
 };
 
 function formatDateTime(value:unknown){
@@ -74,7 +82,7 @@ export default async function MeetingV3DetailPage({
   searchParams,
 }:{
   params:Promise<{id:string}>;
-  searchParams:Promise<{error?:string;created?:string;saved?:string;invitation?:string;officers?:string;agenda?:string;ready?:string;preparation?:string;guest?:string;guest_removed?:string;attachment?:string}>;
+  searchParams:Promise<{error?:string;created?:string;saved?:string;invitation?:string;officers?:string;agenda?:string;participant?:string;ready?:string;preparation?:string;guest?:string;guest_removed?:string;attachment?:string}>;
 }){
   const actor=await requirePermission("meetings.read");
   const {id}=await params;
@@ -82,7 +90,7 @@ export default async function MeetingV3DetailPage({
   const sql=getDb();
   if(!sql) notFound();
 
-  const [rows,participants,agenda,guests,attachments]=await Promise.all([
+  const [rows,participants,agenda,guests,attachments,availableMembers]=await Promise.all([
     sql`
       SELECT
         m.*,
@@ -132,6 +140,18 @@ export default async function MeetingV3DetailPage({
       WHERE a.meeting_id=${id}::uuid
       ORDER BY a.created_at
     `,
+    sql`
+      SELECT m.id::text,m.first_name,m.last_name
+      FROM members m
+      WHERE m.status='active'
+        AND NOT EXISTS (
+          SELECT 1
+          FROM meeting_v3_participants p
+          WHERE p.meeting_id=${id}::uuid
+            AND p.member_id=m.id
+        )
+      ORDER BY m.last_name,m.first_name
+    `,
   ]);
 
   const meeting=rows[0];
@@ -158,11 +178,11 @@ export default async function MeetingV3DetailPage({
 
   return (
     <div className="page-stack meeting-v3-page">
-      <Link href="/sitzungen" className="back-link">← Zur V3-Sitzungszentrale</Link>
+      <Link href="/sitzungen" className="back-link">← Zur Sitzungszentrale</Link>
 
       <section className="meeting-v3-hero">
         <div>
-          <span className="eyebrow">Sitzungssystem V3 · {meetingV3StateLabels[state]}</span>
+          <span className="eyebrow">Sitzungssystem · {meetingV3StateLabels[state]}</span>
           <h1>{String(meeting.title)}</h1>
           <p>
             {meetingType==="custom"
@@ -174,12 +194,12 @@ export default async function MeetingV3DetailPage({
         </div>
         <div className="meeting-v3-hero-state">
           <span className={`meeting-v3-state ${state}`}>{meetingV3StateLabels[state]}</span>
-          <span className="meeting-v3-preview-chip">V3</span>
+          
         </div>
       </section>
 
       {query.error && <p className="form-error">{errors[query.error] ?? "Die Aktion konnte nicht ausgeführt werden."}</p>}
-      {(query.created || query.saved || query.invitation || query.officers || query.agenda || query.ready || query.preparation || query.guest || query.guest_removed || query.attachment) && (
+      {(query.created || query.saved || query.invitation || query.officers || query.agenda || query.participant || query.ready || query.preparation || query.guest || query.guest_removed || query.attachment) && (
         <p className="form-success">
           {query.created ? "Sitzung wurde angelegt und automatisch vorbereitet." :
            query.ready ? "Die Sitzung ist jetzt bereit für den Startcheck." :
@@ -338,11 +358,43 @@ export default async function MeetingV3DetailPage({
           <div className="meeting-v3-person-list">
             {participants.map((person)=>(
               <div className="meeting-v3-person" key={String(person.id)}>
-                <div><strong>{String(person.first_name)} {String(person.last_name)}</strong><span>{String(person.role_in_meeting)==="chair" ? "Sitzungsleitung" : String(person.role_in_meeting)==="minute_taker" ? "Protokollführung" : "Teilnehmer"}</span></div>
-                <span>{String(person.attendance)==="invited" ? "Eingeladen" : String(person.attendance)}</span>
+                <div>
+                  <strong>{String(person.first_name)} {String(person.last_name)}</strong>
+                  <span>{String(person.role_in_meeting)==="chair" ? "Sitzungsleitung" : String(person.role_in_meeting)==="minute_taker" ? "Protokollführung" : "Teilnehmer"}</span>
+                </div>
+                <div className="meeting-v3-person-actions">
+                  <span>{String(person.attendance)==="invited" ? "Eingeladen" : String(person.attendance)}</span>
+                  {editable && canWrite && String(person.role_in_meeting)==="participant" && (
+                    <form action={removeMeetingV3ParticipantAction}>
+                      <input type="hidden" name="meetingId" value={id}/>
+                      <input type="hidden" name="participantId" value={String(person.id)}/>
+                      <button className="mini-button" type="submit">Entfernen</button>
+                    </form>
+                  )}
+                </div>
               </div>
             ))}
           </div>
+
+          {editable && canWrite && availableMembers.length>0 && (
+            <details className="meeting-v3-add-participant">
+              <summary>Teilnehmer hinzufügen</summary>
+              <form action={addMeetingV3ParticipantAction} className="form-stack">
+                <input type="hidden" name="meetingId" value={id}/>
+                <label>Mitglied
+                  <select name="memberId" required defaultValue="">
+                    <option value="">Bitte auswählen</option>
+                    {availableMembers.map((member)=>(
+                      <option key={String(member.id)} value={String(member.id)}>
+                        {String(member.first_name)} {String(member.last_name)}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <button className="ghost-button" type="submit">Teilnehmer hinzufügen</button>
+              </form>
+            </details>
+          )}
 
           <div className="meeting-v3-guest-section">
             <div className="meeting-v3-subhead">
@@ -392,14 +444,58 @@ export default async function MeetingV3DetailPage({
             <span className="count-chip">{agenda.length}</span>
           </div>
           <div className="meeting-v3-agenda-list">
-            {agenda.map((item)=>(
+            {agenda.map((item,index)=>(
               <div className="meeting-v3-agenda-item" key={String(item.id)}>
                 <b>{Number(item.position)}</b>
-                <div>
+                <div className="meeting-v3-agenda-item-main">
                   <strong>{String(item.title)}</strong>
                   <span>{meetingV3AgendaTypeLabels[String(item.agenda_type) as MeetingV3AgendaType]}</span>
                   {item.description && <small>{String(item.description)}</small>}
+                  {item.estimated_minutes && <small>{Number(item.estimated_minutes)} Min. geplant</small>}
+
+                  {editable && canWrite && (
+                    <details className="meeting-v3-agenda-edit">
+                      <summary>Bearbeiten</summary>
+                      <form action={updateMeetingV3AgendaAction} className="form-stack">
+                        <input type="hidden" name="meetingId" value={id}/>
+                        <input type="hidden" name="agendaItemId" value={String(item.id)}/>
+                        <label>Titel<input name="title" required defaultValue={String(item.title)}/></label>
+                        <label>Typ
+                          <select name="agendaType" defaultValue={String(item.agenda_type)}>
+                            <option value="information">Information</option>
+                            <option value="consultation">Beratung</option>
+                            <option value="decision">Beschluss</option>
+                          </select>
+                        </label>
+                        <label>Zeitansatz (Min.)<input name="estimatedMinutes" type="number" min="1" defaultValue={item.estimated_minutes ? Number(item.estimated_minutes) : undefined}/></label>
+                        <label>Beschreibung<textarea name="description" rows={3} defaultValue={String(item.description ?? "")}/></label>
+                        <button className="ghost-button" type="submit">TOP speichern</button>
+                      </form>
+                    </details>
+                  )}
                 </div>
+
+                {editable && canWrite && (
+                  <div className="meeting-v3-agenda-actions">
+                    <form action={moveMeetingV3AgendaAction}>
+                      <input type="hidden" name="meetingId" value={id}/>
+                      <input type="hidden" name="agendaItemId" value={String(item.id)}/>
+                      <input type="hidden" name="direction" value="up"/>
+                      <button className="mini-button" type="submit" disabled={index===0} aria-label="TOP nach oben">↑</button>
+                    </form>
+                    <form action={moveMeetingV3AgendaAction}>
+                      <input type="hidden" name="meetingId" value={id}/>
+                      <input type="hidden" name="agendaItemId" value={String(item.id)}/>
+                      <input type="hidden" name="direction" value="down"/>
+                      <button className="mini-button" type="submit" disabled={index===agenda.length-1} aria-label="TOP nach unten">↓</button>
+                    </form>
+                    <form action={deleteMeetingV3AgendaAction}>
+                      <input type="hidden" name="meetingId" value={id}/>
+                      <input type="hidden" name="agendaItemId" value={String(item.id)}/>
+                      <button className="mini-button" type="submit">Löschen</button>
+                    </form>
+                  </div>
+                )}
               </div>
             ))}
           </div>
