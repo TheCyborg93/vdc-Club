@@ -481,3 +481,212 @@ export async function reopenMeetingV3PreparationAction(formData: FormData) {
   revalidatePath("/sitzungen");
   redirect(`/sitzungen/${meetingId}?preparation=1`);
 }
+
+
+export async function addMeetingV3ParticipantAction(formData: FormData) {
+  const actor=await requirePermission("meetings.write");
+  const sql=getDb();
+  if (!sql) redirect("/sitzungen?error=database");
+
+  const meetingId=value(formData,"meetingId");
+  const memberId=value(formData,"memberId");
+  if(!meetingId || !memberId) redirect(`/sitzungen/${meetingId}?error=participant`);
+
+  const rows=await sql`
+    INSERT INTO meeting_v3_participants (
+      meeting_id,member_id,attendance,voting_eligible,role_in_meeting,updated_by
+    )
+    SELECT m.id,mem.id,'invited',true,'participant',${actor.id}::uuid
+    FROM meeting_v3_meetings m
+    JOIN members mem ON mem.id=${memberId}::uuid AND mem.status='active'
+    WHERE m.id=${meetingId}::uuid
+      AND m.lifecycle_state='preparation'
+    ON CONFLICT (meeting_id,member_id) DO NOTHING
+    RETURNING id::text
+  `;
+
+  if(!rows.length) redirect(`/sitzungen/${meetingId}?error=participant`);
+
+  const participantId=String(rows[0].id);
+  await writeMeetingV3Audit(meetingId,actor.id,"participant.added","participant",participantId,{memberId});
+  revalidatePath(`/sitzungen/${meetingId}`);
+  redirect(`/sitzungen/${meetingId}?participant=1`);
+}
+
+export async function removeMeetingV3ParticipantAction(formData: FormData) {
+  const actor=await requirePermission("meetings.write");
+  const sql=getDb();
+  if (!sql) redirect("/sitzungen?error=database");
+
+  const meetingId=value(formData,"meetingId");
+  const participantId=value(formData,"participantId");
+  if(!meetingId || !participantId) redirect(`/sitzungen/${meetingId}?error=participant`);
+
+  const rows=await sql`
+    DELETE FROM meeting_v3_participants p
+    USING meeting_v3_meetings m
+    WHERE p.id=${participantId}::uuid
+      AND p.meeting_id=m.id
+      AND m.id=${meetingId}::uuid
+      AND m.lifecycle_state='preparation'
+      AND p.member_id IS DISTINCT FROM m.chair_member_id
+      AND p.member_id IS DISTINCT FROM m.minute_taker_member_id
+    RETURNING p.id::text,p.member_id::text
+  `;
+
+  if(!rows.length) redirect(`/sitzungen/${meetingId}?error=participant_officer`);
+
+  await writeMeetingV3Audit(meetingId,actor.id,"participant.removed","participant",participantId,{
+    memberId:String(rows[0].member_id),
+  });
+  revalidatePath(`/sitzungen/${meetingId}`);
+  redirect(`/sitzungen/${meetingId}?participant=1`);
+}
+
+export async function updateMeetingV3AgendaAction(formData: FormData) {
+  const actor=await requirePermission("meetings.write");
+  const sql=getDb();
+  if (!sql) redirect("/sitzungen?error=database");
+
+  const meetingId=value(formData,"meetingId");
+  const agendaItemId=value(formData,"agendaItemId");
+  const title=value(formData,"title");
+  const description=value(formData,"description");
+  const estimatedRaw=value(formData,"estimatedMinutes");
+  const estimatedMinutes=estimatedRaw ? Number(estimatedRaw) : null;
+  const typeRaw=value(formData,"agendaType");
+  const agendaType=(meetingV3AgendaTypes as readonly string[]).includes(typeRaw)
+    ? typeRaw as MeetingV3AgendaType
+    : "consultation";
+
+  if(!meetingId || !agendaItemId || !title || (estimatedMinutes!==null && (!Number.isInteger(estimatedMinutes) || estimatedMinutes<=0))){
+    redirect(`/sitzungen/${meetingId}?error=agenda`);
+  }
+
+  const rows=await sql`
+    UPDATE meeting_v3_agenda_items ai
+    SET
+      title=${title},
+      agenda_type=${agendaType},
+      description=${description || null},
+      estimated_minutes=${estimatedMinutes},
+      row_version=row_version+1,
+      updated_by=${actor.id}::uuid
+    FROM meeting_v3_meetings m
+    WHERE ai.id=${agendaItemId}::uuid
+      AND ai.meeting_id=m.id
+      AND m.id=${meetingId}::uuid
+      AND m.lifecycle_state='preparation'
+    RETURNING ai.id::text,ai.position
+  `;
+
+  if(!rows.length) redirect(`/sitzungen/${meetingId}?error=locked`);
+
+  await writeMeetingV3Audit(meetingId,actor.id,"agenda.updated","agenda_item",agendaItemId,{
+    title,agendaType,description:description || null,estimatedMinutes,
+  });
+  revalidatePath(`/sitzungen/${meetingId}`);
+  redirect(`/sitzungen/${meetingId}?agenda=1`);
+}
+
+export async function deleteMeetingV3AgendaAction(formData: FormData) {
+  const actor=await requirePermission("meetings.write");
+  const sql=getDb();
+  if (!sql) redirect("/sitzungen?error=database");
+
+  const meetingId=value(formData,"meetingId");
+  const agendaItemId=value(formData,"agendaItemId");
+  if(!meetingId || !agendaItemId) redirect(`/sitzungen/${meetingId}?error=agenda`);
+
+  const linked=await sql`
+    SELECT EXISTS(
+      SELECT 1 FROM meeting_v3_attachments
+      WHERE agenda_item_id=${agendaItemId}::uuid
+    ) AS has_attachment
+  `;
+  if(linked[0]?.has_attachment) redirect(`/sitzungen/${meetingId}?error=agenda_linked`);
+
+  const rows=await sql`
+    DELETE FROM meeting_v3_agenda_items ai
+    USING meeting_v3_meetings m
+    WHERE ai.id=${agendaItemId}::uuid
+      AND ai.meeting_id=m.id
+      AND m.id=${meetingId}::uuid
+      AND m.lifecycle_state='preparation'
+    RETURNING ai.id::text,ai.position,ai.title
+  `;
+
+  if(!rows.length) redirect(`/sitzungen/${meetingId}?error=locked`);
+
+  await sql`
+    UPDATE meeting_v3_agenda_items
+    SET position=position-1,updated_by=${actor.id}::uuid,row_version=row_version+1
+    WHERE meeting_id=${meetingId}::uuid
+      AND position>${Number(rows[0].position)}
+  `;
+
+  await writeMeetingV3Audit(meetingId,actor.id,"agenda.deleted","agenda_item",agendaItemId,{
+    title:String(rows[0].title),position:Number(rows[0].position),
+  });
+  revalidatePath(`/sitzungen/${meetingId}`);
+  redirect(`/sitzungen/${meetingId}?agenda=1`);
+}
+
+export async function moveMeetingV3AgendaAction(formData: FormData) {
+  const actor=await requirePermission("meetings.write");
+  const sql=getDb();
+  if (!sql) redirect("/sitzungen?error=database");
+
+  const meetingId=value(formData,"meetingId");
+  const agendaItemId=value(formData,"agendaItemId");
+  const direction=value(formData,"direction");
+  if(!meetingId || !agendaItemId || !["up","down"].includes(direction)){
+    redirect(`/sitzungen/${meetingId}?error=agenda`);
+  }
+
+  const current=await sql`
+    SELECT ai.id::text,ai.position
+    FROM meeting_v3_agenda_items ai
+    JOIN meeting_v3_meetings m ON m.id=ai.meeting_id
+    WHERE ai.id=${agendaItemId}::uuid
+      AND ai.meeting_id=${meetingId}::uuid
+      AND m.lifecycle_state='preparation'
+    LIMIT 1
+  `;
+  if(!current[0]) redirect(`/sitzungen/${meetingId}?error=locked`);
+
+  const currentPosition=Number(current[0].position);
+  const target=await sql`
+    SELECT id::text,position
+    FROM meeting_v3_agenda_items
+    WHERE meeting_id=${meetingId}::uuid
+      AND position ${direction==="up" ? sql`< ${currentPosition}` : sql`> ${currentPosition}`}
+    ORDER BY position ${direction==="up" ? sql`DESC` : sql`ASC`}
+    LIMIT 1
+  `;
+  if(!target[0]) redirect(`/sitzungen/${meetingId}?agenda=1`);
+
+  const targetId=String(target[0].id);
+  const targetPosition=Number(target[0].position);
+  await sql`
+    UPDATE meeting_v3_agenda_items
+    SET position=-1,updated_by=${actor.id}::uuid,row_version=row_version+1
+    WHERE id=${agendaItemId}::uuid
+  `;
+  await sql`
+    UPDATE meeting_v3_agenda_items
+    SET position=${currentPosition},updated_by=${actor.id}::uuid,row_version=row_version+1
+    WHERE id=${targetId}::uuid
+  `;
+  await sql`
+    UPDATE meeting_v3_agenda_items
+    SET position=${targetPosition},updated_by=${actor.id}::uuid,row_version=row_version+1
+    WHERE id=${agendaItemId}::uuid
+  `;
+
+  await writeMeetingV3Audit(meetingId,actor.id,"agenda.reordered","agenda_item",agendaItemId,{
+    from:currentPosition,to:targetPosition,direction,
+  });
+  revalidatePath(`/sitzungen/${meetingId}`);
+  redirect(`/sitzungen/${meetingId}?agenda=1`);
+}
