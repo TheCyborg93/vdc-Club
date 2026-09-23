@@ -1041,3 +1041,241 @@ body.meeting-focus-mode .meeting-control-hero{position:sticky;top:0;z-index:18;b
     width:100%;
   }
 }
+
+
+/* Meeting responsive completion */
+@media(max-width:1100px){
+  .meeting-session-shell{
+    grid-template-columns:minmax(0,1fr) 220px;
+  }
+  .meeting-top-rail{
+    grid-column:1/-1;
+    position:static;
+  }
+  .meeting-top-list{
+    display:flex;
+    gap:6px;
+    overflow-x:auto;
+    overscroll-behavior-inline:contain;
+    scrollbar-width:thin;
+    padding-bottom:3px;
+  }
+  .meeting-top-link{
+    flex:0 0 min(260px,72vw);
+  }
+  .meeting-check-rail{
+    position:sticky;
+    top:82px;
+  }
+  .meeting-control-stats{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+  }
+}
+
+@media(max-width:820px){
+  .meeting-control-page{
+    gap:11px;
+  }
+  .meeting-control-hero{
+    align-items:flex-start;
+    flex-direction:column;
+    padding:14px;
+  }
+  .meeting-control-tools{
+    width:100%;
+    justify-content:flex-start;
+  }
+  .meeting-control-tools>a,
+  .meeting-control-tools>form,
+  .meeting-control-tools>form>button{
+    max-width:100%;
+  }
+  .meeting-workflow-bar{
+    overflow-x:auto;
+    grid-template-columns:repeat(3,minmax(190px,1fr));
+    scrollbar-width:thin;
+    overscroll-behavior-inline:contain;
+  }
+  .meeting-session-shell{
+    grid-template-columns:1fr;
+  }
+  .meeting-top-rail,
+  .meeting-check-rail{
+    position:static;
+  }
+  .meeting-check-rail{
+    order:3;
+  }
+  .meeting-focus-panel{
+    order:2;
+  }
+  .meeting-top-rail{
+    order:1;
+  }
+  .meeting-close-grid{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+  }
+  .meeting-close-form{
+    grid-template-columns:1fr;
+  }
+  .meeting-close-form>*{
+    min-width:0;
+  }
+  .meeting-close-submit{
+    align-items:stretch;
+    flex-direction:column;
+  }
+  .meeting-close-submit .primary-button{
+    width:100%;
+  }
+  .meeting-officer-form{
+    grid-template-columns:1fr 1fr;
+  }
+  .meeting-officer-form>button{
+    grid-column:1/-1;
+    width:100%;
+  }
+  .secretary-approval-panel{
+    grid-template-columns:1fr;
+  }
+  .minutes-review-checklist{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+  }
+  .minutes-archive-complete,
+  .minutes-review-primary{
+    align-items:flex-start;
+    flex-direction:column;
+  }
+  .minutes-archive-actions,
+  .minutes-review-primary form,
+  .minutes-review-primary .primary-button{
+    width:100%;
+  }
+}
+
+@media(max-width:560px){
+  .meeting-control-hero{
+    border-radius:13px;
+    padding:11px;
+  }
+  .meeting-control-title{
+    align-items:flex-start;
+  }
+  .meeting-control-title img{
+    width:36px;
+    height:36px;
+  }
+  .meeting-control-title h1{
+    font-size:20px;
+    overflow-wrap:anywhere;
+  }
+  .meeting-control-tools{
+    display:grid;
+    grid-template-columns:1fr;
+  }
+  .meeting-control-tools>a,
+  .meeting-control-tools>form,
+  .meeting-control-tools button,
+  .meeting-control-tools .primary-button,
+  .meeting-control-tools .mini-button{
+    width:100%;
+  }
+  .meeting-control-stats{
+    grid-template-columns:1fr 1fr;
+    gap:6px;
+  }
+  .meeting-control-stats>article{
+    padding:9px;
+  }
+  .meeting-workflow-bar{
+    margin-inline:-2px;
+    padding-bottom:3px;
+  }
+  .meeting-top-link{
+    flex-basis:min(235px,82vw);
+  }
+  .meeting-focus-head{
+    padding:12px;
+    flex-direction:column;
+  }
+  .meeting-focus-status{
+    width:100%;
+    justify-items:start;
+  }
+  .meeting-focus-section{
+    padding:12px;
+  }
+  .meeting-section-head{
+    align-items:flex-start;
+    flex-direction:column;
+  }
+  .vote-exclusion-list>div,
+  .meeting-attachment-list>div{
+    align-items:flex-start;
+    flex-direction:column;
+  }
+  .meeting-attachment-list>div>div:last-child{
+    width:100%;
+  }
+  .meeting-attachment-list>div>div:last-child a,
+  .meeting-attachment-list>div>div:last-child button,
+  .meeting-attachment-list>div>div:last-child form{
+    width:100%;
+  }
+  .meeting-attachment-list>div>div:last-child form button{
+    width:100%;
+  }
+  .vote-exclusion-form,
+  .meeting-attachment-upload{
+    grid-template-columns:1fr;
+  }
+  .vote-exclusion-form button,
+  .meeting-attachment-upload button{
+    width:100%;
+  }
+  .vote-formal-summary{
+    grid-template-columns:1fr;
+  }
+  .vote-formal-summary>span{
+    padding-bottom:0;
+  }
+  .meeting-close-grid{
+    grid-template-columns:1fr;
+  }
+  .meeting-close-summary{
+    grid-template-columns:1fr 1fr;
+  }
+  .meeting-officer-form{
+    grid-template-columns:1fr;
+  }
+  .meeting-officer-form>button{
+    grid-column:auto;
+  }
+  .meeting-vote-check{
+    align-items:flex-start;
+    flex-direction:column;
+  }
+  .minutes-review-checklist,
+  .secretary-meta-grid{
+    grid-template-columns:1fr;
+  }
+  .secretary-workspace-head{
+    align-items:flex-start;
+    flex-direction:column;
+    padding:13px;
+  }
+  .secretary-workspace-actions{
+    width:100%;
+    justify-content:flex-start;
+  }
+  .secretary-workspace-actions>a,
+  .secretary-workspace-actions button{
+    width:100%;
+  }
+  .meeting-correction-guide{
+    padding:12px;
+  }
+  .meeting-correction-group-body{
+    padding:11px;
+  }
+}
