@@ -22,6 +22,10 @@ import {
   createMeetingV3ResolutionAction,
   endMeetingV3VoteExclusionAction,
 } from "@/app/sitzungen-neu/formal-actions";
+import {
+  updateMeetingV3GuestAction,
+  uploadMeetingV3AttachmentAction,
+} from "@/app/sitzungen-neu/support-actions";
 
 export const dynamic="force-dynamic";
 
@@ -67,6 +71,7 @@ export default async function MeetingV3LivePage({
     error?:string;started?:string;agenda?:string;advanced?:string;
     agenda_complete?:string;participant?:string;quorum?:string;
     spontaneous?:string;exclusion?:string;resolution?:string;
+    guest?:string;attachment?:string;
   }>;
 }) {
   const actor=await requirePermission("meetings.read");
@@ -75,7 +80,7 @@ export default async function MeetingV3LivePage({
   const sql=getDb();
   if(!sql) notFound();
 
-  const [rows,agenda,participants,exclusions,resolutions]=await Promise.all([
+  const [rows,agenda,participants,exclusions,resolutions,guests,attachments]=await Promise.all([
     sql`
       SELECT
         m.id::text,m.title,m.lifecycle_state,m.opened_at,m.quorum_confirmed,
@@ -135,6 +140,21 @@ export default async function MeetingV3LivePage({
       WHERE r.meeting_id=${id}::uuid
       ORDER BY r.decided_at
     `,
+    sql`
+      SELECT id::text,name,organization,attendance,note
+      FROM meeting_v3_guests
+      WHERE meeting_id=${id}::uuid
+      ORDER BY name
+    `,
+    sql`
+      SELECT
+        a.id::text,a.agenda_item_id::text,a.document_id::text,a.title,a.attachment_kind,
+        d.original_filename,d.file_size_bytes
+      FROM meeting_v3_attachments a
+      LEFT JOIN documents d ON d.id=a.document_id
+      WHERE a.meeting_id=${id}::uuid
+      ORDER BY a.created_at
+    `,
   ]);
 
   const meeting=rows[0];
@@ -146,6 +166,7 @@ export default async function MeetingV3LivePage({
 
   const canWrite=hasPermission(actor.roles,"meetings.write") && meetingV3CanControlLive(actor.roles);
   const canResolve=hasPermission(actor.roles,"resolutions.write");
+  const canDocuments=hasPermission(actor.roles,"documents.write");
   const current=agenda.find((item)=>String(item.status)==="active") ?? null;
   const open=agenda.filter((item)=>String(item.status)==="open");
   const finished=agenda.filter((item)=>["completed","deferred","skipped"].includes(String(item.status))).length;
@@ -163,6 +184,11 @@ export default async function MeetingV3LivePage({
     person.voting_eligible===true &&
     !excludedMemberIds.has(String(person.member_id))
   );
+  const currentAttachments=current
+    ? attachments.filter((entry)=>String(entry.agenda_item_id ?? "")===String(current.id))
+    : [];
+  const generalAttachments=attachments.filter((entry)=>!entry.agenda_item_id);
+  const presentGuests=guests.filter((guest)=>["present","late"].includes(String(guest.attendance))).length;
 
   return (
     <div className="page-stack meeting-v3-page meeting-v3-live-page">
@@ -179,13 +205,15 @@ export default async function MeetingV3LivePage({
       </section>
 
       {query.error && <p className="form-error">{errors[query.error] ?? "Die Aktion konnte nicht ausgeführt werden."}</p>}
-      {(query.started || query.agenda || query.advanced || query.participant || query.quorum || query.spontaneous || query.exclusion || query.resolution) && (
+      {(query.started || query.agenda || query.advanced || query.participant || query.quorum || query.spontaneous || query.exclusion || query.resolution || query.guest || query.attachment) && (
         <p className="form-success">
           {query.started ? "Die Sitzung läuft. Der erste TOP wurde geöffnet." :
            query.advanced ? "TOP abgeschlossen. Der nächste TOP wurde automatisch geöffnet." :
            query.spontaneous ? "Spontaner TOP wurde aufgenommen." :
            query.exclusion ? "Befangenheit / Stimmrechtsausschluss wurde aktualisiert." :
            query.resolution ? "Beschluss wurde erfasst." :
+           query.guest ? "Gaststatus wurde aktualisiert." :
+           query.attachment ? "Anlage wurde hochgeladen." :
            "Live-Sitzung wurde aktualisiert."}
         </p>
       )}
