@@ -5,6 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "postbuild": "node scripts/import-tc-opponents.mjs",
     "start": "next start",
     "typecheck": "tsc --noEmit"
   },
