@@ -7,6 +7,7 @@ import {
   updateMeetingV3ParticipantAction,
   updateMeetingV3QuorumAction,
 } from "@/app/sitzungen-neu/live-actions";
+import { updateMeetingV3GuestAction } from "@/app/sitzungen-neu/support-actions";
 
 export const dynamic="force-dynamic";
 
@@ -33,7 +34,7 @@ export default async function MeetingV3StartPage({
   searchParams,
 }:{
   params:Promise<{id:string}>;
-  searchParams:Promise<{error?:string;participant?:string;quorum?:string}>;
+  searchParams:Promise<{error?:string;participant?:string;quorum?:string;guest?:string}>;
 }) {
   await requirePermission("meetings.read");
   const {id}=await params;
@@ -41,7 +42,7 @@ export default async function MeetingV3StartPage({
   const sql=getDb();
   if(!sql) notFound();
 
-  const [rows,participants]=await Promise.all([
+  const [rows,participants,guests]=await Promise.all([
     sql`
       SELECT
         m.id::text,m.title,m.starts_at,m.location,m.lifecycle_state,m.quorum_confirmed,
@@ -68,6 +69,12 @@ export default async function MeetingV3StartPage({
         CASE p.role_in_meeting WHEN 'chair' THEN 0 WHEN 'minute_taker' THEN 1 ELSE 2 END,
         m.last_name,m.first_name
     `,
+    sql`
+      SELECT id::text,name,organization,attendance,note
+      FROM meeting_v3_guests
+      WHERE meeting_id=${id}::uuid
+      ORDER BY name
+    `,
   ]);
 
   const meeting=rows[0];
@@ -80,6 +87,7 @@ export default async function MeetingV3StartPage({
   const unresolved=participants.filter((person)=>String(person.attendance)==="invited").length;
   const present=participants.filter((person)=>String(person.attendance)==="present").length;
   const eligible=participants.filter((person)=>String(person.attendance)==="present" && person.voting_eligible===true).length;
+  const presentGuests=guests.filter((guest)=>["present","late"].includes(String(guest.attendance))).length;
   const chairPresent=participants.some((person)=>String(person.member_id)===String(meeting.chair_member_id) && String(person.attendance)==="present");
   const minutePresent=participants.some((person)=>String(person.member_id)===String(meeting.minute_taker_member_id) && String(person.attendance)==="present");
   const quorumReady=meeting.quorum_confirmed===true;
@@ -100,11 +108,12 @@ export default async function MeetingV3StartPage({
           <span>{present} anwesend</span>
           <span>{eligible} stimmberechtigt</span>
           <span>{unresolved} ungeklärt</span>
+          <span>{presentGuests} Gäste</span>
         </div>
       </section>
 
       {query.error && <p className="form-error">{errors[query.error] ?? "Die Sitzung kann noch nicht gestartet werden."}</p>}
-      {(query.participant || query.quorum) && <p className="form-success">Startcheck wurde aktualisiert.</p>}
+      {(query.participant || query.quorum || query.guest) && <p className="form-success">Startcheck wurde aktualisiert.</p>}
 
       <section className="meeting-v3-start-progress">
         <article className={unresolved===0 ? "complete" : ""}>
@@ -170,6 +179,35 @@ export default async function MeetingV3StartPage({
             );
           })}
         </div>
+
+        {guests.length>0 && (
+          <div className="meeting-v3-start-guests">
+            <div className="meeting-v3-subhead">
+              <div><span className="eyebrow">Gäste</span><strong>{presentGuests}/{guests.length} anwesend</strong></div>
+            </div>
+            <div className="meeting-v3-start-guest-list">
+              {guests.map((guest)=>(
+                <form action={updateMeetingV3GuestAction} className="meeting-v3-start-guest" key={String(guest.id)}>
+                  <input type="hidden" name="meetingId" value={id}/>
+                  <input type="hidden" name="guestId" value={String(guest.id)}/>
+                  <input type="hidden" name="returnTo" value={"/sitzungen-neu/"+id+"/start"}/>
+                  <div>
+                    <strong>{String(guest.name)}</strong>
+                    <span>{guest.organization ? String(guest.organization) : "Gast"}</span>
+                  </div>
+                  <select name="attendance" defaultValue={String(guest.attendance)} aria-label={"Anwesenheit "+String(guest.name)}>
+                    <option value="present">Anwesend</option>
+                    <option value="absent">Abwesend</option>
+                    <option value="late">Kommt später</option>
+                    <option value="left_early">Früher gegangen</option>
+                  </select>
+                  <input name="note" defaultValue={String(guest.note ?? "")} placeholder="Notiz"/>
+                  <button className="mini-button" type="submit">Speichern</button>
+                </form>
+              ))}
+            </div>
+          </div>
+        )}
       </section>
 
       <section className="meeting-v3-work-grid">
