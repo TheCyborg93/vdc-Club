@@ -174,6 +174,10 @@ export default async function MeetingCorrectionPage({
   const generalAttachments=attachments.filter((doc)=>!doc.agenda_item_id);
   const attendeeIds=new Set(attendees.map((row)=>String(row.member_id)));
   const availableMembers=members.filter((row)=>!attendeeIds.has(String(row.id)));
+  const presentVotingCount=attendees.filter(
+    (row)=>row.attendance==="present" && row.voting_eligible===true,
+  ).length;
+
   const formalReady=
     Boolean(meeting.invited_at) &&
     Boolean(String(meeting.invitation_method ?? "").trim()) &&
