@@ -174,10 +174,6 @@ export default async function MeetingCorrectionPage({
   const generalAttachments=attachments.filter((doc)=>!doc.agenda_item_id);
   const attendeeIds=new Set(attendees.map((row)=>String(row.member_id)));
   const availableMembers=members.filter((row)=>!attendeeIds.has(String(row.id)));
-  const presentVotingCount=attendees.filter(
-    (row)=>row.attendance==="present" && row.voting_eligible===true,
-  ).length;
-
   const formalReady=
     Boolean(meeting.invited_at) &&
     Boolean(String(meeting.invitation_method ?? "").trim()) &&
@@ -205,25 +201,14 @@ export default async function MeetingCorrectionPage({
         if (!row.resolution_id) return false;
         const eligible=row.eligible_voters==null ? null : Number(row.eligible_voters);
         const total=Number(row.votes_yes ?? 0)+Number(row.votes_no ?? 0)+Number(row.votes_abstain ?? 0);
-        const itemExclusions=exclusions.filter(
+        const exclusionCount=exclusions.filter(
           (entry)=>String(entry.agenda_item_id)===String(row.id),
-        );
-        const exclusionCount=itemExclusions.length;
-        const expectedEligible=Math.max(0,presentVotingCount-exclusionCount);
-        const invalidExclusion=itemExclusions.some((entry)=>
-          !attendees.some((attendee)=>
-            String(attendee.member_id)===String(entry.member_id) &&
-            attendee.attendance==="present" &&
-            attendee.voting_eligible===true
-          )
-        );
+        ).length;
         return !row.vote_method ||
           !row.decision_outcome ||
           eligible==null ||
           eligible!==total ||
-          eligible!==expectedEligible ||
           Number(row.excluded_voters ?? 0)!==exclusionCount ||
-          invalidExclusion ||
           (row.vote_method==="roll_call" && !String(row.vote_details ?? "").trim());
       })
       .map((row)=>String(row.id)),
