@@ -68,6 +68,7 @@ export async function createMeetingV3Action(formData: FormData) {
     : "in_person";
 
   const customTypeLabel=value(formData,"customTypeLabel");
+  const templateId=value(formData,"templateId");
 
   if (!title || !startsAt || (meetingType==="custom" && !customTypeLabel)) {
     redirect("/sitzungen?error=missing");
@@ -104,10 +105,16 @@ export async function createMeetingV3Action(formData: FormData) {
     chosen_template AS (
       SELECT id
       FROM meeting_v3_templates
-      WHERE meeting_type=${meetingType}
-        AND is_default=true
-        AND is_active=true
-      ORDER BY created_at
+      WHERE is_active=true
+        AND meeting_type=${meetingType}
+        AND (
+          (${templateId || null}::uuid IS NOT NULL AND id=${templateId || null}::uuid)
+          OR
+          (${templateId || null}::uuid IS NULL AND is_default=true)
+        )
+      ORDER BY
+        CASE WHEN id=${templateId || null}::uuid THEN 0 ELSE 1 END,
+        created_at
       LIMIT 1
     ),
     new_meeting AS (
@@ -199,7 +206,7 @@ export async function createMeetingV3Action(formData: FormData) {
   if (!id) redirect("/sitzungen?error=create");
 
   await writeMeetingV3Audit(id,actor.id,"meeting.created","meeting",id,{
-    title,meetingType,meetingMode,autoParticipants:true,autoOfficers:true,autoAgenda:true,
+    title,meetingType,meetingMode,templateId:templateId || null,autoParticipants:true,autoOfficers:true,autoAgenda:true,
   });
   await writeAudit(actor.id,"meeting_v3.created","meeting_v3",id,{title,meetingType});
 
