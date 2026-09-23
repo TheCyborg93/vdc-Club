@@ -1666,51 +1666,55 @@ export async function approveMeetingMinutesAction(formData: FormData) {
   const meetingId=value(formData,"meetingId");
 
   const rows=await sql`
-    UPDATE meetings
-    SET
-      minutes_status='archived',
-      minutes_return_note=NULL,
-      minutes_approved_at=now(),
-      minutes_approved_by=${actor.id}::uuid,
-      minutes_archived_at=now(),
-      minutes_archived_by=${actor.id}::uuid,
-      updated_at=now()
-    WHERE id=${meetingId}::uuid
-      AND minutes_status='review'
-      AND deleted_at IS NULL
-    RETURNING minutes_version,minutes_intro,minutes_closing
-  `;
-
-  const meeting=rows[0];
-  if (!meeting) redirect(`/sitzungen/${meetingId}/protokoll?error=minutes_locked`);
-
-  await sql`
-    INSERT INTO meeting_minutes_revisions (
-      meeting_id,version,status,intro,closing,changed_by,change_note
+    WITH meeting_updated AS (
+      UPDATE meetings
+      SET
+        minutes_status='archived',
+        minutes_return_note=NULL,
+        minutes_approved_at=now(),
+        minutes_approved_by=${actor.id}::uuid,
+        minutes_archived_at=now(),
+        minutes_archived_by=${actor.id}::uuid,
+        updated_at=now()
+      WHERE id=${meetingId}::uuid
+        AND status='completed'
+        AND minutes_status='review'
+        AND deleted_at IS NULL
+      RETURNING id,minutes_version,minutes_intro,minutes_closing
+    ),
+    revision_created AS (
+      INSERT INTO meeting_minutes_revisions (
+        meeting_id,version,status,intro,closing,changed_by,change_note
+      )
+      SELECT
+        id,
+        minutes_version,
+        'archived',
+        minutes_intro,
+        minutes_closing,
+        ${actor.id}::uuid,
+        'Protokoll freigegeben und automatisch archiviert'
+      FROM meeting_updated
+      RETURNING meeting_id
+    ),
+    document_updated AS (
+      UPDATE documents d
+      SET
+        status='archived',
+        archived_at=now(),
+        archived_by=${actor.id}::uuid,
+        notes='Freigegebenes Sitzungsprotokoll · automatisch archiviert.',
+        updated_at=now()
+      FROM meeting_updated mu
+      WHERE d.meeting_id=mu.id
+        AND d.category='Protokoll'
+        AND d.deleted_at IS NULL
+      RETURNING d.id
     )
-    VALUES (
-      ${meetingId}::uuid,
-      ${Number(meeting.minutes_version ?? 1)}::int,
-      'archived',
-      ${meeting.minutes_intro ?? null},
-      ${meeting.minutes_closing ?? null},
-      ${actor.id}::uuid,
-      'Protokoll freigegeben und automatisch archiviert'
-    )
+    SELECT id::text FROM meeting_updated
   `;
 
-  await sql`
-    UPDATE documents
-    SET
-      status='archived',
-      archived_at=now(),
-      archived_by=${actor.id}::uuid,
-      notes='Freigegebenes Sitzungsprotokoll · automatisch archiviert.',
-      updated_at=now()
-    WHERE meeting_id=${meetingId}::uuid
-      AND category='Protokoll'
-      AND deleted_at IS NULL
-  `;
+  if (!rows.length) redirect(`/sitzungen/${meetingId}/protokoll?error=minutes_locked`);
 
   await writeAudit(actor.id,"meeting.minutes_approved_and_archived","meeting",meetingId,{});
   revalidatePath(`/sitzungen/${meetingId}`);
