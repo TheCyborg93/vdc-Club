@@ -70,12 +70,22 @@ export default async function TasksPage({
             m.first_name,
             m.last_name,
             r.resolution_number,
-            r.title AS resolution_title
+            r.title AS resolution_title,
+            vr.resolution_number AS v3_resolution_number,
+            vr.title AS v3_resolution_title,
+            vm.id::text AS v3_meeting_id,
+            vm.title AS v3_meeting_title,
+            vm.lifecycle_state AS v3_meeting_state
           FROM tasks t
           LEFT JOIN members m ON m.id = t.owner_member_id
           LEFT JOIN resolutions r
             ON t.source_type='resolution'
            AND r.id=t.source_id
+          LEFT JOIN meeting_v3_resolutions vr
+            ON t.source_type='meeting_v3_resolution'
+           AND vr.id=t.source_id
+          LEFT JOIN meeting_v3_meetings vm
+            ON vm.id=vr.meeting_id
           WHERE t.status <> 'cancelled'
             AND t.deleted_at IS NULL
             AND (
@@ -247,6 +257,26 @@ export default async function TasksPage({
                         <strong>
                           {task.resolution_number ? String(task.resolution_number)+" · " : ""}
                           {task.resolution_title ? String(task.resolution_title) : "Beschluss öffnen"}
+                        </strong>
+                      </Link>
+                    )}
+                    {task.source_type==="meeting_v3_resolution" && task.source_id && task.v3_meeting_id && (
+                      <Link
+                        href={
+                          String(task.v3_meeting_state)==="live"
+                            ? "/sitzungen-neu/"+String(task.v3_meeting_id)+"/live"
+                            : String(task.v3_meeting_state)==="closing"
+                              ? "/sitzungen-neu/"+String(task.v3_meeting_id)+"/close"
+                              : ["minutes_draft","minutes_review","archived"].includes(String(task.v3_meeting_state))
+                                ? "/sitzungen-neu/"+String(task.v3_meeting_id)+"/minutes"
+                                : "/sitzungen-neu/"+String(task.v3_meeting_id)
+                        }
+                        className="task-source-link"
+                      >
+                        <span>Aus V3-Beschluss</span>
+                        <strong>
+                          {task.v3_resolution_number ? String(task.v3_resolution_number)+" · " : ""}
+                          {task.v3_resolution_title ? String(task.v3_resolution_title) : String(task.v3_meeting_title ?? "Sitzung öffnen")}
                         </strong>
                       </Link>
                     )}
