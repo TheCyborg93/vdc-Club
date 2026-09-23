@@ -15,7 +15,7 @@ const attendanceValues = [
   "left_early",
 ] as const;
 
-const resultCodes = ["noted","completed","deferred","no_decision"] as const;
+const resultCodes = ["noted","completed","deferred","resolution","no_decision"] as const;
 const noteKinds = ["autosave","checkpoint"] as const;
 
 function value(formData: FormData,key: string) {
@@ -377,6 +377,19 @@ export async function completeMeetingV3AgendaAction(formData:FormData) {
   const resultCode=(resultCodes as readonly string[]).includes(resultRaw)
     ? resultRaw
     : "completed";
+
+  if(resultCode==="resolution"){
+    const resolutionRows=await sql`
+      SELECT count(*)::int AS count
+      FROM meeting_v3_resolutions r
+      JOIN meeting_v3_agenda_items ai ON ai.id=r.agenda_item_id
+      WHERE r.agenda_item_id=${agendaItemId}::uuid
+        AND ai.meeting_id=${meetingId}::uuid
+    `;
+    if(Number(resolutionRows[0]?.count ?? 0)===0){
+      redirect(livePath(meetingId,"error=resolution_required"));
+    }
+  }
 
   const rows=await sql`
     WITH completed_item AS (
