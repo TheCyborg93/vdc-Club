@@ -95,11 +95,11 @@ export default async function MeetingTemplatesPage({
                 <div>
                   <span className="eyebrow">{meetingV3TypeLabels[type]}</span>
                   <h2>{String(template.name)}</h2>
-                  {template.description && <p>{String(template.description)}</p>}
+                  {Boolean(template.description) && <p>{String(template.description)}</p>}
                 </div>
                 <div className="meeting-v3-template-badges">
-                  {template.is_default && <span className="status-badge">Standard</span>}
-                  <span className={template.is_active ? "status-badge" : "status-badge muted"}>{template.is_active ? "Aktiv" : "Inaktiv"}</span>
+                  {Boolean(template.is_default) && <span className="status-badge">Standard</span>}
+                  <span className={Boolean(template.is_active) ? "status-badge" : "status-badge muted"}>{Boolean(template.is_active) ? "Aktiv" : "Inaktiv"}</span>
                 </div>
               </div>
 
@@ -111,8 +111,8 @@ export default async function MeetingTemplatesPage({
                     <div>
                       <strong>{String(item.title)}</strong>
                       <span>{meetingV3AgendaTypeLabels[String(item.agenda_type) as MeetingV3AgendaType]}</span>
-                      {item.description && <small>{String(item.description)}</small>}
-                      {item.estimated_minutes && <small>{Number(item.estimated_minutes)} Min.</small>}
+                      {Boolean(item.description) && <small>{String(item.description)}</small>}
+                      {Boolean(item.estimated_minutes) && <small>{Number(item.estimated_minutes)} Min.</small>}
                     </div>
                     {canWrite && (
                       <form action={deleteMeetingV3TemplateItemAction}>
@@ -125,7 +125,7 @@ export default async function MeetingTemplatesPage({
                 ))}
               </div>
 
-              {canWrite && template.is_active && (
+              {canWrite && Boolean(template.is_active) && (
                 <details className="meeting-v3-add-top">
                   <summary>Vorlagen-TOP hinzufügen</summary>
                   <form action={addMeetingV3TemplateItemAction} className="form-grid">
@@ -148,7 +148,7 @@ export default async function MeetingTemplatesPage({
 
               {canWrite && (
                 <div className="meeting-v3-readiness-actions">
-                  {!template.is_default && template.is_active && (
+                  {!Boolean(template.is_default) && Boolean(template.is_active) && (
                     <form action={setMeetingV3TemplateDefaultAction}>
                       <input type="hidden" name="templateId" value={String(template.id)}/>
                       <button className="ghost-button" type="submit">Als Standard setzen</button>
@@ -156,7 +156,7 @@ export default async function MeetingTemplatesPage({
                   )}
                   <form action={toggleMeetingV3TemplateActiveAction}>
                     <input type="hidden" name="templateId" value={String(template.id)}/>
-                    <button className="ghost-button" type="submit">{template.is_active ? "Deaktivieren" : "Aktivieren"}</button>
+                    <button className="ghost-button" type="submit">{Boolean(template.is_active) ? "Deaktivieren" : "Aktivieren"}</button>
                   </form>
                 </div>
               )}
