@@ -10,6 +10,7 @@ import {
   removeAttendeeAction,
   carryForwardAgendaItemAction,
   carryForwardTaskAction,
+  cloneMeetingAsTemplateAction,
   deleteAgendaItemAction,
   deleteMeetingGuestAction,
   deleteVoteExclusionAction,
@@ -84,6 +85,8 @@ const errors:Record<string,string>={
   resolution:"Für einen Beschluss werden Titel und Beschlusstext benötigt.",
   resolution_exists:"Für diesen TOP wurde bereits ein Beschluss gespeichert.",
   resolution_not_decision:"Eine Abstimmung kann nur bei einem Beschluss-TOP gespeichert werden.",
+  template_missing:"Für die neue Sitzung werden Titel und Startzeit benötigt.",
+  template_copy:"Die Sitzung konnte nicht aus der Vorlage erstellt werden.",
   protected_delete:"Diese Sitzung kann nicht gelöscht werden, weil sie bereits abgeschlossen ist oder Beschlüsse/Dokumente enthält.",
   agenda_delete:"Dieser TOP kann nicht gelöscht werden, weil bereits ein Beschluss dazu existiert oder die Sitzung abgeschlossen ist.",
   meeting_locked:"Diese Änderung ist im aktuellen Sitzungsstatus nicht möglich.",
@@ -172,6 +175,7 @@ export default async function MeetingDetailPage({
     attachment_deleted?:string;
     attendee_removed?:string;
     started?:string;
+    template?:string;
   }>;
 }) {
   const actor=await requirePermission("meetings.read");
@@ -1565,6 +1569,48 @@ export default async function MeetingDetailPage({
           quorumBasis={String(meeting.quorum_basis ?? "")}
           quorumNote={String(meeting.quorum_note ?? "")}
         />
+      )}
+
+      {canWrite && (
+        <details className="panel meeting-template-copy">
+          <summary>
+            <div>
+              <span className="eyebrow">Wiederverwenden</span>
+              <strong>Diese Sitzung als Vorlage nutzen</strong>
+              <small>Neue Sitzung mit derselben Struktur anlegen – ohne alte Beschlüsse oder Protokolldaten.</small>
+            </div>
+            <b>+</b>
+          </summary>
+          <form action={cloneMeetingAsTemplateAction} className="form-grid meeting-template-copy-form">
+            <input type="hidden" name="sourceMeetingId" value={id}/>
+            <label>
+              Titel der neuen Sitzung
+              <input name="title" defaultValue={String(meeting.title)} required/>
+            </label>
+            <label>
+              Start
+              <input name="startsAt" type="datetime-local" required/>
+            </label>
+            <label>
+              Ort
+              <input name="location" defaultValue={meeting.location ? String(meeting.location) : ""}/>
+            </label>
+            <label className="checkbox-row">
+              <input type="checkbox" name="copyParticipants" defaultChecked/>
+              <span>Teilnehmer & Stimmrechte übernehmen</span>
+            </label>
+            <label className="checkbox-row">
+              <input type="checkbox" name="copyAgenda" defaultChecked/>
+              <span>TOP-Struktur übernehmen</span>
+            </label>
+            <div className="meeting-template-copy-note">
+              <small>Abstimmungen, Beschlüsse, Gäste, Anlagen, Notizen und Protokolldaten werden nicht kopiert.</small>
+            </div>
+            <div className="meeting-template-copy-submit">
+              <button className="primary-button" type="submit">Neue Sitzung anlegen</button>
+            </div>
+          </form>
+        </details>
       )}
 
       {meeting.status==="completed" && (
