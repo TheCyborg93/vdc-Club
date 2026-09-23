@@ -898,6 +898,22 @@ export async function updateMeetingStatusAction(formData: FormData) {
           THEN 'Sitzung wurde wieder geöffnet. Protokoll muss erneut geprüft werden.'
         ELSE minutes_return_note
       END,
+      minutes_submitted_at=CASE
+        WHEN ${status}='running' AND status='completed' AND minutes_status<>'archived' THEN NULL
+        ELSE minutes_submitted_at
+      END,
+      minutes_submitted_by=CASE
+        WHEN ${status}='running' AND status='completed' AND minutes_status<>'archived' THEN NULL
+        ELSE minutes_submitted_by
+      END,
+      minutes_approved_at=CASE
+        WHEN ${status}='running' AND status='completed' AND minutes_status<>'archived' THEN NULL
+        ELSE minutes_approved_at
+      END,
+      minutes_approved_by=CASE
+        WHEN ${status}='running' AND status='completed' AND minutes_status<>'archived' THEN NULL
+        ELSE minutes_approved_by
+      END,
       minutes_closing=CASE
         WHEN ${status}='completed' THEN NULLIF(${minutesClosing},'')
         ELSE minutes_closing
@@ -1626,6 +1642,8 @@ export async function returnMeetingMinutesAction(formData: FormData) {
         minutes_status='draft',
         minutes_return_note=${returnNote},
         minutes_version=minutes_version+1,
+        minutes_submitted_at=NULL,
+        minutes_submitted_by=NULL,
         minutes_approved_at=NULL,
         minutes_approved_by=NULL,
         updated_at=now()
