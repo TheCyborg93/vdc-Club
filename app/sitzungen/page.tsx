@@ -50,7 +50,7 @@ export default async function MeetingV3Dashboard({
   const sql=getDb();
   const canWrite=hasPermission(actor.roles,"meetings.write");
 
-  const [meetings,counts]=sql ? await Promise.all([
+  const [meetings,counts,templates]=sql ? await Promise.all([
     sql`
       SELECT
         m.id::text,m.title,m.meeting_type,m.custom_type_label,m.lifecycle_state,
@@ -82,7 +82,13 @@ export default async function MeetingV3Dashboard({
         count(*) FILTER (WHERE lifecycle_state='archived')::int AS archived
       FROM meeting_v3_meetings
     `,
-  ]) : [[],[{preparation:0,ready:0,live:0,minutes_open:0,archived:0}]];
+    sql`
+      SELECT id::text,name,meeting_type,is_default
+      FROM meeting_v3_templates
+      WHERE is_active=true
+      ORDER BY meeting_type,is_default DESC,name
+    `,
+  ]) : [[],[{preparation:0,ready:0,live:0,minutes_open:0,archived:0}],[]];
 
   const c=counts[0] ?? {};
   const active=meetings.filter((meeting)=>!["archived","cancelled"].includes(String(meeting.lifecycle_state)));
@@ -92,14 +98,13 @@ export default async function MeetingV3Dashboard({
     <div className="page-stack meeting-v3-page">
       <section className="page-heading">
         <div>
-          <span className="eyebrow">Sitzungssystem V3</span>
-          <h1>Neue Sitzungszentrale</h1>
+          <span className="eyebrow">Vorstandsarbeit</span>
+          <h1>Sitzungszentrale</h1>
           <p>
-            Eigenständige Entwicklung auf dev2: geführte Vorbereitung, Live-Sitzung,
-            Beschlüsse, Protokoll und Archiv in einem festen Ablauf.
+            Vorbereitung, Live-Sitzung, Beschlüsse, Protokoll und Archiv in einem geführten Ablauf.
           </p>
         </div>
-        <span className="meeting-v3-preview-chip">Parallelbetrieb</span>
+        <Link href="/sitzungen/vorlagen" className="ghost-button">Vorlagen verwalten</Link>
       </section>
 
       {params.error && <p className="form-error">{errors[params.error] ?? "Die Aktion konnte nicht ausgeführt werden."}</p>}
@@ -143,6 +148,16 @@ export default async function MeetingV3Dashboard({
                 <option value="online">Online</option>
               </select>
             </label>
+            <label>Vorlage
+              <select name="templateId" defaultValue="">
+                <option value="">Automatisch · Standard der Sitzungsart</option>
+                {templates.map((template)=>(
+                  <option key={String(template.id)} value={String(template.id)}>
+                    {meetingV3TypeLabels[String(template.meeting_type) as MeetingV3Type]} · {String(template.name)}{template.is_default ? " · Standard" : ""}
+                  </option>
+                ))}
+              </select>
+            </label>
             <label>Ort
               <input name="location" placeholder="z. B. Vereinsheim"/>
             </label>
@@ -169,7 +184,7 @@ export default async function MeetingV3Dashboard({
         </div>
 
         {active.length===0 ? (
-          <p className="empty-state">Noch keine aktive V3-Sitzung vorhanden.</p>
+          <p className="empty-state">Noch keine aktive Sitzung vorhanden.</p>
         ) : (
           <div className="meeting-v3-list">
             {active.map((meeting)=>{
