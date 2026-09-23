@@ -324,7 +324,8 @@ export async function submitMeetingV3MinutesReviewAction(formData:FormData){
 }
 
 export async function returnMeetingV3MinutesDraftAction(formData:FormData){
-  const actor=await requirePermission("meetings.approve");
+  const actor=await requirePermission("meetings.write");
+  if(!meetingV3CanApproveMinutes(actor.roles)) redirect("/sitzungen-neu?error=permission");
   const sql=getDb();
   if(!sql) redirect("/sitzungen-neu?error=database");
 
@@ -360,7 +361,8 @@ export async function returnMeetingV3MinutesDraftAction(formData:FormData){
 }
 
 export async function archiveMeetingV3MinutesAction(formData:FormData){
-  const actor=await requirePermission("meetings.approve");
+  const actor=await requirePermission("meetings.write");
+  if(!meetingV3CanApproveMinutes(actor.roles)) redirect("/sitzungen-neu?error=permission");
   if(!meetingV3CanApproveMinutes(actor.roles)) redirect("/sitzungen-neu?error=permission");
 
   const sql=getDb();
