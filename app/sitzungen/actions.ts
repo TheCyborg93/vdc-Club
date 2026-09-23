@@ -913,8 +913,7 @@ export async function updateMeetingStatusAction(formData: FormData) {
         ELSE minutes_closing
       END,
       next_meeting_at=CASE
-        WHEN ${status}='completed' AND ${nextMeetingAt}<>'' THEN (${nextMeetingAt}::timestamp AT TIME ZONE 'Europe/Berlin')
-        WHEN ${status}='completed' THEN NULL
+        WHEN ${status}='completed' THEN (${nextMeetingAt || null}::timestamp AT TIME ZONE 'Europe/Berlin')
         ELSE next_meeting_at
       END,
       updated_at=now()
