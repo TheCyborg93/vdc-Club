@@ -1504,71 +1504,82 @@ export async function submitMeetingMinutesAction(formData: FormData) {
     redirect(`/sitzungen/${meetingId}/protokoll?error=protocol_quorum`);
   }
 
-  await sql`
-    INSERT INTO meeting_minutes_revisions (
-      meeting_id,version,status,intro,closing,return_note,changed_by,change_note
-    )
-    VALUES (
-      ${meetingId}::uuid,
-      ${Number(meeting.minutes_version ?? 1)}::int,
-      'review',
-      ${meeting.minutes_intro ?? null},
-      ${meeting.minutes_closing ?? null},
-      NULL,
-      ${actor.id}::uuid,
-      'Zur Prüfung eingereicht'
-    )
-  `;
-
-  await sql`
-    UPDATE meetings
-    SET
-      minutes_status='review',
-      minutes_return_note=NULL,
-      minutes_submitted_at=now(),
-      minutes_submitted_by=${actor.id}::uuid,
-      updated_at=now()
-    WHERE id=${meetingId}::uuid
-  `;
-
-  await sql`
-    INSERT INTO documents (
-      title,category,storage_type,storage_ref,status,
-      document_date,meeting_id,notes
-    )
-    SELECT
-      'Protokoll · ' || m.title,
-      'Protokoll',
-      'internal',
-      '/sitzungen/' || m.id::text || '/protokoll',
-      'review',
-      (m.starts_at AT TIME ZONE 'Europe/Berlin')::date,
-      m.id,
-      'Protokoll zur Freigabe eingereicht.'
-    FROM meetings m
-    WHERE m.id=${meetingId}::uuid
-      AND m.deleted_at IS NULL
-      AND NOT EXISTS (
+  const submitted=await sql`
+    WITH meeting_updated AS (
+      UPDATE meetings
+      SET
+        minutes_status='review',
+        minutes_return_note=NULL,
+        minutes_submitted_at=now(),
+        minutes_submitted_by=${actor.id}::uuid,
+        updated_at=now()
+      WHERE id=${meetingId}::uuid
+        AND status='completed'
+        AND minutes_status='draft'
+        AND deleted_at IS NULL
+      RETURNING id,title,starts_at,minutes_version,minutes_intro,minutes_closing
+    ),
+    revision_created AS (
+      INSERT INTO meeting_minutes_revisions (
+        meeting_id,version,status,intro,closing,return_note,changed_by,change_note
+      )
+      SELECT
+        id,
+        minutes_version,
+        'review',
+        minutes_intro,
+        minutes_closing,
+        NULL,
+        ${actor.id}::uuid,
+        'Zur Prüfung eingereicht'
+      FROM meeting_updated
+      RETURNING meeting_id
+    ),
+    document_created AS (
+      INSERT INTO documents (
+        title,category,storage_type,storage_ref,status,
+        document_date,meeting_id,notes
+      )
+      SELECT
+        'Protokoll · ' || mu.title,
+        'Protokoll',
+        'internal',
+        '/sitzungen/' || mu.id::text || '/protokoll',
+        'review',
+        (mu.starts_at AT TIME ZONE 'Europe/Berlin')::date,
+        mu.id,
+        'Protokoll zur Freigabe eingereicht.'
+      FROM meeting_updated mu
+      WHERE NOT EXISTS (
         SELECT 1
         FROM documents d
-        WHERE d.meeting_id=m.id
+        WHERE d.meeting_id=mu.id
           AND d.category='Protokoll'
           AND d.deleted_at IS NULL
       )
+      ON CONFLICT DO NOTHING
+      RETURNING id
+    ),
+    document_updated AS (
+      UPDATE documents d
+      SET
+        status='review',
+        archived_at=NULL,
+        archived_by=NULL,
+        notes='Protokoll zur Freigabe eingereicht.',
+        updated_at=now()
+      FROM meeting_updated mu
+      WHERE d.meeting_id=mu.id
+        AND d.category='Protokoll'
+        AND d.deleted_at IS NULL
+      RETURNING d.id
+    )
+    SELECT id::text FROM meeting_updated
   `;
 
-  await sql`
-    UPDATE documents
-    SET
-      status='review',
-      archived_at=NULL,
-      archived_by=NULL,
-      notes='Protokoll zur Freigabe eingereicht.',
-      updated_at=now()
-    WHERE meeting_id=${meetingId}::uuid
-      AND category='Protokoll'
-      AND deleted_at IS NULL
-  `;
+  if (!submitted.length) {
+    redirect(`/sitzungen/${meetingId}/protokoll?error=minutes_locked`);
+  }
 
   await writeAudit(actor.id,"meeting.minutes_submitted","meeting",meetingId,{});
   revalidatePath(`/sitzungen/${meetingId}`);
