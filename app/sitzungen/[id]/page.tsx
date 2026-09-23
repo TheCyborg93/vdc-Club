@@ -98,6 +98,8 @@ const errors:Record<string,string>={
   forbidden:"Diese Aktion ist für deine Rolle nicht freigegeben.",
   officers_missing:"Sitzungsleitung und Protokollführung müssen festgelegt sein.",
   officers_not_present:"Sitzungsleitung und Protokollführung müssen zum Sitzungsabschluss als anwesend dokumentiert sein.",
+  officers_invalid:"Die ausgewählten Verantwortlichen sind nicht mehr als aktive Mitglieder verfügbar.",
+  officers_change_presence:"Während der Sitzung können nur anwesende Personen als Sitzungsleitung oder Protokollführung gewählt werden.",
   formalities_open:"Einladung, Tagesordnung und Beschlussfähigkeit müssen vollständig dokumentiert sein.",
   not_quorate_for_resolutions:"Beschlüsse können nur bei dokumentierter Beschlussfähigkeit abgeschlossen werden.",
   vote_incomplete:"Mindestens eine Abstimmung ist formal unvollständig oder die Stimmenzahl passt nicht.",
@@ -444,6 +446,7 @@ export default async function MeetingDetailPage({
     (row)=>String(row.member_id)===String(meeting.minute_taker_member_id) && row.attendance==="present",
   );
   const officersPresent=chairPresent && minuteTakerPresent;
+  const presentOfficerOptions=attendees.filter((row)=>row.attendance==="present");
   const invitationPrepared=
     Boolean(meeting.invited_at) &&
     Boolean(String(meeting.invitation_method ?? "").trim()) &&
@@ -1173,6 +1176,53 @@ export default async function MeetingDetailPage({
 
         </aside>
         </section>
+      )}
+
+      {meetingRunning && canWrite && (
+        <details className="panel meeting-live-officers">
+          <summary>
+            <div>
+              <span className="eyebrow">Verantwortung</span>
+              <strong>Leitung oder Protokollführung wechseln</strong>
+              <small>Nur aktuell anwesende Personen können während der laufenden Sitzung übernommen werden.</small>
+            </div>
+            <b>+</b>
+          </summary>
+          <form action={updateMeetingOfficersAction} className="meeting-officer-form meeting-live-officer-form">
+            <input type="hidden" name="meetingId" value={id} />
+            <label>
+              Sitzungsleitung
+              <select
+                name="chairMemberId"
+                defaultValue={chairPresent ? String(meeting.chair_member_id ?? "") : ""}
+                required
+              >
+                <option value="" disabled>Bitte auswählen</option>
+                {presentOfficerOptions.map((person)=>(
+                  <option key={"chair-"+String(person.member_id)} value={String(person.member_id)}>
+                    {String(person.first_name)} {String(person.last_name)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Protokollführung
+              <select
+                name="minuteTakerMemberId"
+                defaultValue={minuteTakerPresent ? String(meeting.minute_taker_member_id ?? "") : ""}
+                required
+              >
+                <option value="" disabled>Bitte auswählen</option>
+                {presentOfficerOptions.map((person)=>(
+                  <option key={"taker-"+String(person.member_id)} value={String(person.member_id)}>
+                    {String(person.first_name)} {String(person.last_name)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button className="mini-button" type="submit">Verantwortung aktualisieren</button>
+          </form>
+        </details>
       )}
 
       {meetingRunning && canWrite && (
