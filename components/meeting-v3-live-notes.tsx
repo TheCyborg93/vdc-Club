@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect,useMemo,useRef,useState } from "react";
-import { saveMeetingV3NoteAction } from "@/app/sitzungen-neu/live-actions";
+import { saveMeetingV3NoteAction } from "@/app/sitzungen/live-actions";
 
 type LocalDraft={
   content:string;
