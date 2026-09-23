@@ -103,7 +103,7 @@ export default async function MeetingV3MinutesPage({
   const generalAttachments=asArray(snapshot.generalAttachments);
 
   const canWrite=hasPermission(actor.roles,"meetings.write");
-  const canApprove=hasPermission(actor.roles,"meetings.approve") && meetingV3CanApproveMinutes(actor.roles);
+  const canApprove=hasPermission(actor.roles,"meetings.write") && meetingV3CanApproveMinutes(actor.roles);
   const status=String(meeting.minutes_status ?? meeting.revision_status ?? "draft");
 
   const presentParticipants=participants.filter((person)=>["present","late","left_early"].includes(String(person.attendance)));
