@@ -163,6 +163,32 @@ export async function updateTaskStatusAction(formData: FormData) {
     revalidatePath("/beschluesse");
   }
 
+  if (task?.source_type==="meeting_v3_resolution" && task.source_id) {
+    if (status==="done") {
+      await sql`
+        UPDATE meeting_v3_resolutions
+        SET implementation_status='implemented',implemented_at=COALESCE(implemented_at,now())
+        WHERE id=${String(task.source_id)}::uuid
+          AND implementation_status<>'withdrawn'
+      `;
+    } else if (["in_progress","blocked"].includes(status)) {
+      await sql`
+        UPDATE meeting_v3_resolutions
+        SET implementation_status='in_progress',implemented_at=NULL
+        WHERE id=${String(task.source_id)}::uuid
+          AND implementation_status<>'withdrawn'
+      `;
+    } else if (status==="open") {
+      await sql`
+        UPDATE meeting_v3_resolutions
+        SET implementation_status='open',implemented_at=NULL
+        WHERE id=${String(task.source_id)}::uuid
+          AND implementation_status<>'withdrawn'
+      `;
+    }
+    revalidatePath("/sitzungen-neu");
+  }
+
   await writeAudit(actor.id,"task.status_changed","task",id,{
     title:String(task?.title ?? ""),
     before:String(task?.status ?? ""),
@@ -233,6 +259,32 @@ export async function updateTaskStatusInlineAction(formData: FormData) {
       `;
     }
     revalidatePath("/beschluesse");
+  }
+
+  if (task.source_type==="meeting_v3_resolution" && task.source_id) {
+    if (status==="done") {
+      await sql`
+        UPDATE meeting_v3_resolutions
+        SET implementation_status='implemented',implemented_at=COALESCE(implemented_at,now())
+        WHERE id=${String(task.source_id)}::uuid
+          AND implementation_status<>'withdrawn'
+      `;
+    } else if (["in_progress","blocked"].includes(status)) {
+      await sql`
+        UPDATE meeting_v3_resolutions
+        SET implementation_status='in_progress',implemented_at=NULL
+        WHERE id=${String(task.source_id)}::uuid
+          AND implementation_status<>'withdrawn'
+      `;
+    } else if (status==="open") {
+      await sql`
+        UPDATE meeting_v3_resolutions
+        SET implementation_status='open',implemented_at=NULL
+        WHERE id=${String(task.source_id)}::uuid
+          AND implementation_status<>'withdrawn'
+      `;
+    }
+    revalidatePath("/sitzungen-neu");
   }
 
   await writeAudit(actor.id,"task.status_changed","task",id,{
