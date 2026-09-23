@@ -275,11 +275,18 @@ export default async function MeetingV3MinutesPage({
 
       {status==="draft" && canWrite && (
         <section className="meeting-v3-minutes-decision">
-          <div><span className="eyebrow">Nächster Schritt</span><h2>Zur Prüfung einreichen</h2><p>Der Snapshot bleibt unverändert und wird für die Vorstandsfreigabe gesperrt.</p></div>
-          <form action={submitMeetingV3MinutesReviewAction}>
-            <input type="hidden" name="meetingId" value={id}/>
-            <button className="primary-button" type="submit">Protokoll zur Prüfung geben</button>
-          </form>
+          <div>
+            <span className="eyebrow">Nachbearbeitung</span>
+            <h2>Entwurf prüfen & einreichen</h2>
+            <p>Korrekturen erfolgen strukturiert und erzeugen jeweils eine neue nachvollziehbare Revision.</p>
+          </div>
+          <div className="meeting-v3-minutes-draft-actions">
+            <Link href={"/sitzungen-neu/"+id+"/minutes/correct"} className="ghost-button">Strukturiert korrigieren</Link>
+            <form action={submitMeetingV3MinutesReviewAction}>
+              <input type="hidden" name="meetingId" value={id}/>
+              <button className="primary-button" type="submit">Protokoll zur Prüfung geben</button>
+            </form>
+          </div>
         </section>
       )}
 
