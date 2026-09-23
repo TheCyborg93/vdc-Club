@@ -598,7 +598,10 @@ export default async function MinutesPage({
         </summary>
       <div className="minutes-toolbar no-print">
         <Link href={`/sitzungen/${id}`} className="ghost-button">← Sitzung</Link>
-        <span>Finale Druckansicht · im Browser „Drucken“ → „Als PDF sichern“.</span>
+        <span>Protokoll als PDF erzeugen oder direkt drucken.</span>
+        <a href={`/api/sitzungen/${id}/protokoll/pdf`} target="_blank" className="primary-button">
+          PDF öffnen
+        </a>
       </div>
 
       <article className="minutes-document">
