@@ -27,6 +27,7 @@ export function MeetingV3LiveNotes({
   const [content,setContent]=useState(initialContent);
   const [status,setStatus]=useState(initialVersion>0 ? `Gespeichert · v${initialVersion}` : "Autosave aktiv");
   const [saving,setSaving]=useState(false);
+  const [retryTick,setRetryTick]=useState(0);
   const lastSaved=useRef(initialContent);
   const currentContent=useRef(initialContent);
   const serverVersion=useRef(initialVersion);
@@ -108,13 +109,13 @@ export function MeetingV3LiveNotes({
     },1200);
 
     return ()=>window.clearTimeout(timer);
-  },[content,meetingId,agendaItemId,storageKey]);
+  },[content,meetingId,agendaItemId,storageKey,retryTick]);
 
   useEffect(()=>{
     function handleOnline(){
       if(currentContent.current!==lastSaved.current){
-        setStatus("Verbindung wieder da · Autosave wird fortgesetzt");
-        setContent((current)=>current+"");
+        setStatus("Verbindung wieder da · lokale Änderungen werden synchronisiert");
+        setRetryTick((tick)=>tick+1);
       }
     }
     function handleOffline(){
