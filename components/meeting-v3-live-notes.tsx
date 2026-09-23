@@ -50,7 +50,11 @@ export function MeetingV3LiveNotes({
         currentContent.current=draft.content;
         setContent(draft.content);
         setStatus("Lokaler Zwischenstand wiederhergestellt");
-      }else if(draft.baseVersion<initialVersion || draft.content===initialContent){
+      }else if(
+        typeof draft.baseVersion!=="number" ||
+        draft.baseVersion<initialVersion ||
+        draft.content===initialContent
+      ){
         window.localStorage.removeItem(storageKey);
       }
     }catch{
