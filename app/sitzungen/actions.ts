@@ -1600,51 +1600,55 @@ export async function returnMeetingMinutesAction(formData: FormData) {
   if (!returnNote) redirect(`/sitzungen/${meetingId}/protokoll?error=return_note`);
 
   const rows=await sql`
-    UPDATE meetings
-    SET
-      minutes_status='draft',
-      minutes_return_note=${returnNote},
-      minutes_version=minutes_version+1,
-      minutes_approved_at=NULL,
-      minutes_approved_by=NULL,
-      updated_at=now()
-    WHERE id=${meetingId}::uuid
-      AND minutes_status='review'
-      AND deleted_at IS NULL
-    RETURNING minutes_version,minutes_intro,minutes_closing
-  `;
-
-  const meeting=rows[0];
-  if (!meeting) redirect(`/sitzungen/${meetingId}/protokoll?error=minutes_locked`);
-
-  await sql`
-    INSERT INTO meeting_minutes_revisions (
-      meeting_id,version,status,intro,closing,return_note,changed_by,change_note
+    WITH meeting_updated AS (
+      UPDATE meetings
+      SET
+        minutes_status='draft',
+        minutes_return_note=${returnNote},
+        minutes_version=minutes_version+1,
+        minutes_approved_at=NULL,
+        minutes_approved_by=NULL,
+        updated_at=now()
+      WHERE id=${meetingId}::uuid
+        AND status='completed'
+        AND minutes_status='review'
+        AND deleted_at IS NULL
+      RETURNING id,minutes_version,minutes_intro,minutes_closing
+    ),
+    revision_created AS (
+      INSERT INTO meeting_minutes_revisions (
+        meeting_id,version,status,intro,closing,return_note,changed_by,change_note
+      )
+      SELECT
+        id,
+        minutes_version,
+        'draft',
+        minutes_intro,
+        minutes_closing,
+        ${returnNote},
+        ${actor.id}::uuid,
+        'Zur Überarbeitung zurückgegeben'
+      FROM meeting_updated
+      RETURNING meeting_id
+    ),
+    document_updated AS (
+      UPDATE documents d
+      SET
+        status='draft',
+        archived_at=NULL,
+        archived_by=NULL,
+        notes='Protokoll zur Überarbeitung zurückgegeben · ' || ${returnNote},
+        updated_at=now()
+      FROM meeting_updated mu
+      WHERE d.meeting_id=mu.id
+        AND d.category='Protokoll'
+        AND d.deleted_at IS NULL
+      RETURNING d.id
     )
-    VALUES (
-      ${meetingId}::uuid,
-      ${Number(meeting.minutes_version ?? 1)}::int,
-      'draft',
-      ${meeting.minutes_intro ?? null},
-      ${meeting.minutes_closing ?? null},
-      ${returnNote},
-      ${actor.id}::uuid,
-      'Zur Überarbeitung zurückgegeben'
-    )
+    SELECT id::text FROM meeting_updated
   `;
 
-  await sql`
-    UPDATE documents
-    SET
-      status='draft',
-      archived_at=NULL,
-      archived_by=NULL,
-      notes='Protokoll zur Überarbeitung zurückgegeben · ' || ${returnNote},
-      updated_at=now()
-    WHERE meeting_id=${meetingId}::uuid
-      AND category='Protokoll'
-      AND deleted_at IS NULL
-  `;
+  if (!rows.length) redirect(`/sitzungen/${meetingId}/protokoll?error=minutes_locked`);
 
   await writeAudit(actor.id,"meeting.minutes_returned","meeting",meetingId,{returnNote});
   revalidatePath(`/sitzungen/${meetingId}`);
