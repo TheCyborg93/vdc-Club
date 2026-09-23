@@ -1364,3 +1364,41 @@ body.meeting-focus-mode .meeting-control-hero{position:sticky;top:0;z-index:18;b
     width:100%;
   }
 }
+
+
+/* Meeting anchor and touch polish */
+#vorbereitung,
+#sitzung-starten,
+#live,
+#abschluss,
+#protokoll-vorschau,
+#korrektur-formalia,
+#korrektur-teilnahme,
+#korrektur-anlagen,
+#korrektur-tops,
+#korrektur-verlauf{
+  scroll-margin-top:96px;
+}
+.meeting-top-link,
+.meeting-action,
+.meeting-control-tools a,
+.meeting-control-tools button,
+.meeting-workflow-bar a,
+.meeting-modal-close,
+.meeting-vote-quick button{
+  touch-action:manipulation;
+}
+@media(max-width:820px){
+  #vorbereitung,
+  #sitzung-starten,
+  #live,
+  #abschluss,
+  #protokoll-vorschau,
+  #korrektur-formalia,
+  #korrektur-teilnahme,
+  #korrektur-anlagen,
+  #korrektur-tops,
+  #korrektur-verlauf{
+    scroll-margin-top:76px;
+  }
+}
