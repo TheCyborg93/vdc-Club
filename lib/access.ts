@@ -49,7 +49,9 @@ export const rolePermissions: Record<string, Permission[] | ["*"]> = {
   ],
   sport_director: [
     "members.read", "teams.read", "teams.write", "tasks.read", "tasks.write",
-    "calendar.read", "calendar.write", "training.read", "training.write", "statistics.read", "surveys.read", "surveys.write", "chronicle.read", "chronicle.write",
+    "calendar.read", "calendar.write", "training.read", "training.write",
+    "meetings.read", "resolutions.read",
+    "statistics.read", "surveys.read", "surveys.write", "chronicle.read", "chronicle.write",
   ],
   team_captain: ["members.read", "teams.read", "tasks.read", "calendar.read", "training.read", "statistics.read", "surveys.read", "surveys.write", "chronicle.read"],
   tournament_director: ["members.read", "tasks.read", "tasks.write", "calendar.read", "calendar.write", "documents.read"],
