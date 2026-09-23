@@ -12,7 +12,7 @@ function value(formData:FormData,key:string){
 }
 
 function meetingPath(meetingId:string,suffix="",query?:string){
-  return `/sitzungen-neu/${meetingId}${suffix}${query ? `?${query}` : ""}`;
+  return `/sitzungen/${meetingId}${suffix}${query ? `?${query}` : ""}`;
 }
 
 async function writeMeetingV3Audit(
@@ -40,10 +40,10 @@ async function writeMeetingV3Audit(
 export async function beginMeetingV3ClosingAction(formData:FormData){
   const actor=await requirePermission("meetings.write");
   const sql=getDb();
-  if(!sql) redirect("/sitzungen-neu?error=database");
+  if(!sql) redirect("/sitzungen?error=database");
 
   const meetingId=value(formData,"meetingId");
-  if(!meetingId) redirect("/sitzungen-neu?error=missing");
+  if(!meetingId) redirect("/sitzungen?error=missing");
 
   const rows=await sql`
     UPDATE meeting_v3_meetings m
@@ -69,14 +69,14 @@ export async function beginMeetingV3ClosingAction(formData:FormData){
 
   revalidatePath(meetingPath(meetingId,"/live"));
   revalidatePath(meetingPath(meetingId,"/close"));
-  revalidatePath("/sitzungen-neu");
+  revalidatePath("/sitzungen");
   redirect(meetingPath(meetingId,"/close"));
 }
 
 export async function returnMeetingV3ToLiveAction(formData:FormData){
   const actor=await requirePermission("meetings.write");
   const sql=getDb();
-  if(!sql) redirect("/sitzungen-neu?error=database");
+  if(!sql) redirect("/sitzungen?error=database");
 
   const meetingId=value(formData,"meetingId");
   const rows=await sql`
@@ -102,7 +102,7 @@ export async function returnMeetingV3ToLiveAction(formData:FormData){
 export async function createMeetingV3MinutesDraftAction(formData:FormData){
   const actor=await requirePermission("meetings.write");
   const sql=getDb();
-  if(!sql) redirect("/sitzungen-neu?error=database");
+  if(!sql) redirect("/sitzungen?error=database");
 
   const meetingId=value(formData,"meetingId");
   const nextMeetingAt=value(formData,"nextMeetingAt");
@@ -282,14 +282,14 @@ export async function createMeetingV3MinutesDraftAction(formData:FormData){
   revalidatePath(meetingPath(meetingId,"/close"));
   revalidatePath(meetingPath(meetingId,"/minutes"));
   revalidatePath(meetingPath(meetingId));
-  revalidatePath("/sitzungen-neu");
+  revalidatePath("/sitzungen");
   redirect(meetingPath(meetingId,"/minutes","created=1"));
 }
 
 export async function submitMeetingV3MinutesReviewAction(formData:FormData){
   const actor=await requirePermission("meetings.write");
   const sql=getDb();
-  if(!sql) redirect("/sitzungen-neu?error=database");
+  if(!sql) redirect("/sitzungen?error=database");
 
   const meetingId=value(formData,"meetingId");
   const rows=await sql`
@@ -319,15 +319,15 @@ export async function submitMeetingV3MinutesReviewAction(formData:FormData){
   });
 
   revalidatePath(meetingPath(meetingId,"/minutes"));
-  revalidatePath("/sitzungen-neu");
+  revalidatePath("/sitzungen");
   redirect(meetingPath(meetingId,"/minutes","review=1"));
 }
 
 export async function returnMeetingV3MinutesDraftAction(formData:FormData){
   const actor=await requirePermission("meetings.write");
-  if(!meetingV3CanApproveMinutes(actor.roles)) redirect("/sitzungen-neu?error=permission");
+  if(!meetingV3CanApproveMinutes(actor.roles)) redirect("/sitzungen?error=permission");
   const sql=getDb();
-  if(!sql) redirect("/sitzungen-neu?error=database");
+  if(!sql) redirect("/sitzungen?error=database");
 
   const meetingId=value(formData,"meetingId");
   const reason=value(formData,"reason");
@@ -356,17 +356,17 @@ export async function returnMeetingV3MinutesDraftAction(formData:FormData){
 
   await writeMeetingV3Audit(meetingId,actor.id,"minutes.returned","meeting",meetingId,{},reason);
   revalidatePath(meetingPath(meetingId,"/minutes"));
-  revalidatePath("/sitzungen-neu");
+  revalidatePath("/sitzungen");
   redirect(meetingPath(meetingId,"/minutes","returned=1"));
 }
 
 export async function archiveMeetingV3MinutesAction(formData:FormData){
   const actor=await requirePermission("meetings.write");
-  if(!meetingV3CanApproveMinutes(actor.roles)) redirect("/sitzungen-neu?error=permission");
-  if(!meetingV3CanApproveMinutes(actor.roles)) redirect("/sitzungen-neu?error=permission");
+  if(!meetingV3CanApproveMinutes(actor.roles)) redirect("/sitzungen?error=permission");
+  if(!meetingV3CanApproveMinutes(actor.roles)) redirect("/sitzungen?error=permission");
 
   const sql=getDb();
-  if(!sql) redirect("/sitzungen-neu?error=database");
+  if(!sql) redirect("/sitzungen?error=database");
   const meetingId=value(formData,"meetingId");
 
   const rows=await sql`
@@ -401,6 +401,6 @@ export async function archiveMeetingV3MinutesAction(formData:FormData){
 
   revalidatePath(meetingPath(meetingId,"/minutes"));
   revalidatePath(meetingPath(meetingId));
-  revalidatePath("/sitzungen-neu");
+  revalidatePath("/sitzungen");
   redirect(meetingPath(meetingId,"/minutes","archived=1"));
 }

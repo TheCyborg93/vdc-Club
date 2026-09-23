@@ -14,7 +14,7 @@ function value(formData:FormData,key:string){
 }
 
 function correctionPath(meetingId:string,query?:string){
-  return `/sitzungen-neu/${meetingId}/minutes/correct${query ? `?${query}` : ""}`;
+  return `/sitzungen/${meetingId}/minutes/correct${query ? `?${query}` : ""}`;
 }
 
 async function auditRevision(
@@ -45,7 +45,7 @@ async function auditRevision(
 export async function correctMeetingV3MinutesFormalitiesAction(formData:FormData){
   const actor=await requirePermission("meetings.write");
   const sql=getDb();
-  if(!sql) redirect("/sitzungen-neu?error=database");
+  if(!sql) redirect("/sitzungen?error=database");
 
   const meetingId=value(formData,"meetingId");
   const title=value(formData,"title");
@@ -118,7 +118,7 @@ export async function correctMeetingV3MinutesFormalitiesAction(formData:FormData
     title,location:location || null,
   });
 
-  revalidatePath(`/sitzungen-neu/${meetingId}/minutes`);
+  revalidatePath(`/sitzungen/${meetingId}/minutes`);
   revalidatePath(correctionPath(meetingId));
   redirect(correctionPath(meetingId,"saved=formalities"));
 }
@@ -126,7 +126,7 @@ export async function correctMeetingV3MinutesFormalitiesAction(formData:FormData
 export async function correctMeetingV3MinutesParticipantAction(formData:FormData){
   const actor=await requirePermission("meetings.write");
   const sql=getDb();
-  if(!sql) redirect("/sitzungen-neu?error=database");
+  if(!sql) redirect("/sitzungen?error=database");
 
   const meetingId=value(formData,"meetingId");
   const memberId=value(formData,"memberId");
@@ -217,7 +217,7 @@ export async function correctMeetingV3MinutesParticipantAction(formData:FormData
     memberId,attendance,votingEligible,
   });
 
-  revalidatePath(`/sitzungen-neu/${meetingId}/minutes`);
+  revalidatePath(`/sitzungen/${meetingId}/minutes`);
   revalidatePath(correctionPath(meetingId));
   redirect(correctionPath(meetingId,"saved=participant"));
 }
@@ -225,7 +225,7 @@ export async function correctMeetingV3MinutesParticipantAction(formData:FormData
 export async function correctMeetingV3MinutesAgendaAction(formData:FormData){
   const actor=await requirePermission("meetings.write");
   const sql=getDb();
-  if(!sql) redirect("/sitzungen-neu?error=database");
+  if(!sql) redirect("/sitzungen?error=database");
 
   const meetingId=value(formData,"meetingId");
   const agendaItemId=value(formData,"agendaItemId");
@@ -318,7 +318,7 @@ export async function correctMeetingV3MinutesAgendaAction(formData:FormData){
     agendaItemId,title,resultCode,
   });
 
-  revalidatePath(`/sitzungen-neu/${meetingId}/minutes`);
+  revalidatePath(`/sitzungen/${meetingId}/minutes`);
   revalidatePath(correctionPath(meetingId));
   redirect(correctionPath(meetingId,"saved=agenda"));
 }

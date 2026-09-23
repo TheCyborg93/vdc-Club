@@ -6,8 +6,8 @@ import {
   startMeetingV3Action,
   updateMeetingV3ParticipantAction,
   updateMeetingV3QuorumAction,
-} from "@/app/sitzungen-neu/live-actions";
-import { updateMeetingV3GuestAction } from "@/app/sitzungen-neu/support-actions";
+} from "@/app/sitzungen/live-actions";
+import { updateMeetingV3GuestAction } from "@/app/sitzungen/support-actions";
 
 export const dynamic="force-dynamic";
 
@@ -81,8 +81,8 @@ export default async function MeetingV3StartPage({
   if(!meeting) notFound();
 
   const state=String(meeting.lifecycle_state);
-  if(state==="live") redirect(`/sitzungen-neu/${id}/live`);
-  if(state!=="ready") redirect(`/sitzungen-neu/${id}`);
+  if(state==="live") redirect(`/sitzungen/${id}/live`);
+  if(state!=="ready") redirect(`/sitzungen/${id}`);
 
   const unresolved=participants.filter((person)=>String(person.attendance)==="invited").length;
   const present=participants.filter((person)=>String(person.attendance)==="present").length;
@@ -96,7 +96,7 @@ export default async function MeetingV3StartPage({
 
   return (
     <div className="page-stack meeting-v3-page meeting-v3-start-page">
-      <Link href={`/sitzungen-neu/${id}`} className="back-link">← Zur Vorbereitung</Link>
+      <Link href={`/sitzungen/${id}`} className="back-link">← Zur Vorbereitung</Link>
 
       <section className="meeting-v3-hero meeting-v3-start-hero">
         <div>
@@ -190,7 +190,7 @@ export default async function MeetingV3StartPage({
                 <form action={updateMeetingV3GuestAction} className="meeting-v3-start-guest" key={String(guest.id)}>
                   <input type="hidden" name="meetingId" value={id}/>
                   <input type="hidden" name="guestId" value={String(guest.id)}/>
-                  <input type="hidden" name="returnTo" value={"/sitzungen-neu/"+id+"/start"}/>
+                  <input type="hidden" name="returnTo" value={"/sitzungen/"+id+"/start"}/>
                   <div>
                     <strong>{String(guest.name)}</strong>
                     <span>{guest.organization ? String(guest.organization) : "Gast"}</span>

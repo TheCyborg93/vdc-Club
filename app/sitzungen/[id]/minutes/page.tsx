@@ -7,7 +7,7 @@ import {
   archiveMeetingV3MinutesAction,
   returnMeetingV3MinutesDraftAction,
   submitMeetingV3MinutesReviewAction,
-} from "@/app/sitzungen-neu/closing-actions";
+} from "@/app/sitzungen/closing-actions";
 
 export const dynamic="force-dynamic";
 
@@ -87,9 +87,9 @@ export default async function MeetingV3MinutesPage({
   if(!meeting) notFound();
 
   const state=String(meeting.lifecycle_state);
-  if(state==="closing") redirect(`/sitzungen-neu/${id}/close`);
-  if(state==="live") redirect(`/sitzungen-neu/${id}/live`);
-  if(!["minutes_draft","minutes_review","archived"].includes(state)) redirect(`/sitzungen-neu/${id}`);
+  if(state==="closing") redirect(`/sitzungen/${id}/close`);
+  if(state==="live") redirect(`/sitzungen/${id}/live`);
+  if(!["minutes_draft","minutes_review","archived"].includes(state)) redirect(`/sitzungen/${id}`);
   if(!meeting.revision_id) notFound();
 
   const rawSnapshot=typeof meeting.snapshot==="string"
@@ -139,7 +139,7 @@ export default async function MeetingV3MinutesPage({
           <span className={`meeting-v3-state ${status==="archived" ? "archived" : status==="review" ? "minutes_review" : "minutes_draft"}`}>
             {statusLabels[status] ?? status}
           </span>
-          <Link href={`/sitzungen-neu/${id}`} className="ghost-button">Sitzungsakte</Link>
+          <Link href={`/sitzungen/${id}`} className="ghost-button">Sitzungsakte</Link>
         </div>
       </section>
 
@@ -281,7 +281,7 @@ export default async function MeetingV3MinutesPage({
             <p>Korrekturen erfolgen strukturiert und erzeugen jeweils eine neue nachvollziehbare Revision.</p>
           </div>
           <div className="meeting-v3-minutes-draft-actions">
-            <Link href={"/sitzungen-neu/"+id+"/minutes/correct"} className="ghost-button">Strukturiert korrigieren</Link>
+            <Link href={"/sitzungen/"+id+"/minutes/correct"} className="ghost-button">Strukturiert korrigieren</Link>
             <form action={submitMeetingV3MinutesReviewAction}>
               <input type="hidden" name="meetingId" value={id}/>
               <button className="primary-button" type="submit">Protokoll zur Prüfung geben</button>

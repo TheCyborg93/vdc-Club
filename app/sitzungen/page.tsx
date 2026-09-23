@@ -1,323 +1,243 @@
 import Link from "next/link";
 import { getDb } from "@/lib/db";
-import { hasPermission, requirePermission } from "@/lib/permissions";
-import { createMeetingAction } from "@/app/sitzungen/actions";
-import { meetingStatusLabel } from "@/lib/ui-labels";
+import { hasPermission,requirePermission } from "@/lib/permissions";
+import {
+  meetingV3ModeLabels,
+  meetingV3StateLabels,
+  meetingV3TypeLabels,
+  type MeetingV3Mode,
+  type MeetingV3State,
+  type MeetingV3Type,
+} from "@/lib/meeting-v3";
+import { createMeetingV3Action } from "@/app/sitzungen/actions";
 
-const minutesStatusLabels:Record<string,string>={
-  draft:"Entwurf",
-  review:"In Prüfung",
-  approved:"Freigegeben",
-  archived:"Archiviert",
+export const dynamic="force-dynamic";
+
+const errors:Record<string,string>={
+  database:"Die Datenbankverbindung fehlt.",
+  missing:"Bitte Titel, Startzeit und ggf. die freie Sitzungsart ausfüllen.",
+  create:"Die Sitzung konnte nicht angelegt werden.",
 };
 
-const modeLabels:Record<string,string>={
-  in_person:"Präsenz",
-  hybrid:"Hybrid",
-  online:"Online",
-};
-
-const errors: Record<string, string> = {
-  database: "Die Datenbankverbindung fehlt.",
-  missing: "Titel und Startzeit sind erforderlich.",
-  protected_delete: "Diese Sitzung enthält bereits Beschlüsse oder Dokumente bzw. ist abgeschlossen und kann nicht gelöscht werden.",
-};
-
-export const dynamic = "force-dynamic";
-
-function formatDateTime(value: unknown) {
-  if (!value) return "";
-  const date = new Date(String(value));
-  if (Number.isNaN(date.getTime())) return "";
-  return new Intl.DateTimeFormat("de-DE", {
-    weekday: "short",
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZone: "Europe/Berlin",
+function formatDateTime(value:unknown){
+  if(!value) return "–";
+  const date=new Date(String(value));
+  if(Number.isNaN(date.getTime())) return "–";
+  return new Intl.DateTimeFormat("de-DE",{
+    weekday:"short",day:"2-digit",month:"2-digit",year:"numeric",
+    hour:"2-digit",minute:"2-digit",timeZone:"Europe/Berlin",
   }).format(date);
 }
 
-function readiness(row:Record<string,unknown>) {
-  return [
-    row.chair_member_id,
-    row.minute_taker_member_id,
-    row.invited_at,
-    Boolean(String(row.invitation_method ?? "").trim()),
-    row.invitation_timely!=null,
-    row.agenda_sent_with_invitation!=null,
-    Number(row.attendee_count ?? 0)>0,
-    Number(row.agenda_count ?? 0)>0,
-  ].filter(Boolean).length;
+function stateClass(state:string){
+  if(state==="live") return "meeting-v3-state live";
+  if(state==="ready") return "meeting-v3-state ready";
+  if(state==="closing") return "meeting-v3-state closing";
+  if(state==="minutes_draft") return "meeting-v3-state minutes_draft";
+  if(state==="minutes_review") return "meeting-v3-state minutes_review";
+  if(state==="archived") return "meeting-v3-state archived";
+  if(state==="cancelled") return "meeting-v3-state cancelled";
+  return "meeting-v3-state";
 }
 
-function MeetingCard({meeting}:{meeting:Record<string,unknown>}) {
-  const ready=readiness(meeting);
-  const running=meeting.status==="running";
-  const completed=meeting.status==="completed";
-  const minutesStatus=String(meeting.minutes_status ?? "draft");
-  const href=completed
-    ? `/sitzungen/${String(meeting.id)}/protokoll`
-    : `/sitzungen/${String(meeting.id)}`;
-  const legacyApproved=minutesStatus==="approved";
-  const displayMinutesStatus=legacyApproved ? "archived" : minutesStatus;
-
-  return (
-    <Link href={href} className={`meeting-overview-card ${running ? "is-running" : ""} ${completed ? "is-completed" : ""}`}>
-      <div className="meeting-overview-main">
-        <div className="meeting-overview-title">
-          <span className={`meeting-status-indicator meeting-${String(meeting.status)}`} />
-          <div>
-            <strong>{String(meeting.title)}</strong>
-            <span>
-              {formatDateTime(meeting.starts_at)}
-              {" · "}
-              {meeting.location ? String(meeting.location) : "Ort offen"}
-            </span>
-          </div>
-        </div>
-        <div className="meeting-overview-badges">
-          <span>{modeLabels[String(meeting.meeting_mode)] ?? "Präsenz"}</span>
-          <span>{Number(meeting.agenda_count ?? 0)} TOPs</span>
-          <span>{Number(meeting.resolution_count ?? 0)} Beschlüsse</span>
-          <span>{Number(meeting.attendee_count ?? 0)} Personen</span>
-        </div>
-      </div>
-
-      <div className={"meeting-overview-readiness "+(completed ? "is-protocol" : "")}>
-        {completed ? (
-          <>
-            <div>
-              <span>Protokoll</span>
-              <strong>{minutesStatusLabels[displayMinutesStatus] ?? displayMinutesStatus}</strong>
-            </div>
-            <small>
-              {displayMinutesStatus==="archived"
-                ? "Finale Fassung"
-                : displayMinutesStatus==="review"
-                  ? "Wartet auf Freigabe"
-                  : "Nachbearbeitung offen"}
-            </small>
-          </>
-        ) : (
-          <>
-            <div>
-              <span>Vorbereitung</span>
-              <strong>{ready}/8</strong>
-            </div>
-            <div className="meeting-mini-progress" aria-hidden="true">
-              <i style={{width:`${Math.round((ready/8)*100)}%`}} />
-            </div>
-          </>
-        )}
-      </div>
-
-      <div className="meeting-overview-state">
-        <b className={`status-badge status-${String(meeting.status)}`}>
-          {meetingStatusLabel(meeting.status)}
-        </b>
-        <span className={`minutes-status minutes-${displayMinutesStatus}`}>
-          Protokoll · {minutesStatusLabels[displayMinutesStatus] ?? displayMinutesStatus}
-        </span>
-      </div>
-    </Link>
-  );
-}
-
-export default async function MeetingsPage({
+export default async function MeetingV3Dashboard({
   searchParams,
-}: {
-  searchParams: Promise<{ error?: string; created?: string; deleted?: string }>;
-}) {
-  const actor = await requirePermission("meetings.read");
-  const sql = getDb();
-  const params = await searchParams;
+}:{
+  searchParams:Promise<{error?:string}>;
+}){
+  const actor=await requirePermission("meetings.read");
+  const params=await searchParams;
+  const sql=getDb();
+  const canWrite=hasPermission(actor.roles,"meetings.write");
 
-  const [meetings, counts] = sql
-    ? await Promise.all([
-        sql`
-          SELECT
-            m.id::text,
-            m.title,
-            m.starts_at,
-            m.location,
-            m.status,
-            m.minutes_status,
-            m.meeting_mode,
-            m.invited_at,
-            m.invitation_method,
-            m.chair_member_id::text,
-            m.minute_taker_member_id::text,
-            m.invitation_timely,
-            m.agenda_sent_with_invitation,
-            m.quorum_confirmed,
-            count(DISTINCT ai.id)::int AS agenda_count,
-            count(DISTINCT ai.id) FILTER (WHERE ai.status IN ('open','active'))::int AS open_agenda_count,
-            count(DISTINCT r.id)::int AS resolution_count,
-            count(DISTINCT ma.member_id)::int AS attendee_count
-          FROM meetings m
-          LEFT JOIN agenda_items ai ON ai.meeting_id = m.id
-          LEFT JOIN resolutions r ON r.meeting_id = m.id
-          LEFT JOIN meeting_attendees ma ON ma.meeting_id = m.id
-          WHERE m.deleted_at IS NULL
-          GROUP BY m.id
-          ORDER BY
-            CASE m.status
-              WHEN 'running' THEN 0
-              WHEN 'planned' THEN 1
-              WHEN 'completed' THEN 2
-              ELSE 3
-            END,
-            CASE WHEN m.status IN ('running','planned') THEN m.starts_at END ASC,
-            m.starts_at DESC
-        `,
-        sql`
-          SELECT
-            count(*) FILTER (WHERE status = 'planned' AND starts_at >= now())::int AS planned,
-            count(*) FILTER (WHERE status = 'running')::int AS running,
-            count(*) FILTER (WHERE EXTRACT(YEAR FROM starts_at) = EXTRACT(YEAR FROM CURRENT_DATE))::int AS year_count,
-            (
-              SELECT count(*)::int
-              FROM agenda_items ai
-              JOIN meetings mx ON mx.id=ai.meeting_id
-              WHERE ai.status IN ('open','active')
-                AND mx.deleted_at IS NULL
-            ) AS open_agenda,
-            (
-              SELECT count(*)::int
-              FROM resolutions
-              WHERE EXTRACT(YEAR FROM decided_at) = EXTRACT(YEAR FROM CURRENT_DATE)
-            ) AS resolutions,
-            count(*) FILTER (
-              WHERE status='completed' AND minutes_status='draft'
-            )::int AS minutes_open,
-            count(*) FILTER (
-              WHERE minutes_status='review'
-            )::int AS minutes_review
-          FROM meetings
-          WHERE deleted_at IS NULL
-        `,
-      ])
-    : [[], [{ planned: 0, running:0, year_count: 0, open_agenda: 0, resolutions: 0, minutes_open:0, minutes_review:0 }]];
+  const [meetings,counts]=sql ? await Promise.all([
+    sql`
+      SELECT
+        m.id::text,m.title,m.meeting_type,m.custom_type_label,m.lifecycle_state,
+        m.meeting_mode,m.starts_at,m.location,m.minutes_status,
+        (SELECT count(*)::int FROM meeting_v3_participants p WHERE p.meeting_id=m.id) AS participant_count,
+        (SELECT count(*)::int FROM meeting_v3_agenda_items ai WHERE ai.meeting_id=m.id) AS agenda_count
+      FROM meeting_v3_meetings m
+      ORDER BY
+        CASE m.lifecycle_state
+          WHEN 'live' THEN 0
+          WHEN 'ready' THEN 1
+          WHEN 'preparation' THEN 2
+          WHEN 'closing' THEN 3
+          WHEN 'minutes_draft' THEN 4
+          WHEN 'minutes_review' THEN 5
+          WHEN 'archived' THEN 6
+          ELSE 7
+        END,
+        CASE WHEN m.lifecycle_state IN ('preparation','ready','live','closing') THEN m.starts_at END ASC,
+        m.starts_at DESC
+      LIMIT 50
+    `,
+    sql`
+      SELECT
+        count(*) FILTER (WHERE lifecycle_state='preparation')::int AS preparation,
+        count(*) FILTER (WHERE lifecycle_state='ready')::int AS ready,
+        count(*) FILTER (WHERE lifecycle_state='live')::int AS live,
+        count(*) FILTER (WHERE lifecycle_state IN ('minutes_draft','minutes_review'))::int AS minutes_open,
+        count(*) FILTER (WHERE lifecycle_state='archived')::int AS archived
+      FROM meeting_v3_meetings
+    `,
+  ]) : [[],[{preparation:0,ready:0,live:0,minutes_open:0,archived:0}]];
 
-  const count = counts[0] ?? {};
-  const canWrite = hasPermission(actor.roles, "meetings.write");
-  const upcoming=meetings.filter((row)=>["planned","running"].includes(String(row.status)));
-  const history=meetings.filter((row)=>!["planned","running"].includes(String(row.status)));
-  const focus=upcoming.find((row)=>row.status==="running") ?? upcoming[0] ?? null;
+  const c=counts[0] ?? {};
+  const active=meetings.filter((meeting)=>!["archived","cancelled"].includes(String(meeting.lifecycle_state)));
+  const history=meetings.filter((meeting)=>["archived","cancelled"].includes(String(meeting.lifecycle_state)));
 
   return (
-    <div className="page-stack meetings-overview-page">
-      <section className="meetings-overview-hero">
+    <div className="page-stack meeting-v3-page">
+      <section className="page-heading">
         <div>
-          <span className="eyebrow">Vorstandsarbeit</span>
-          <h1>Vorstandssitzungen</h1>
-          <p>Vorbereiten, durchführen, beschließen und protokollieren – in einem durchgängigen Arbeitsablauf.</p>
+          <span className="eyebrow">Sitzungssystem V3</span>
+          <h1>Neue Sitzungszentrale</h1>
+          <p>
+            Eigenständige Entwicklung auf dev2: geführte Vorbereitung, Live-Sitzung,
+            Beschlüsse, Protokoll und Archiv in einem festen Ablauf.
+          </p>
         </div>
-        {canWrite && (
-          <a href="#neue-sitzung" className="primary-button">Neue Sitzung</a>
-        )}
+        <span className="meeting-v3-preview-chip">Parallelbetrieb</span>
       </section>
 
-      {params.error && <div className="form-error">{errors[params.error] ?? "Die Aktion konnte nicht ausgeführt werden."}</div>}
-      {params.created && <div className="form-success">Sitzung wurde angelegt.</div>}
-      {params.deleted && <div className="form-success">Sitzung wurde in den Papierkorb verschoben.</div>}
+      {params.error && <p className="form-error">{errors[params.error] ?? "Die Aktion konnte nicht ausgeführt werden."}</p>}
 
-      <section className="meetings-kpi-strip">
-        <article>
-          <span>Aktuell</span>
-          <strong>{Number(count.running ?? 0) ? "Live" : Number(count.planned ?? 0)}</strong>
-          <small>{Number(count.running ?? 0) ? "Sitzung läuft" : "geplant"}</small>
-        </article>
-        <article>
-          <span>Offene TOPs</span>
-          <strong>{Number(count.open_agenda ?? 0)}</strong>
-          <small>noch zu behandeln</small>
-        </article>
-        <article>
-          <span>Beschlüsse</span>
-          <strong>{Number(count.resolutions ?? 0)}</strong>
-          <small>dieses Jahr</small>
-        </article>
-        <article>
-          <span>Protokolle</span>
-          <strong>{Number(count.minutes_open ?? 0)+Number(count.minutes_review ?? 0)}</strong>
-          <small>{Number(count.minutes_open ?? 0)} Entwurf · {Number(count.minutes_review ?? 0)} in Prüfung</small>
-        </article>
-      </section>
-
-      {focus && (
-        <section className="meeting-focus-overview">
-          <div className="meeting-focus-overview-copy">
-            <span className="eyebrow">{focus.status==="running" ? "Laufende Sitzung" : "Nächste Sitzung"}</span>
-            <h2>{String(focus.title)}</h2>
-            <p>{formatDateTime(focus.starts_at)} · {focus.location ? String(focus.location) : "Ort offen"}</p>
-            <div>
-              <span>{modeLabels[String(focus.meeting_mode)] ?? "Präsenz"}</span>
-              <span>{Number(focus.agenda_count ?? 0)} TOPs</span>
-              <span>{Number(focus.attendee_count ?? 0)} Personen</span>
-              <span>{readiness(focus)}/8 Vorbereitung</span>
-            </div>
-          </div>
-          <div className="meeting-focus-overview-actions">
-            <b className={`status-badge status-${String(focus.status)}`}>{meetingStatusLabel(focus.status)}</b>
-            <Link href={`/sitzungen/${String(focus.id)}`} className="primary-button">
-              {focus.status==="running" ? "Sitzung fortsetzen" : "Vorbereitung öffnen"}
-            </Link>
-          </div>
-        </section>
-      )}
-
-      <section className="meetings-overview-section">
-        <div className="meetings-section-head">
-          <div>
-            <span className="eyebrow">Arbeitsbereich</span>
-            <h2>Kommend & laufend</h2>
-          </div>
-          <span>{upcoming.length}</span>
-        </div>
-        <div className="meetings-overview-list">
-          {upcoming.length===0
-            ? <div className="empty-state">Keine kommende Vorstandssitzung geplant.</div>
-            : upcoming.map((meeting)=><MeetingCard key={String(meeting.id)} meeting={meeting} />)}
-        </div>
+      <section className="stat-grid">
+        <article className="stat-card"><span>Vorbereitung</span><strong>{Number(c.preparation ?? 0)}</strong><small>noch nicht freigegeben</small></article>
+        <article className="stat-card"><span>Bereit</span><strong>{Number(c.ready ?? 0)}</strong><small>kann gestartet werden</small></article>
+        <article className="stat-card"><span>Live</span><strong>{Number(c.live ?? 0)}</strong><small>aktuell laufend</small></article>
+        <article className="stat-card"><span>Protokoll offen</span><strong>{Number(c.minutes_open ?? 0)}</strong><small>Entwurf oder Prüfung</small></article>
       </section>
 
       {canWrite && (
-        <details className="meeting-create-drawer" id="neue-sitzung">
+        <details className="panel meeting-v3-create" open={!meetings.length}>
           <summary>
             <div>
-              <span className="eyebrow">Planung</span>
-              <strong>Neue Vorstandssitzung anlegen</strong>
+              <span className="eyebrow">Schnellstart</span>
+              <strong>Neue Sitzung anlegen</strong>
+              <small>Nur die Eckdaten – die Vorbereitung folgt geführt.</small>
             </div>
-            <b>+</b>
+            <span className="count-chip">+</span>
           </summary>
-          <form action={createMeetingAction} className="meeting-create-form">
-            <label>Titel<input name="title" required placeholder="z. B. Vorstandssitzung Oktober" /></label>
-            <label>Start<input name="startsAt" type="datetime-local" required /></label>
-            <label>Ort<input name="location" placeholder="Vereinsheim" /></label>
-            <label className="wide">Vorbereitung / Notiz<textarea name="notes" rows={3} /></label>
-            <button className="primary-button wide" type="submit">Sitzung anlegen</button>
+          <form action={createMeetingV3Action} className="form-grid meeting-v3-create-form">
+            <label>Titel
+              <input name="title" required placeholder="z. B. Vorstandssitzung Oktober"/>
+            </label>
+            <label>Start
+              <input name="startsAt" type="datetime-local" required/>
+            </label>
+            <label>Sitzungsart
+              <select name="meetingType" defaultValue="board">
+                <option value="board">Vorstandssitzung</option>
+                <option value="general_assembly">Mitgliederversammlung</option>
+                <option value="extraordinary">Außerordentliche Sitzung</option>
+                <option value="custom">Freie Sitzung</option>
+              </select>
+            </label>
+            <label>Format
+              <select name="meetingMode" defaultValue="in_person">
+                <option value="in_person">Präsenz</option>
+                <option value="hybrid">Hybrid</option>
+                <option value="online">Online</option>
+              </select>
+            </label>
+            <label>Ort
+              <input name="location" placeholder="z. B. Vereinsheim"/>
+            </label>
+            <label>Freie Sitzungsart
+              <input name="customTypeLabel" placeholder="Nur bei „Freie Sitzung“"/>
+            </label>
+            <label className="meeting-v3-wide">Kurzbeschreibung
+              <textarea name="description" rows={3} placeholder="Optional"/>
+            </label>
+            <div className="meeting-v3-wide meeting-v3-form-submit">
+              <button className="primary-button" type="submit">Sitzung anlegen</button>
+            </div>
           </form>
         </details>
       )}
 
-      <section className="meetings-overview-section meetings-history-section">
-        <div className="meetings-section-head">
+      <section className="panel">
+        <div className="panel-head">
           <div>
-            <span className="eyebrow">Archiv & Verlauf</span>
-            <h2>Abgeschlossen</h2>
+            <span className="eyebrow">Arbeitsbereich</span>
+            <h2>Aktive Sitzungen</h2>
           </div>
-          <span>{history.length}</span>
+          <span className="count-chip">{active.length}</span>
         </div>
-        <div className="meetings-overview-list">
-          {history.length===0
-            ? <div className="empty-state">Noch keine abgeschlossenen Sitzungen vorhanden.</div>
-            : history.map((meeting)=><MeetingCard key={String(meeting.id)} meeting={meeting} />)}
-        </div>
+
+        {active.length===0 ? (
+          <p className="empty-state">Noch keine aktive V3-Sitzung vorhanden.</p>
+        ) : (
+          <div className="meeting-v3-list">
+            {active.map((meeting)=>{
+              const meetingId=String(meeting.id);
+              const lifecycle=String(meeting.lifecycle_state);
+              const href=lifecycle==="live"
+                ? `/sitzungen/${meetingId}/live`
+                : lifecycle==="ready"
+                  ? `/sitzungen/${meetingId}/start`
+                  : lifecycle==="closing"
+                    ? `/sitzungen/${meetingId}/close`
+                    : lifecycle==="minutes_draft" || lifecycle==="minutes_review"
+                      ? `/sitzungen/${meetingId}/minutes`
+                      : `/sitzungen/${meetingId}`;
+              return (
+              <Link href={href} className="meeting-v3-card" key={meetingId}>
+                <div className="meeting-v3-card-main">
+                  <span className="meeting-v3-type">
+                    {String(meeting.meeting_type)==="custom"
+                      ? String(meeting.custom_type_label || "Freie Sitzung")
+                      : meetingV3TypeLabels[String(meeting.meeting_type) as MeetingV3Type] ?? String(meeting.meeting_type)}
+                  </span>
+                  <strong>{String(meeting.title)}</strong>
+                  <small>{formatDateTime(meeting.starts_at)} · {meeting.location ? String(meeting.location) : "Ort offen"}</small>
+                  <div className="meeting-v3-meta">
+                    <span>{meetingV3ModeLabels[String(meeting.meeting_mode) as MeetingV3Mode] ?? String(meeting.meeting_mode)}</span>
+                    <span>{Number(meeting.participant_count ?? 0)} Teilnehmer</span>
+                    <span>{Number(meeting.agenda_count ?? 0)} TOPs</span>
+                  </div>
+                </div>
+                <span className={stateClass(String(meeting.lifecycle_state))}>
+                  {meetingV3StateLabels[String(meeting.lifecycle_state) as MeetingV3State] ?? String(meeting.lifecycle_state)}
+                </span>
+              </Link>
+              );
+            })}
+          </div>
+        )}
       </section>
+
+      {history.length>0 && (
+        <details className="panel meeting-v3-history">
+          <summary>
+            <div><span className="eyebrow">Historie</span><strong>Archiv & abgesagte Sitzungen</strong></div>
+            <span className="count-chip">{history.length}</span>
+          </summary>
+          <div className="meeting-v3-list">
+            {history.map((meeting)=>{
+              const meetingId=String(meeting.id);
+              const lifecycle=String(meeting.lifecycle_state);
+              const href=lifecycle==="archived"
+                ? `/sitzungen/${meetingId}/minutes`
+                : `/sitzungen/${meetingId}`;
+              return (
+              <Link href={href} className="meeting-v3-card compact" key={meetingId}>
+                <div className="meeting-v3-card-main">
+                  <strong>{String(meeting.title)}</strong>
+                  <small>{formatDateTime(meeting.starts_at)}</small>
+                </div>
+                <span className={stateClass(String(meeting.lifecycle_state))}>
+                  {meetingV3StateLabels[String(meeting.lifecycle_state) as MeetingV3State] ?? String(meeting.lifecycle_state)}
+                </span>
+              </Link>
+              );
+            })}
+          </div>
+        </details>
+      )}
     </div>
   );
 }

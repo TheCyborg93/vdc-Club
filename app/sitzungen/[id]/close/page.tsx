@@ -5,7 +5,7 @@ import { hasPermission,requirePermission } from "@/lib/permissions";
 import {
   createMeetingV3MinutesDraftAction,
   returnMeetingV3ToLiveAction,
-} from "@/app/sitzungen-neu/closing-actions";
+} from "@/app/sitzungen/closing-actions";
 
 export const dynamic="force-dynamic";
 
@@ -69,9 +69,9 @@ export default async function MeetingV3ClosePage({
   if(!meeting) notFound();
 
   const state=String(meeting.lifecycle_state);
-  if(state==="live") redirect(`/sitzungen-neu/${id}/live`);
-  if(["minutes_draft","minutes_review","archived"].includes(state)) redirect(`/sitzungen-neu/${id}/minutes`);
-  if(state!=="closing") redirect(`/sitzungen-neu/${id}`);
+  if(state==="live") redirect(`/sitzungen/${id}/live`);
+  if(["minutes_draft","minutes_review","archived"].includes(state)) redirect(`/sitzungen/${id}/minutes`);
+  if(state!=="closing") redirect(`/sitzungen/${id}`);
 
   const canWrite=hasPermission(actor.roles,"meetings.write");
   const unfinished=Number(meeting.unfinished_count ?? 0);
@@ -180,7 +180,7 @@ export default async function MeetingV3ClosePage({
         </section>
       )}
 
-      <Link href={`/sitzungen-neu/${id}`} className="back-link">Sitzungsakte öffnen</Link>
+      <Link href={`/sitzungen/${id}`} className="back-link">Sitzungsakte öffnen</Link>
     </div>
   );
 }

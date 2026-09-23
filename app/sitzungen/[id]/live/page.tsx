@@ -13,19 +13,19 @@ import {
   completeMeetingV3AgendaAction,
   updateMeetingV3ParticipantAction,
   updateMeetingV3QuorumAction,
-} from "@/app/sitzungen-neu/live-actions";
+} from "@/app/sitzungen/live-actions";
 import { MeetingV3LiveNotes } from "@/components/meeting-v3-live-notes";
-import { beginMeetingV3ClosingAction } from "@/app/sitzungen-neu/closing-actions";
+import { beginMeetingV3ClosingAction } from "@/app/sitzungen/closing-actions";
 import {
   addMeetingV3VoteExclusionAction,
   addSpontaneousMeetingV3AgendaAction,
   createMeetingV3ResolutionAction,
   endMeetingV3VoteExclusionAction,
-} from "@/app/sitzungen-neu/formal-actions";
+} from "@/app/sitzungen/formal-actions";
 import {
   updateMeetingV3GuestAction,
   uploadMeetingV3AttachmentAction,
-} from "@/app/sitzungen-neu/support-actions";
+} from "@/app/sitzungen/support-actions";
 
 export const dynamic="force-dynamic";
 
@@ -161,8 +161,8 @@ export default async function MeetingV3LivePage({
   if(!meeting) notFound();
 
   const state=String(meeting.lifecycle_state);
-  if(state==="ready") redirect(`/sitzungen-neu/${id}/start`);
-  if(state!=="live") redirect(`/sitzungen-neu/${id}`);
+  if(state==="ready") redirect(`/sitzungen/${id}/start`);
+  if(state!=="live") redirect(`/sitzungen/${id}`);
 
   const canWrite=hasPermission(actor.roles,"meetings.write") && meetingV3CanControlLive(actor.roles);
   const canResolve=hasPermission(actor.roles,"resolutions.write");
@@ -200,7 +200,7 @@ export default async function MeetingV3LivePage({
         </div>
         <div className="meeting-v3-live-hero-actions">
           <span className="meeting-v3-live-pill">LIVE</span>
-          <Link href={`/sitzungen-neu/${id}`} className="ghost-button">Sitzungsakte</Link>
+          <Link href={`/sitzungen/${id}`} className="ghost-button">Sitzungsakte</Link>
         </div>
       </section>
 
@@ -383,7 +383,7 @@ export default async function MeetingV3LivePage({
                   <form action={uploadMeetingV3AttachmentAction} className="meeting-v3-live-tool-form" encType="multipart/form-data">
                     <input type="hidden" name="meetingId" value={id}/>
                     <input type="hidden" name="agendaItemId" value={String(current.id)}/>
-                    <input type="hidden" name="returnTo" value={"/sitzungen-neu/"+id+"/live"}/>
+                    <input type="hidden" name="returnTo" value={"/sitzungen/"+id+"/live"}/>
                     <label>Titel<input name="title" placeholder="Optional – sonst Dateiname"/></label>
                     <label>Datei<input name="file" type="file" required accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.jpg,.jpeg,.png,.webp"/></label>
                     <div className="meeting-v3-live-tool-wide"><button className="ghost-button" type="submit">TOP-Anlage hochladen</button></div>
@@ -591,7 +591,7 @@ export default async function MeetingV3LivePage({
                       <form action={updateMeetingV3GuestAction} className="meeting-v3-live-guest" key={String(guest.id)}>
                         <input type="hidden" name="meetingId" value={id}/>
                         <input type="hidden" name="guestId" value={String(guest.id)}/>
-                        <input type="hidden" name="returnTo" value={"/sitzungen-neu/"+id+"/live"}/>
+                        <input type="hidden" name="returnTo" value={"/sitzungen/"+id+"/live"}/>
                         <div><strong>{String(guest.name)}</strong><span>{guest.organization ? String(guest.organization) : "Gast"}</span></div>
                         <select name="attendance" defaultValue={String(guest.attendance)} aria-label={"Gaststatus "+String(guest.name)}>
                           <option value="present">Anwesend</option>

@@ -3,41 +3,78 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { getDb } from "@/lib/db";
-import { requirePermission } from "@/lib/permissions";
-import { hasPermission } from "@/lib/access";
 import { writeAudit } from "@/lib/audit";
+import { requirePermission } from "@/lib/permissions";
+import {
+  getMeetingV3Readiness,
+  meetingV3AgendaTypes,
+  meetingV3Modes,
+  meetingV3Types,
+  type MeetingV3AgendaType,
+  type MeetingV3Mode,
+  type MeetingV3Type,
+} from "@/lib/meeting-v3";
 
-function value(formData: FormData, key: string) {
+function value(formData: FormData,key: string) {
   return String(formData.get(key) ?? "").trim();
 }
 
-export async function createMeetingAction(formData: FormData) {
+function booleanChoice(raw: string) {
+  if (raw === "yes") return true;
+  if (raw === "no") return false;
+  return null;
+}
+
+async function writeMeetingV3Audit(
+  meetingId: string,
+  actorUserId: string,
+  action: string,
+  entityType: string,
+  entityId: string | null,
+  afterData: Record<string,unknown> = {},
+  reason?: string,
+) {
+  const sql=getDb();
+  if (!sql) return;
+  await sql`
+    INSERT INTO meeting_v3_audit_log (
+      meeting_id,actor_user_id,action,entity_type,entity_id,after_data,reason
+    )
+    VALUES (
+      ${meetingId}::uuid,${actorUserId}::uuid,${action},${entityType},
+      ${entityId || null}::uuid,${JSON.stringify(afterData)}::jsonb,${reason || null}
+    )
+  `;
+}
+
+export async function createMeetingV3Action(formData: FormData) {
   const actor=await requirePermission("meetings.write");
-  const sql = getDb();
+  const sql=getDb();
   if (!sql) redirect("/sitzungen?error=database");
 
-  const title = value(formData, "title");
-  const startsAt = value(formData, "startsAt");
-  const location = value(formData, "location");
-  const notes = value(formData, "notes");
+  const title=value(formData,"title");
+  const startsAt=value(formData,"startsAt");
+  const location=value(formData,"location");
+  const description=value(formData,"description");
 
-  if (!title || !startsAt) redirect("/sitzungen?error=missing");
+  const typeRaw=value(formData,"meetingType");
+  const meetingType=(meetingV3Types as readonly string[]).includes(typeRaw)
+    ? typeRaw as MeetingV3Type
+    : "board";
 
-  const rows = await sql`
-    WITH board_members AS (
-      SELECT DISTINCT au.member_id
-      FROM app_users au
-      JOIN user_roles ur ON ur.user_id=au.id
-      JOIN members m ON m.id=au.member_id
-      WHERE au.status='active'
-        AND m.status='active'
-        AND au.member_id IS NOT NULL
-        AND ur.role_key IN (
-          'chair','vice_chair','treasurer','media_director',
-          'sport_director','secretary','board'
-        )
-    ),
-    detected_roles AS (
+  const modeRaw=value(formData,"meetingMode");
+  const meetingMode=(meetingV3Modes as readonly string[]).includes(modeRaw)
+    ? modeRaw as MeetingV3Mode
+    : "in_person";
+
+  const customTypeLabel=value(formData,"customTypeLabel");
+
+  if (!title || !startsAt || (meetingType==="custom" && !customTypeLabel)) {
+    redirect("/sitzungen?error=missing");
+  }
+
+  const rows=await sql`
+    WITH detected_roles AS (
       SELECT
         (
           SELECT au.member_id
@@ -46,6 +83,7 @@ export async function createMeetingAction(formData: FormData) {
           JOIN members m ON m.id=au.member_id
           WHERE au.status='active'
             AND m.status='active'
+            AND au.member_id IS NOT NULL
             AND ur.role_key='chair'
           ORDER BY au.display_name
           LIMIT 1
@@ -57,66 +95,120 @@ export async function createMeetingAction(formData: FormData) {
           JOIN members m ON m.id=au.member_id
           WHERE au.status='active'
             AND m.status='active'
+            AND au.member_id IS NOT NULL
             AND ur.role_key='secretary'
           ORDER BY au.display_name
           LIMIT 1
         ) AS minute_taker_member_id
     ),
-    new_event AS (
-      INSERT INTO club_events (
-        title, event_type, starts_at, location, source, description
-      )
-      VALUES (
-        ${title},
-        'board',
-        (${startsAt}::timestamp AT TIME ZONE 'Europe/Berlin'),
-        ${location || null},
-        'club',
-        ${notes || null}
-      )
-      RETURNING id, title, starts_at, location
+    chosen_template AS (
+      SELECT id
+      FROM meeting_v3_templates
+      WHERE meeting_type=${meetingType}
+        AND is_default=true
+        AND is_active=true
+      ORDER BY created_at
+      LIMIT 1
     ),
     new_meeting AS (
-      INSERT INTO meetings (
-        event_id,title,starts_at,location,status,notes,
-        chair_member_id,minute_taker_member_id
+      INSERT INTO meeting_v3_meetings (
+        title,meeting_type,custom_type_label,lifecycle_state,meeting_mode,
+        starts_at,location,description,
+        chair_member_id,minute_taker_member_id,template_id,
+        created_by,updated_by
       )
       SELECT
-        ne.id,ne.title,ne.starts_at,ne.location,'planned',${notes || null},
-        dr.chair_member_id,dr.minute_taker_member_id
-      FROM new_event ne
-      CROSS JOIN detected_roles dr
+        ${title},
+        ${meetingType},
+        ${meetingType==="custom" ? customTypeLabel : null},
+        'preparation',
+        ${meetingMode},
+        (${startsAt}::timestamp AT TIME ZONE 'Europe/Berlin'),
+        ${location || null},
+        ${description || null},
+        dr.chair_member_id,
+        dr.minute_taker_member_id,
+        ct.id,
+        ${actor.id}::uuid,
+        ${actor.id}::uuid
+      FROM detected_roles dr
+      LEFT JOIN chosen_template ct ON true
+      RETURNING id,chair_member_id,minute_taker_member_id,template_id
+    ),
+    participant_source AS (
+      SELECT DISTINCT au.member_id
+      FROM app_users au
+      JOIN members m ON m.id=au.member_id
+      LEFT JOIN user_roles ur ON ur.user_id=au.id
+      CROSS JOIN new_meeting nm
+      WHERE au.status='active'
+        AND m.status='active'
+        AND au.member_id IS NOT NULL
+        AND (
+          ${meetingType}<>'board'
+          OR ur.role_key IN (
+            'chair','vice_chair','treasurer','media_director',
+            'sport_director','secretary','board'
+          )
+        )
+    ),
+    inserted_participants AS (
+      INSERT INTO meeting_v3_participants (
+        meeting_id,member_id,attendance,voting_eligible,role_in_meeting,updated_by
+      )
+      SELECT
+        nm.id,
+        ps.member_id,
+        'invited',
+        true,
+        CASE
+          WHEN ps.member_id=nm.chair_member_id THEN 'chair'
+          WHEN ps.member_id=nm.minute_taker_member_id THEN 'minute_taker'
+          ELSE 'participant'
+        END,
+        ${actor.id}::uuid
+      FROM new_meeting nm
+      CROSS JOIN participant_source ps
+      ON CONFLICT (meeting_id,member_id) DO NOTHING
       RETURNING id
     ),
-    invited_board AS (
-      INSERT INTO meeting_attendees (
-        meeting_id,member_id,attendance,voting_eligible
+    inserted_agenda AS (
+      INSERT INTO meeting_v3_agenda_items (
+        meeting_id,position,title,agenda_type,description,estimated_minutes,
+        status,announced_with_invitation,created_by,updated_by
       )
-      SELECT nm.id,bm.member_id,'invited',true
+      SELECT
+        nm.id,
+        ti.position,
+        ti.title,
+        ti.agenda_type,
+        ti.description,
+        ti.estimated_minutes,
+        'open',
+        true,
+        ${actor.id}::uuid,
+        ${actor.id}::uuid
       FROM new_meeting nm
-      CROSS JOIN board_members bm
-      ON CONFLICT (meeting_id,member_id) DO NOTHING
+      JOIN meeting_v3_template_items ti ON ti.template_id=nm.template_id
+      RETURNING id
     )
     SELECT id::text FROM new_meeting
   `;
 
-  const id = rows[0]?.id;
-  if (id) {
-    await writeAudit(actor.id,"meeting.created","meeting",String(id),{
-      title,
-      startsAt,
-      location:location || null,
-      autoInvitedBoard:true,
-      autoAssignedOfficers:true,
-    });
-  }
+  const id=rows[0]?.id ? String(rows[0].id) : null;
+  if (!id) redirect("/sitzungen?error=create");
+
+  await writeMeetingV3Audit(id,actor.id,"meeting.created","meeting",id,{
+    title,meetingType,meetingMode,autoParticipants:true,autoOfficers:true,autoAgenda:true,
+  });
+  await writeAudit(actor.id,"meeting_v3.created","meeting_v3",id,{title,meetingType});
+
   revalidatePath("/sitzungen");
-  revalidatePath("/kalender");
   revalidatePath("/");
-  redirect(id ? `/sitzungen/${id}?created=1` : "/sitzungen");
+  redirect(`/sitzungen/${id}?created=1`);
 }
 
-export async function updateMeetingDetailsAction(formData: FormData) {
+export async function updateMeetingV3BasicsAction(formData: FormData) {
   const actor=await requirePermission("meetings.write");
   const sql=getDb();
   if (!sql) redirect("/sitzungen?error=database");
@@ -125,1186 +217,82 @@ export async function updateMeetingDetailsAction(formData: FormData) {
   const title=value(formData,"title");
   const startsAt=value(formData,"startsAt");
   const location=value(formData,"location");
-  const notes=value(formData,"notes");
+  const description=value(formData,"description");
+  const modeRaw=value(formData,"meetingMode");
+  const meetingMode=(meetingV3Modes as readonly string[]).includes(modeRaw)
+    ? modeRaw as MeetingV3Mode
+    : "in_person";
 
   if (!meetingId || !title || !startsAt) {
     redirect(`/sitzungen/${meetingId}?error=missing`);
   }
 
   const rows=await sql`
-    UPDATE meetings
+    UPDATE meeting_v3_meetings
     SET
       title=${title},
       starts_at=(${startsAt}::timestamp AT TIME ZONE 'Europe/Berlin'),
       location=${location || null},
-      notes=${notes || null},
-      updated_at=now()
+      description=${description || null},
+      meeting_mode=${meetingMode},
+      row_version=row_version+1,
+      updated_by=${actor.id}::uuid
     WHERE id=${meetingId}::uuid
-      AND deleted_at IS NULL
-      AND status IN ('planned','cancelled')
-    RETURNING event_id::text
+      AND lifecycle_state='preparation'
+    RETURNING id::text
   `;
 
-  if (!rows.length) redirect(`/sitzungen/${meetingId}?error=meeting_locked`);
+  if (!rows.length) redirect(`/sitzungen/${meetingId}?error=locked`);
 
-  if (rows[0].event_id) {
-    await sql`
-      UPDATE club_events
-      SET
-        title=${title},
-        starts_at=(${startsAt}::timestamp AT TIME ZONE 'Europe/Berlin'),
-        location=${location || null},
-        description=${notes || null},
-        updated_at=now()
-      WHERE id=${String(rows[0].event_id)}::uuid
-        AND deleted_at IS NULL
-    `;
-  }
-
-  await writeAudit(actor.id,"meeting.updated","meeting",meetingId,{title,startsAt,location});
+  await writeMeetingV3Audit(meetingId,actor.id,"meeting.basics_updated","meeting",meetingId,{
+    title,startsAt,location:location || null,meetingMode,
+  });
 
   revalidatePath(`/sitzungen/${meetingId}`);
   revalidatePath("/sitzungen");
-  revalidatePath("/kalender");
-  revalidatePath("/");
   redirect(`/sitzungen/${meetingId}?saved=1`);
 }
 
-export async function addAgendaItemAction(formData: FormData) {
-  await requirePermission("meetings.write");
-  const sql = getDb();
-  if (!sql) redirect("/sitzungen?error=database");
-
-  const meetingId = value(formData, "meetingId");
-  const title = value(formData, "title");
-  const description = value(formData, "description");
-  const agendaTypeRaw=value(formData,"agendaType");
-  const agendaType=["information","consultation","decision"].includes(agendaTypeRaw)
-    ? agendaTypeRaw
-    : "consultation";
-  if (!meetingId || !title) redirect(`/sitzungen/${meetingId}?error=missing`);
-
-  await sql`
-    INSERT INTO agenda_items (
-      meeting_id, position, title, description, status,
-      announced_with_invitation,decision_basis_note,agenda_type
-    )
-    SELECT
-      ${meetingId}::uuid,
-      COALESCE((SELECT MAX(ai.position) FROM agenda_items ai WHERE ai.meeting_id=m.id), 0) + 1,
-      ${title},
-      ${description || null},
-      'open',
-      (m.status='planned' AND m.invited_at IS NULL),
-      NULL,
-      ${agendaType}
-    FROM meetings m
-    WHERE m.id=${meetingId}::uuid
-      AND m.deleted_at IS NULL
-      AND m.status IN ('planned','running')
-  `;
-
-  revalidatePath(`/sitzungen/${meetingId}`);
-  redirect(`/sitzungen/${meetingId}?agenda=1`);
-}
-
-export async function updateAgendaPreparationAction(formData:FormData) {
+export async function updateMeetingV3InvitationAction(formData: FormData) {
   const actor=await requirePermission("meetings.write");
   const sql=getDb();
   if (!sql) redirect("/sitzungen?error=database");
 
   const meetingId=value(formData,"meetingId");
-  const agendaItemId=value(formData,"agendaItemId");
-  const title=value(formData,"title");
-  const description=value(formData,"description");
-  const agendaTypeRaw=value(formData,"agendaType");
-  const agendaType=["information","consultation","decision"].includes(agendaTypeRaw)
-    ? agendaTypeRaw
-    : "consultation";
+  const invitedAt=value(formData,"invitedAt");
+  const invitationMethod=value(formData,"invitationMethod");
+  const invitationTimely=booleanChoice(value(formData,"invitationTimely"));
+  const agendaSent=booleanChoice(value(formData,"agendaSentWithInvitation"));
 
-  if (!meetingId || !agendaItemId || !title) {
-    redirect(`/sitzungen/${meetingId}?error=missing`);
+  if (!meetingId || !invitedAt || !invitationMethod || invitationTimely==null || agendaSent==null) {
+    redirect(`/sitzungen/${meetingId}?error=invitation`);
   }
 
-  const beforeRows=await sql`
-    SELECT title,description,agenda_type
-    FROM agenda_items
-    WHERE id=${agendaItemId}::uuid
-      AND meeting_id=${meetingId}::uuid
-    LIMIT 1
-  `;
-  const before=beforeRows[0];
-
   const rows=await sql`
-    UPDATE agenda_items ai
+    UPDATE meeting_v3_meetings
     SET
-      title=${title},
-      description=${description || null},
-      agenda_type=${agendaType},
-      updated_at=now()
-    FROM meetings m
-    WHERE ai.id=${agendaItemId}::uuid
-      AND ai.meeting_id=${meetingId}::uuid
-      AND m.id=ai.meeting_id
-      AND m.deleted_at IS NULL
-      AND m.status='planned'
-    RETURNING ai.id::text
-  `;
-
-  if (!rows.length) redirect(`/sitzungen/${meetingId}?error=meeting_locked`);
-
-  await writeAudit(actor.id,"agenda.preparation_updated","agenda_item",agendaItemId,{
-    before:before ?? null,
-    after:{title,description:description || null,agendaType},
-  });
-
-  revalidatePath(`/sitzungen/${meetingId}`);
-  redirect(`/sitzungen/${meetingId}?agenda=1`);
-}
-
-export async function updateAgendaStatusAction(formData: FormData) {
-  const actor=await requirePermission("meetings.write");
-  const sql=getDb();
-  if (!sql) redirect("/sitzungen?error=database");
-
-  const meetingId=value(formData,"meetingId");
-  const agendaItemId=value(formData,"agendaItemId");
-  const statusRaw=value(formData,"status");
-  const status=["open","active","done","deferred"].includes(statusRaw) ? statusRaw : "open";
-
-  if (status==="active") {
-    await sql`
-      UPDATE agenda_items
-      SET status='open'
-      WHERE meeting_id=${meetingId}::uuid
-        AND status='active'
-        AND id<>${agendaItemId}::uuid
-    `;
-  }
-
-  const rows=await sql`
-    UPDATE agenda_items
-    SET
-      status=${status},
-      result_code=CASE
-        WHEN ${status}='done' THEN COALESCE(result_code,'completed')
-        WHEN ${status}='deferred' THEN 'deferred'
-        WHEN ${status} IN ('open','active') THEN NULL
-        ELSE result_code
-      END,
-      completed_at=CASE
-        WHEN ${status} IN ('done','deferred') THEN now()
-        ELSE NULL
-      END,
-      updated_at=now()
-    WHERE id=${agendaItemId}::uuid
-      AND meeting_id=${meetingId}::uuid
-      AND EXISTS (
-        SELECT 1
-        FROM meetings m
-        WHERE m.id=${meetingId}::uuid
-          AND m.deleted_at IS NULL
-          AND m.status='running'
-      )
-    RETURNING id::text,position
-  `;
-
-  if (!rows.length) redirect(`/sitzungen/${meetingId}?error=meeting_locked`);
-
-  await writeAudit(actor.id,"agenda.status_changed","agenda_item",agendaItemId,{
-    meetingId,
-    status,
-  });
-
-  let targetId=agendaItemId;
-  if (["done","deferred"].includes(status)) {
-    const next=await sql`
-      SELECT id::text
-      FROM agenda_items
-      WHERE meeting_id=${meetingId}::uuid
-        AND position>${Number(rows[0].position)}
-        AND status IN ('open','active')
-      ORDER BY position
-      LIMIT 1
-    `;
-    if (next[0]?.id) {
-      targetId=String(next[0].id);
-    } else {
-      const firstOpen=await sql`
-        SELECT id::text
-        FROM agenda_items
-        WHERE meeting_id=${meetingId}::uuid
-          AND status IN ('open','active')
-        ORDER BY position
-        LIMIT 1
-      `;
-      if (firstOpen[0]?.id) targetId=String(firstOpen[0].id);
-    }
-  }
-
-  revalidatePath(`/sitzungen/${meetingId}`);
-  redirect(`/sitzungen/${meetingId}?top=${targetId}`);
-}
-
-export async function updateAgendaNotesAction(formData: FormData) {
-  const actor=await requirePermission("meetings.write");
-  const sql=getDb();
-  if (!sql) redirect("/sitzungen?error=database");
-
-  const meetingId=value(formData,"meetingId");
-  const agendaItemId=value(formData,"agendaItemId");
-  const notes=value(formData,"notes");
-
-  const rows=await sql`
-    UPDATE agenda_items
-    SET notes=${notes || null}
-    WHERE id=${agendaItemId}::uuid
-      AND meeting_id=${meetingId}::uuid
-      AND EXISTS (
-        SELECT 1
-        FROM meetings m
-        WHERE m.id=${meetingId}::uuid
-          AND m.deleted_at IS NULL
-          AND m.status='running'
-      )
-    RETURNING id::text,title
-  `;
-
-  if (!rows.length) redirect(`/sitzungen/${meetingId}?error=meeting_locked`);
-
-  await writeAudit(actor.id,"agenda.notes_updated","agenda_item",agendaItemId,{
-    meetingId,
-    title:String(rows[0].title),
-  });
-
-  revalidatePath(`/sitzungen/${meetingId}`);
-  revalidatePath(`/sitzungen/${meetingId}/protokoll`);
-  redirect(`/sitzungen/${meetingId}?top=${agendaItemId}&notes=1`);
-}
-
-export async function saveAgendaNotesInlineAction(
-  meetingId:string,
-  agendaItemId:string,
-  notes:string,
-) {
-  const actor=await requirePermission("meetings.write");
-  const sql=getDb();
-  if (!sql) return {ok:false,error:"database"};
-
-  const rows=await sql`
-    UPDATE agenda_items
-    SET notes=${notes.trim() || null}
-    WHERE id=${agendaItemId}::uuid
-      AND meeting_id=${meetingId}::uuid
-      AND EXISTS (
-        SELECT 1
-        FROM meetings m
-        WHERE m.id=${meetingId}::uuid
-          AND m.deleted_at IS NULL
-          AND m.status='running'
-      )
+      invited_at=(${invitedAt}::timestamp AT TIME ZONE 'Europe/Berlin'),
+      invitation_method=${invitationMethod},
+      invitation_timely=${invitationTimely},
+      agenda_sent_with_invitation=${agendaSent},
+      row_version=row_version+1,
+      updated_by=${actor.id}::uuid
+    WHERE id=${meetingId}::uuid
+      AND lifecycle_state='preparation'
     RETURNING id::text
   `;
 
-  if (!rows.length) return {ok:false,error:"locked"};
+  if (!rows.length) redirect(`/sitzungen/${meetingId}?error=locked`);
 
-  revalidatePath(`/sitzungen/${meetingId}`);
-  revalidatePath(`/sitzungen/${meetingId}/protokoll`);
-
-  return {ok:true,savedAt:new Date().toISOString()};
-}
-
-export async function deleteAgendaItemAction(formData: FormData) {
-  const actor=await requirePermission("meetings.write");
-  const sql=getDb();
-  if (!sql) redirect("/sitzungen?error=database");
-
-  const meetingId=value(formData,"meetingId");
-  const agendaItemId=value(formData,"agendaItemId");
-  if (!meetingId || !agendaItemId) redirect(`/sitzungen/${meetingId}?error=missing`);
-
-  const rows=await sql`
-    SELECT
-      ai.id::text,
-      ai.title,
-      m.status AS meeting_status,
-      m.deleted_at,
-      EXISTS(SELECT 1 FROM resolutions r WHERE r.agenda_item_id=ai.id) AS has_resolution
-    FROM agenda_items ai
-    JOIN meetings m ON m.id=ai.meeting_id
-    WHERE ai.id=${agendaItemId}::uuid
-      AND ai.meeting_id=${meetingId}::uuid
-    LIMIT 1
-  `;
-
-  const item=rows[0];
-  if (
-    !item ||
-    item.deleted_at ||
-    !["planned","running"].includes(String(item.meeting_status)) ||
-    item.has_resolution
-  ) {
-    redirect(`/sitzungen/${meetingId}?error=agenda_delete`);
-  }
-
-  await sql`
-    DELETE FROM agenda_items
-    WHERE id=${agendaItemId}::uuid
-      AND meeting_id=${meetingId}::uuid
-  `;
-
-  await writeAudit(actor.id,"agenda.deleted","agenda_item",agendaItemId,{
-    title:String(item.title),
-    meetingId,
+  await writeMeetingV3Audit(meetingId,actor.id,"meeting.invitation_updated","meeting",meetingId,{
+    invitedAt,invitationMethod,invitationTimely,agendaSentWithInvitation:agendaSent,
   });
 
   revalidatePath(`/sitzungen/${meetingId}`);
-  redirect(`/sitzungen/${meetingId}?agenda_deleted=1`);
-}
-export async function addAttendeeAction(formData: FormData) {
-  await requirePermission("meetings.write");
-  const sql = getDb();
-  if (!sql) redirect("/sitzungen?error=database");
-
-  const meetingId = value(formData, "meetingId");
-  const memberId = value(formData, "memberId");
-  if (!meetingId || !memberId) redirect(`/sitzungen/${meetingId}?error=attendee`);
-
-  await sql`
-    INSERT INTO meeting_attendees (meeting_id, member_id, attendance)
-    SELECT ${meetingId}::uuid, ${memberId}::uuid, 'invited'
-    WHERE EXISTS (
-      SELECT 1 FROM meetings m
-      WHERE m.id=${meetingId}::uuid
-        AND m.deleted_at IS NULL
-        AND m.status IN ('planned','running')
-    )
-    ON CONFLICT (meeting_id, member_id) DO NOTHING
-  `;
-
-  revalidatePath(`/sitzungen/${meetingId}`);
-  redirect(`/sitzungen/${meetingId}`);
+  redirect(`/sitzungen/${meetingId}?invitation=1`);
 }
 
-export async function removeAttendeeAction(formData:FormData) {
-  const actor=await requirePermission("meetings.write");
-  const sql=getDb();
-  if (!sql) redirect("/sitzungen?error=database");
-
-  const meetingId=value(formData,"meetingId");
-  const memberId=value(formData,"memberId");
-
-  const rows=await sql`
-    DELETE FROM meeting_attendees ma
-    USING meetings m
-    WHERE ma.meeting_id=${meetingId}::uuid
-      AND ma.member_id=${memberId}::uuid
-      AND m.id=ma.meeting_id
-      AND m.deleted_at IS NULL
-      AND m.status IN ('planned','cancelled')
-    RETURNING ma.member_id::text
-  `;
-
-  if (!rows.length) redirect(`/sitzungen/${meetingId}?error=attendee_remove_locked`);
-
-  await writeAudit(actor.id,"meeting.attendee_removed","meeting",meetingId,{memberId});
-  revalidatePath(`/sitzungen/${meetingId}`);
-  revalidatePath(`/sitzungen/${meetingId}/protokoll`);
-  redirect(`/sitzungen/${meetingId}?attendee_removed=1`);
-}
-
-export async function updateAttendanceAction(formData: FormData) {
-  const actor=await requirePermission("meetings.write");
-  const sql=getDb();
-  if (!sql) redirect("/sitzungen?error=database");
-
-  const meetingId=value(formData,"meetingId");
-  const memberId=value(formData,"memberId");
-  const attendanceRaw=value(formData,"attendance");
-  const attendance=["invited","present","absent","excused"].includes(attendanceRaw)
-    ? attendanceRaw
-    : "invited";
-  const votingRaw=value(formData,"votingEligible");
-  const votingEligible=votingRaw ? votingRaw==="true" : true;
-
-  const rows=await sql`
-    UPDATE meeting_attendees
-    SET attendance=${attendance},
-        voting_eligible=${votingEligible}
-    WHERE meeting_id=${meetingId}::uuid
-      AND member_id=${memberId}::uuid
-      AND EXISTS (
-        SELECT 1
-        FROM meetings m
-        WHERE m.id=${meetingId}::uuid
-          AND m.deleted_at IS NULL
-          AND m.status IN ('planned','running')
-      )
-    RETURNING member_id::text
-  `;
-
-  if (!rows.length) redirect(`/sitzungen/${meetingId}?error=meeting_locked`);
-
-  await writeAudit(actor.id,"meeting.attendance_changed","meeting",meetingId,{
-    memberId,
-    attendance,
-    votingEligible,
-  });
-
-  revalidatePath(`/sitzungen/${meetingId}`);
-  revalidatePath(`/sitzungen/${meetingId}/protokoll`);
-  redirect(`/sitzungen/${meetingId}`);
-}
-
-export async function startMeetingAction(formData:FormData) {
-  const actor=await requirePermission("meetings.write");
-  const sql=getDb();
-  if (!sql) redirect("/sitzungen?error=database");
-
-  const meetingId=value(formData,"meetingId");
-  const quorumRaw=value(formData,"quorumConfirmed");
-  const quorumConfirmed=quorumRaw==="yes" ? true : quorumRaw==="no" ? false : null;
-  const quorumBasis=value(formData,"quorumBasis");
-  const quorumNote=value(formData,"quorumNote");
-
-  if (quorumConfirmed==null) {
-    redirect(`/sitzungen/${meetingId}?error=start_quorum`);
-  }
-
-  const meetingRows=await sql`
-    SELECT
-      id::text,status,chair_member_id::text,minute_taker_member_id::text,
-      invited_at,invitation_method,invitation_timely,agenda_sent_with_invitation
-    FROM meetings
-    WHERE id=${meetingId}::uuid
-      AND deleted_at IS NULL
-    LIMIT 1
-  `;
-  const meeting=meetingRows[0];
-  if (!meeting || String(meeting.status)!=="planned") {
-    redirect(`/sitzungen/${meetingId}?error=meeting_locked`);
-  }
-  if (
-    !meeting.chair_member_id ||
-    !meeting.minute_taker_member_id ||
-    !meeting.invited_at ||
-    !String(meeting.invitation_method ?? "").trim() ||
-    meeting.invitation_timely==null ||
-    meeting.agenda_sent_with_invitation==null
-  ) {
-    redirect(`/sitzungen/${meetingId}?error=start_preparation`);
-  }
-
-  const [attendeeRows,guestRows,agendaRows]=await Promise.all([
-    sql`
-      SELECT member_id::text
-      FROM meeting_attendees
-      WHERE meeting_id=${meetingId}::uuid
-      ORDER BY member_id
-    `,
-    sql`
-      SELECT id::text
-      FROM meeting_guests
-      WHERE meeting_id=${meetingId}::uuid
-      ORDER BY id
-    `,
-    sql`
-      SELECT id::text
-      FROM agenda_items
-      WHERE meeting_id=${meetingId}::uuid
-      ORDER BY position
-    `,
-  ]);
-
-  if (!attendeeRows.length) redirect(`/sitzungen/${meetingId}?error=start_attendees`);
-  if (!agendaRows.length) redirect(`/sitzungen/${meetingId}?error=start_agenda`);
-
-  const attendeeUpdates=attendeeRows.map((row)=>{
-    const memberId=String(row.member_id);
-    const attendance=value(formData,`attendee:${memberId}`);
-    if (!["present","absent","excused"].includes(attendance)) return null;
-    return {memberId,attendance};
-  });
-  if (attendeeUpdates.some((row)=>row==null)) {
-    redirect(`/sitzungen/${meetingId}?error=start_attendance`);
-  }
-
-  const guestUpdates=guestRows.map((row)=>{
-    const guestId=String(row.id);
-    const attendance=value(formData,`guest:${guestId}`);
-    if (!["present","absent"].includes(attendance)) return null;
-    return {guestId,attendance};
-  });
-  if (guestUpdates.some((row)=>row==null)) {
-    redirect(`/sitzungen/${meetingId}?error=start_guest_attendance`);
-  }
-
-  const presentIds=new Set(
-    attendeeUpdates
-      .filter((row)=>row?.attendance==="present")
-      .map((row)=>row?.memberId),
-  );
-  if (
-    !presentIds.has(String(meeting.chair_member_id)) ||
-    !presentIds.has(String(meeting.minute_taker_member_id))
-  ) {
-    redirect(`/sitzungen/${meetingId}?error=start_officers_present`);
-  }
-
-  for (const row of attendeeUpdates) {
-    if (!row) continue;
-    await sql`
-      UPDATE meeting_attendees
-      SET attendance=${row.attendance}
-      WHERE meeting_id=${meetingId}::uuid
-        AND member_id=${row.memberId}::uuid
-    `;
-  }
-  for (const row of guestUpdates) {
-    if (!row) continue;
-    await sql`
-      UPDATE meeting_guests
-      SET attendance=${row.attendance}
-      WHERE meeting_id=${meetingId}::uuid
-        AND id=${row.guestId}::uuid
-    `;
-  }
-
-  const started=await sql`
-    UPDATE meetings
-    SET
-      status='running',
-      opened_at=now(),
-      ended_at=NULL,
-      quorum_confirmed=${quorumConfirmed},
-      quorum_basis=${quorumBasis || null},
-      quorum_note=${quorumNote || null},
-      updated_at=now()
-    WHERE id=${meetingId}::uuid
-      AND status='planned'
-      AND deleted_at IS NULL
-    RETURNING id::text
-  `;
-  if (!started.length) redirect(`/sitzungen/${meetingId}?error=meeting_locked`);
-
-  const firstAgenda=await sql`
-    UPDATE agenda_items
-    SET status='active'
-    WHERE id=(
-      SELECT id
-      FROM agenda_items
-      WHERE meeting_id=${meetingId}::uuid
-        AND status='open'
-      ORDER BY position
-      LIMIT 1
-    )
-    RETURNING id::text
-  `;
-
-  await writeAudit(actor.id,"meeting.started","meeting",meetingId,{
-    quorumConfirmed,
-    attendees:attendeeUpdates.length,
-    guests:guestUpdates.length,
-  });
-
-  revalidatePath(`/sitzungen/${meetingId}`);
-  revalidatePath("/sitzungen");
-  revalidatePath("/");
-  redirect(
-    firstAgenda[0]?.id
-      ? `/sitzungen/${meetingId}?top=${String(firstAgenda[0].id)}&started=1`
-      : `/sitzungen/${meetingId}?started=1`,
-  );
-}
-
-export async function updateMeetingStatusAction(formData: FormData) {
-  const actor=await requirePermission("meetings.write");
-  const sql=getDb();
-  if (!sql) redirect("/sitzungen?error=database");
-
-  const meetingId=value(formData,"meetingId");
-  const statusRaw=value(formData,"status");
-  const minutesClosing=value(formData,"minutesClosing");
-  const nextMeetingAt=value(formData,"nextMeetingAt");
-  const createNextMeeting=formData.get("createNextMeeting")==="on";
-  const status=["planned","running","completed","cancelled"].includes(statusRaw)
-    ? statusRaw
-    : "planned";
-
-  const beforeRows=await sql`
-    SELECT id::text,title,status,starts_at,event_id::text,minutes_status
-    FROM meetings
-    WHERE id=${meetingId}::uuid
-      AND deleted_at IS NULL
-    LIMIT 1
-  `;
-  const before=beforeRows[0];
-  if (!before) redirect("/sitzungen?error=missing");
-
-  const current=String(before.status);
-  const transitions:Record<string,string[]>={
-    planned:["cancelled"],
-    cancelled:["planned"],
-    running:["completed"],
-    completed:["running"],
-  };
-
-  if (current==="planned" && status==="running") {
-    redirect(`/sitzungen/${meetingId}?error=start_preparation`);
-  }
-  if (status!==current && !(transitions[current] ?? []).includes(status)) {
-    redirect(`/sitzungen/${meetingId}?error=invalid_transition`);
-  }
-
-  if (
-    current==="completed" &&
-    status==="running" &&
-    ["approved","archived"].includes(String(before.minutes_status))
-  ) {
-    redirect(`/sitzungen/${meetingId}?error=minutes_archived`);
-  }
-
-  if (status==="completed") {
-    const checks=await sql`
-      SELECT
-        m.chair_member_id IS NOT NULL AS has_chair,
-        m.minute_taker_member_id IS NOT NULL AS has_minute_taker,
-        m.invited_at IS NOT NULL AS invitation_date_present,
-        NULLIF(trim(m.invitation_method),'') IS NOT NULL AS invitation_method_present,
-        m.invitation_timely IS NOT NULL AS invitation_checked,
-        m.agenda_sent_with_invitation IS NOT NULL AS agenda_checked,
-        m.quorum_confirmed,
-        count(ai.id) FILTER (WHERE ai.status IN ('open','active'))::int AS open_agenda,
-        count(r.id)::int AS resolution_count,
-        count(ai.id) FILTER (
-          WHERE ai.agenda_type='decision'
-            AND ai.status='done'
-            AND r.id IS NULL
-        )::int AS decision_without_resolution,
-        count(r.id) FILTER (
-          WHERE r.vote_method IS NULL
-             OR r.eligible_voters IS NULL
-             OR r.decision_outcome IS NULL
-             OR r.eligible_voters <> (r.votes_yes+r.votes_no+r.votes_abstain)
-             OR r.excluded_voters <> (
-               SELECT count(*)::int
-               FROM agenda_vote_exclusions ave
-               WHERE ave.agenda_item_id=ai.id
-             )
-             OR r.eligible_voters <> GREATEST(
-               0,
-               (
-                 SELECT count(*)::int
-                 FROM meeting_attendees ma
-                 WHERE ma.meeting_id=m.id
-                   AND ma.attendance='present'
-                   AND ma.voting_eligible=true
-               ) - (
-                 SELECT count(*)::int
-                 FROM agenda_vote_exclusions ave
-                 WHERE ave.agenda_item_id=ai.id
-               )
-             )
-             OR EXISTS(
-               SELECT 1
-               FROM agenda_vote_exclusions ave
-               LEFT JOIN meeting_attendees ma
-                 ON ma.meeting_id=m.id
-                AND ma.member_id=ave.member_id
-               WHERE ave.agenda_item_id=ai.id
-                 AND (
-                   ma.member_id IS NULL
-                   OR ma.attendance<>'present'
-                   OR ma.voting_eligible IS NOT TRUE
-                 )
-             )
-             OR (r.vote_method='roll_call' AND NULLIF(trim(r.vote_details),'') IS NULL)
-        )::int AS incomplete_votes,
-        count(r.id) FILTER (
-          WHERE ai.announced_with_invitation=false
-            AND NULLIF(trim(ai.decision_basis_note),'') IS NULL
-        )::int AS spontaneous_without_basis,
-        (
-          SELECT count(*)::int
-          FROM meeting_attendees ma
-          WHERE ma.meeting_id=m.id
-            AND ma.attendance='invited'
-        ) AS unresolved_attendance,
-        (
-          SELECT count(*)::int
-          FROM meeting_guests mg
-          WHERE mg.meeting_id=m.id
-            AND mg.attendance='invited'
-        ) AS unresolved_guest_attendance
-      FROM meetings m
-      LEFT JOIN agenda_items ai ON ai.meeting_id=m.id
-      LEFT JOIN resolutions r ON r.agenda_item_id=ai.id
-      WHERE m.id=${meetingId}::uuid
-      GROUP BY
-        m.id,m.chair_member_id,m.minute_taker_member_id,
-        m.invited_at,m.invitation_method,
-        m.invitation_timely,m.agenda_sent_with_invitation,m.quorum_confirmed
-    `;
-    const check=checks[0] ?? {};
-    if (!check.has_chair || !check.has_minute_taker) {
-      redirect(`/sitzungen/${meetingId}?error=officers_missing`);
-    }
-    if (
-      !check.invitation_date_present ||
-      !check.invitation_method_present ||
-      !check.invitation_checked ||
-      !check.agenda_checked ||
-      check.quorum_confirmed==null
-    ) {
-      redirect(`/sitzungen/${meetingId}?error=formalities_open`);
-    }
-    if (Number(check.resolution_count ?? 0)>0 && check.quorum_confirmed!==true) {
-      redirect(`/sitzungen/${meetingId}?error=not_quorate_for_resolutions`);
-    }
-    if (Number(check.open_agenda ?? 0)>0) {
-      redirect(`/sitzungen/${meetingId}?error=open_agenda`);
-    }
-    if (Number(check.unresolved_attendance ?? 0)>0) {
-      redirect(`/sitzungen/${meetingId}?error=attendance_open`);
-    }
-    if (Number(check.unresolved_guest_attendance ?? 0)>0) {
-      redirect(`/sitzungen/${meetingId}?error=guest_attendance_open`);
-    }
-    if (Number(check.decision_without_resolution ?? 0)>0) {
-      redirect(`/sitzungen/${meetingId}?error=decision_missing_vote`);
-    }
-    if (Number(check.incomplete_votes ?? 0)>0) {
-      redirect(`/sitzungen/${meetingId}?error=vote_incomplete`);
-    }
-    if (Number(check.spontaneous_without_basis ?? 0)>0) {
-      redirect(`/sitzungen/${meetingId}?error=spontaneous_basis`);
-    }
-  }
-
-  await sql`
-    UPDATE meetings
-    SET
-      status=${status},
-      opened_at=CASE
-        WHEN ${status}='running' THEN COALESCE(opened_at,now())
-        ELSE opened_at
-      END,
-      ended_at=CASE
-        WHEN ${status}='completed' THEN COALESCE(ended_at,now())
-        WHEN ${status}='running' THEN NULL
-        ELSE ended_at
-      END,
-      minutes_status=CASE
-        WHEN ${status}='running' AND status='completed' AND minutes_status<>'archived' THEN 'draft'
-        ELSE minutes_status
-      END,
-      minutes_version=CASE
-        WHEN ${status}='running' AND status='completed' AND minutes_status='review'
-          THEN minutes_version+1
-        ELSE minutes_version
-      END,
-      minutes_return_note=CASE
-        WHEN ${status}='running' AND status='completed' AND minutes_status<>'archived'
-          THEN 'Sitzung wurde wieder geöffnet. Protokoll muss erneut geprüft werden.'
-        ELSE minutes_return_note
-      END,
-      minutes_closing=CASE
-        WHEN ${status}='completed' THEN NULLIF(${minutesClosing},'')
-        ELSE minutes_closing
-      END,
-      next_meeting_at=CASE
-        WHEN ${status}='completed' AND ${nextMeetingAt}<>'' THEN (${nextMeetingAt}::timestamp AT TIME ZONE 'Europe/Berlin')
-        WHEN ${status}='completed' THEN NULL
-        ELSE next_meeting_at
-      END,
-      updated_at=now()
-    WHERE id=${meetingId}::uuid
-      AND deleted_at IS NULL
-  `;
-
-  if (status==="completed") {
-    await sql`
-      INSERT INTO documents (
-        title,category,storage_type,storage_ref,status,
-        document_date,meeting_id,notes
-      )
-      SELECT
-        'Protokoll · ' || m.title,
-        'Protokoll',
-        'internal',
-        '/sitzungen/' || m.id::text || '/protokoll',
-        'draft',
-        (m.starts_at AT TIME ZONE 'Europe/Berlin')::date,
-        m.id,
-        'Protokollentwurf aus abgeschlossener Sitzung · noch nicht zur Prüfung eingereicht.'
-      FROM meetings m
-      WHERE m.id=${meetingId}::uuid
-        AND m.deleted_at IS NULL
-        AND NOT EXISTS (
-          SELECT 1
-          FROM documents d
-          WHERE d.meeting_id=m.id
-            AND d.category='Protokoll'
-            AND d.deleted_at IS NULL
-        )
-    `;
-  }
-
-  if (
-    current==="completed" &&
-    status==="running" &&
-    String(before.minutes_status)==="review"
-  ) {
-    await sql`
-      UPDATE documents
-      SET
-        status='draft',
-        archived_at=NULL,
-        archived_by=NULL,
-        notes='Sitzung wurde wieder geöffnet · Protokoll erneut im Entwurf.',
-        updated_at=now()
-      WHERE meeting_id=${meetingId}::uuid
-        AND category='Protokoll'
-        AND deleted_at IS NULL
-    `;
-  }
-
-  if (status==="completed" && createNextMeeting && nextMeetingAt) {
-    await sql`
-      WITH board_members AS (
-        SELECT DISTINCT au.member_id
-        FROM app_users au
-        JOIN user_roles ur ON ur.user_id=au.id
-        JOIN members m ON m.id=au.member_id
-        WHERE au.status='active'
-          AND m.status='active'
-          AND au.member_id IS NOT NULL
-          AND ur.role_key IN (
-            'chair','vice_chair','treasurer','media_director',
-            'sport_director','secretary','board'
-          )
-      ),
-      detected_roles AS (
-        SELECT
-          (
-            SELECT au.member_id
-            FROM app_users au
-            JOIN user_roles ur ON ur.user_id=au.id
-            JOIN members m ON m.id=au.member_id
-            WHERE au.status='active'
-              AND m.status='active'
-              AND ur.role_key='chair'
-            ORDER BY au.display_name
-            LIMIT 1
-          ) AS chair_member_id,
-          (
-            SELECT au.member_id
-            FROM app_users au
-            JOIN user_roles ur ON ur.user_id=au.id
-            JOIN members m ON m.id=au.member_id
-            WHERE au.status='active'
-              AND m.status='active'
-              AND ur.role_key='secretary'
-            ORDER BY au.display_name
-            LIMIT 1
-          ) AS minute_taker_member_id
-      ),
-      existing AS (
-        SELECT id
-        FROM meetings
-        WHERE deleted_at IS NULL
-          AND status IN ('planned','running')
-          AND starts_at=(${nextMeetingAt}::timestamp AT TIME ZONE 'Europe/Berlin')
-        LIMIT 1
-      ),
-      new_event AS (
-        INSERT INTO club_events (
-          title,event_type,starts_at,location,source,description
-        )
-        SELECT
-          'Vorstandssitzung',
-          'board',
-          (${nextMeetingAt}::timestamp AT TIME ZONE 'Europe/Berlin'),
-          NULL,
-          'club',
-          'Automatisch aus der vorherigen Vorstandssitzung angelegt.'
-        WHERE NOT EXISTS (SELECT 1 FROM existing)
-        RETURNING id,title,starts_at,location
-      ),
-      new_meeting AS (
-        INSERT INTO meetings (
-          event_id,title,starts_at,location,status,
-          chair_member_id,minute_taker_member_id
-        )
-        SELECT
-          ne.id,ne.title,ne.starts_at,ne.location,'planned',
-          dr.chair_member_id,dr.minute_taker_member_id
-        FROM new_event ne
-        CROSS JOIN detected_roles dr
-        RETURNING id
-      )
-      INSERT INTO meeting_attendees (
-        meeting_id,member_id,attendance,voting_eligible
-      )
-      SELECT nm.id,bm.member_id,'invited',true
-      FROM new_meeting nm
-      CROSS JOIN board_members bm
-      ON CONFLICT (meeting_id,member_id) DO NOTHING
-    `;
-  }
-
-  await writeAudit(actor.id,"meeting.status_changed","meeting",meetingId,{
-    title:String(before.title ?? ""),
-    before:current,
-    after:status,
-    protocolRegistered:status==="completed",
-    nextMeetingCreated:status==="completed" && createNextMeeting && Boolean(nextMeetingAt),
-  });
-
-  revalidatePath(`/sitzungen/${meetingId}`);
-  revalidatePath(`/sitzungen/${meetingId}/protokoll`);
-  revalidatePath("/sitzungen");
-  revalidatePath("/dokumente");
-  revalidatePath("/archiv");
-  revalidatePath("/");
-  if (status==="completed") {
-    redirect(`/sitzungen/${meetingId}/protokoll?completed=1`);
-  }
-  redirect(`/sitzungen/${meetingId}?status=${status}`);
-}
-
-export async function createResolutionFromAgendaAction(formData: FormData) {
-  const actor = await requirePermission("resolutions.write");
-  const sql = getDb();
-  if (!sql) redirect("/sitzungen?error=database");
-
-  const meetingId = value(formData, "meetingId");
-  const agendaItemId = value(formData, "agendaItemId");
-  const title = value(formData, "title");
-  const decisionText = value(formData, "decisionText");
-  const voteMethodRaw=value(formData,"voteMethod");
-  const voteMethod=["open","show_of_hands","roll_call","secret","electronic"].includes(voteMethodRaw)
-    ? voteMethodRaw
-    : "open";
-  const voteDetails=value(formData,"voteDetails");
-  const decisionOutcomeRaw=value(formData,"decisionOutcome");
-  const decisionOutcome=["accepted","rejected"].includes(decisionOutcomeRaw)
-    ? decisionOutcomeRaw
-    : "";
-  const yes = Number(value(formData, "votesYes") || "0");
-  const no = Number(value(formData, "votesNo") || "0");
-  const abstain = Number(value(formData, "votesAbstain") || "0");
-  const createTaskRequested = formData.get("createTask") === "on";
-  const taskOwner = value(formData, "taskOwner");
-  const taskDueDate = value(formData, "taskDueDate");
-
-  if (!meetingId || !agendaItemId || !title || !decisionText || !decisionOutcome) {
-    redirect(`/sitzungen/${meetingId}?top=${agendaItemId}&error=resolution`);
-  }
-  if (voteMethod==="roll_call" && !voteDetails) {
-    redirect(`/sitzungen/${meetingId}?top=${agendaItemId}&error=roll_call_details`);
-  }
-
-  if ([yes,no,abstain].some((number)=>!Number.isFinite(number) || number<0)) {
-    redirect(`/sitzungen/${meetingId}?top=${agendaItemId}&error=vote_mismatch`);
-  }
-  const safeYes=yes;
-  const safeNo=no;
-  const safeAbstain=abstain;
-
-  const formalRows=await sql`
-    SELECT
-      ai.announced_with_invitation,
-      ai.decision_basis_note,
-      m.quorum_confirmed,
-      (
-        SELECT count(*)::int
-        FROM agenda_vote_exclusions ave
-        WHERE ave.agenda_item_id=ai.id
-      ) AS excluded_voters,
-      (
-        SELECT count(*)::int
-        FROM meeting_attendees ma
-        WHERE ma.meeting_id=m.id
-          AND ma.attendance='present'
-          AND ma.voting_eligible=true
-      ) AS present_voting_count,
-      (
-        SELECT count(*)::int
-        FROM agenda_vote_exclusions ave
-        LEFT JOIN meeting_attendees ma
-          ON ma.meeting_id=m.id
-         AND ma.member_id=ave.member_id
-        WHERE ave.agenda_item_id=ai.id
-          AND (
-            ma.member_id IS NULL
-            OR ma.attendance<>'present'
-            OR ma.voting_eligible IS NOT TRUE
-          )
-      ) AS invalid_exclusions
-    FROM agenda_items ai
-    JOIN meetings m ON m.id=ai.meeting_id
-    WHERE ai.id=${agendaItemId}::uuid
-      AND ai.meeting_id=${meetingId}::uuid
-      AND m.deleted_at IS NULL
-      AND m.status='running'
-    LIMIT 1
-  `;
-  const formal=formalRows[0];
-  if (!formal) redirect(`/sitzungen/${meetingId}?error=meeting_locked`);
-  if (formal.quorum_confirmed!==true) {
-    redirect(`/sitzungen/${meetingId}?top=${agendaItemId}&error=not_quorate_for_resolutions`);
-  }
-  if (formal.announced_with_invitation===false && !String(formal.decision_basis_note ?? "").trim()) {
-    redirect(`/sitzungen/${meetingId}?top=${agendaItemId}&error=spontaneous_basis`);
-  }
-
-  const excludedVoters=Number(formal.excluded_voters ?? 0);
-  if (Number(formal.invalid_exclusions ?? 0)>0) {
-    redirect(`/sitzungen/${meetingId}?top=${agendaItemId}&error=vote_mismatch`);
-  }
-  const safeEligible=Math.max(0,Number(formal.present_voting_count ?? 0)-excludedVoters);
-  if (safeYes+safeNo+safeAbstain!==safeEligible) {
-    redirect(`/sitzungen/${meetingId}?top=${agendaItemId}&error=vote_mismatch`);
-  }
-  const createTask =
-    decisionOutcome==="accepted" &&
-    createTaskRequested &&
-    hasPermission(actor.roles, "tasks.write");
-
-  await sql`
-    WITH counter AS (
-      INSERT INTO resolution_counters (year, last_number)
-      VALUES (EXTRACT(YEAR FROM CURRENT_DATE)::int, 1)
-      ON CONFLICT (year)
-      DO UPDATE SET last_number = resolution_counters.last_number + 1
-      RETURNING year, last_number
-    ),
-    new_resolution AS (
-      INSERT INTO resolutions (
-        meeting_id,
-        agenda_item_id,
-        title,
-        decision_text,
-        votes_yes,
-        votes_no,
-        votes_abstain,
-        vote_method,
-        vote_details,
-        eligible_voters,
-        excluded_voters,
-        decision_outcome,
-        status,
-        decided_at,
-        resolution_number
-      )
-      SELECT
-        ${meetingId}::uuid,
-        ${agendaItemId}::uuid,
-        ${title},
-        ${decisionText},
-        ${safeYes},
-        ${safeNo},
-        ${safeAbstain},
-        ${voteMethod},
-        ${voteDetails || null},
-        ${safeEligible},
-        ${excludedVoters},
-        ${decisionOutcome},
-        CASE WHEN ${decisionOutcome}='accepted' THEN 'open' ELSE 'withdrawn' END,
-        now(),
-        year::text || '-' || lpad(last_number::text, 3, '0')
-      FROM counter
-      WHERE EXISTS (
-        SELECT 1 FROM meetings m
-        WHERE m.id=${meetingId}::uuid
-          AND m.deleted_at IS NULL
-          AND m.status='running'
-      )
-      RETURNING id, title
-    ),
-    new_task AS (
-      INSERT INTO tasks (
-        title, description, category, status, priority,
-        due_date, owner_member_id, source_type, source_id
-      )
-      SELECT
-        'Beschluss umsetzen: ' || title,
-        ${decisionText},
-        'Beschluss',
-        'open',
-        'medium',
-        ${taskDueDate || null}::date,
-        ${taskOwner || null}::uuid,
-        'resolution',
-        id
-      FROM new_resolution
-      WHERE ${createTask}
-      RETURNING id
-    )
-    UPDATE agenda_items
-    SET status = 'done'
-    WHERE id = ${agendaItemId}::uuid
-      AND meeting_id = ${meetingId}::uuid
-      AND EXISTS (SELECT 1 FROM new_resolution)
-  `;
-
-  const created=await sql`
-    SELECT id::text
-    FROM resolutions
-    WHERE meeting_id=${meetingId}::uuid
-      AND agenda_item_id=${agendaItemId}::uuid
-    ORDER BY created_at DESC
-    LIMIT 1
-  `;
-  if (!created.length) redirect(`/sitzungen/${meetingId}?error=meeting_locked`);
-
-  await writeAudit(actor.id,"resolution.created","resolution",String(created[0].id),{
-    meetingId,
-    agendaItemId,
-    title,
-    voteMethod,
-    voteDetails:voteDetails || null,
-    eligibleVoters:safeEligible,
-    excludedVoters,
-    decisionOutcome,
-    votesYes:safeYes,
-    votesNo:safeNo,
-    votesAbstain:safeAbstain,
-    taskCreated:createTask,
-  });
-
-  const nextAgenda=await sql`
-    SELECT next_item.id::text
-    FROM agenda_items current_item
-    LEFT JOIN LATERAL (
-      SELECT ai.id
-      FROM agenda_items ai
-      WHERE ai.meeting_id=current_item.meeting_id
-        AND ai.position>current_item.position
-        AND ai.status IN ('open','active')
-      ORDER BY ai.position
-      LIMIT 1
-    ) next_item ON true
-    WHERE current_item.id=${agendaItemId}::uuid
-    LIMIT 1
-  `;
-  const nextTop=nextAgenda[0]?.id ? String(nextAgenda[0].id) : agendaItemId;
-
-  revalidatePath(`/sitzungen/${meetingId}`);
-  revalidatePath(`/sitzungen/${meetingId}/protokoll`);
-  revalidatePath("/beschluesse");
-  revalidatePath("/aufgaben");
-  revalidatePath("/");
-  redirect(`/sitzungen/${meetingId}?top=${nextTop}&resolution=1`);
-}
-
-
-function canApproveMinutes(roles:string[]) {
-  return roles.some((role)=>["chair","vice_chair","board","admin"].includes(role));
-}
-
-export async function updateMeetingOfficersAction(formData: FormData) {
+export async function updateMeetingV3OfficersAction(formData: FormData) {
   const actor=await requirePermission("meetings.write");
   const sql=getDb();
   if (!sql) redirect("/sitzungen?error=database");
@@ -1313,774 +301,183 @@ export async function updateMeetingOfficersAction(formData: FormData) {
   const chairMemberId=value(formData,"chairMemberId");
   const minuteTakerMemberId=value(formData,"minuteTakerMemberId");
 
+  if (!meetingId || !chairMemberId || !minuteTakerMemberId) {
+    redirect(`/sitzungen/${meetingId}?error=officers`);
+  }
+
   const rows=await sql`
-    UPDATE meetings
+    UPDATE meeting_v3_meetings m
     SET
-      chair_member_id=${chairMemberId || null}::uuid,
-      minute_taker_member_id=${minuteTakerMemberId || null}::uuid,
-      updated_at=now()
-    WHERE id=${meetingId}::uuid
-      AND deleted_at IS NULL
-      AND status='planned'
-      AND minutes_status='draft'
-    RETURNING id::text
+      chair_member_id=${chairMemberId}::uuid,
+      minute_taker_member_id=${minuteTakerMemberId}::uuid,
+      row_version=row_version+1,
+      updated_by=${actor.id}::uuid
+    WHERE m.id=${meetingId}::uuid
+      AND m.lifecycle_state='preparation'
+      AND EXISTS (
+        SELECT 1 FROM meeting_v3_participants p
+        WHERE p.meeting_id=m.id AND p.member_id=${chairMemberId}::uuid
+      )
+      AND EXISTS (
+        SELECT 1 FROM meeting_v3_participants p
+        WHERE p.meeting_id=m.id AND p.member_id=${minuteTakerMemberId}::uuid
+      )
+    RETURNING m.id::text
   `;
 
-  if (!rows.length) redirect(`/sitzungen/${meetingId}?error=meeting_locked`);
+  if (!rows.length) redirect(`/sitzungen/${meetingId}?error=officers`);
 
-  await writeAudit(actor.id,"meeting.officers_updated","meeting",meetingId,{
-    chairMemberId:chairMemberId || null,
-    minuteTakerMemberId:minuteTakerMemberId || null,
+  await sql`
+    UPDATE meeting_v3_participants
+    SET
+      role_in_meeting=CASE
+        WHEN member_id=${chairMemberId}::uuid THEN 'chair'
+        WHEN member_id=${minuteTakerMemberId}::uuid THEN 'minute_taker'
+        ELSE 'participant'
+      END,
+      updated_by=${actor.id}::uuid,
+      updated_at=now()
+    WHERE meeting_id=${meetingId}::uuid
+  `;
+
+  await writeMeetingV3Audit(meetingId,actor.id,"meeting.officers_updated","meeting",meetingId,{
+    chairMemberId,minuteTakerMemberId,
   });
 
   revalidatePath(`/sitzungen/${meetingId}`);
-  revalidatePath(`/sitzungen/${meetingId}/protokoll`);
   redirect(`/sitzungen/${meetingId}?officers=1`);
 }
 
-export async function submitMeetingMinutesAction(formData: FormData) {
+export async function addMeetingV3AgendaAction(formData: FormData) {
   const actor=await requirePermission("meetings.write");
   const sql=getDb();
   if (!sql) redirect("/sitzungen?error=database");
 
   const meetingId=value(formData,"meetingId");
+  const title=value(formData,"title");
+  const description=value(formData,"description");
+  const typeRaw=value(formData,"agendaType");
+  const agendaType=(meetingV3AgendaTypes as readonly string[]).includes(typeRaw)
+    ? typeRaw as MeetingV3AgendaType
+    : "consultation";
+
+  if (!meetingId || !title) redirect(`/sitzungen/${meetingId}?error=agenda`);
 
   const rows=await sql`
-    SELECT
-      id::text,status,minutes_status,minutes_version,
-      minutes_intro,minutes_closing,
-      chair_member_id::text,minute_taker_member_id::text
-    FROM meetings
-    WHERE id=${meetingId}::uuid
-      AND deleted_at IS NULL
-    LIMIT 1
-  `;
-  const meeting=rows[0];
-  if (!meeting) redirect("/sitzungen?error=missing");
-  if (String(meeting.status)!=="completed") {
-    redirect(`/sitzungen/${meetingId}/protokoll?error=meeting_not_completed`);
-  }
-  if (String(meeting.minutes_status)!=="draft") {
-    redirect(`/sitzungen/${meetingId}/protokoll?error=minutes_locked`);
-  }
-  if (!meeting.chair_member_id || !meeting.minute_taker_member_id) {
-    redirect(`/sitzungen/${meetingId}/protokoll?error=officers_missing`);
-  }
-
-  const validationRows=await sql`
-    SELECT
-      m.invited_at IS NOT NULL
-        AND NULLIF(trim(m.invitation_method),'') IS NOT NULL
-        AND m.invitation_timely IS NOT NULL
-        AND m.agenda_sent_with_invitation IS NOT NULL
-        AND m.quorum_confirmed IS NOT NULL AS formalities_complete,
-      m.quorum_confirmed,
-      count(DISTINCT ai.id) FILTER (
-        WHERE ai.status NOT IN ('done','deferred')
-      )::int AS unfinished_agenda,
-      count(DISTINCT ai.id) FILTER (
-        WHERE ai.agenda_type='decision'
-          AND ai.status='done'
-          AND r.id IS NULL
-      )::int AS decision_without_resolution,
-      count(DISTINCT r.id)::int AS resolution_count,
-      count(DISTINCT r.id) FILTER (
-        WHERE r.vote_method IS NULL
-           OR r.eligible_voters IS NULL
-           OR r.decision_outcome IS NULL
-           OR r.eligible_voters<>(r.votes_yes+r.votes_no+r.votes_abstain)
-           OR r.excluded_voters<>(
-             SELECT count(*)::int
-             FROM agenda_vote_exclusions ave
-             WHERE ave.agenda_item_id=ai.id
-           )
-           OR r.eligible_voters<>GREATEST(
-             0,
-             (
-               SELECT count(*)::int
-               FROM meeting_attendees ma2
-               WHERE ma2.meeting_id=m.id
-                 AND ma2.attendance='present'
-                 AND ma2.voting_eligible=true
-             ) - (
-               SELECT count(*)::int
-               FROM agenda_vote_exclusions ave2
-               WHERE ave2.agenda_item_id=ai.id
-             )
-           )
-           OR EXISTS(
-             SELECT 1
-             FROM agenda_vote_exclusions ave
-             LEFT JOIN meeting_attendees ma
-               ON ma.meeting_id=m.id
-              AND ma.member_id=ave.member_id
-             WHERE ave.agenda_item_id=ai.id
-               AND (
-                 ma.member_id IS NULL
-                 OR ma.attendance<>'present'
-                 OR ma.voting_eligible IS NOT TRUE
-               )
-           )
-           OR (r.vote_method='roll_call' AND NULLIF(trim(r.vote_details),'') IS NULL)
-      )::int AS invalid_votes,
-      count(DISTINCT r.id) FILTER (
-        WHERE ai.announced_with_invitation=false
-          AND NULLIF(trim(ai.decision_basis_note),'') IS NULL
-      )::int AS spontaneous_without_basis,
-      (
-        SELECT count(*)::int
-        FROM meeting_attendees ma
-        WHERE ma.meeting_id=m.id
-          AND ma.attendance='invited'
-      ) AS unresolved_attendees,
-      (
-        SELECT count(*)::int
-        FROM meeting_guests mg
-        WHERE mg.meeting_id=m.id
-          AND mg.attendance='invited'
-      ) AS unresolved_guests,
-      EXISTS(
-        SELECT 1
-        FROM meeting_attendees ma
-        WHERE ma.meeting_id=m.id
-          AND ma.member_id=m.chair_member_id
-          AND ma.attendance='present'
-      ) AS chair_present,
-      EXISTS(
-        SELECT 1
-        FROM meeting_attendees ma
-        WHERE ma.meeting_id=m.id
-          AND ma.member_id=m.minute_taker_member_id
-          AND ma.attendance='present'
-      ) AS minute_taker_present
-    FROM meetings m
-    LEFT JOIN agenda_items ai ON ai.meeting_id=m.id
-    LEFT JOIN resolutions r ON r.agenda_item_id=ai.id
-    WHERE m.id=${meetingId}::uuid
-    GROUP BY m.id,m.invited_at,m.invitation_method,m.invitation_timely,
-      m.agenda_sent_with_invitation,m.quorum_confirmed,
-      m.chair_member_id,m.minute_taker_member_id
-  `;
-  const validation=validationRows[0] ?? {};
-
-  if (!validation.formalities_complete) {
-    redirect(`/sitzungen/${meetingId}/protokoll?error=protocol_formalities`);
-  }
-  if (!validation.chair_present || !validation.minute_taker_present) {
-    redirect(`/sitzungen/${meetingId}/protokoll?error=protocol_officers_present`);
-  }
-  if (Number(validation.unresolved_attendees ?? 0)>0 || Number(validation.unresolved_guests ?? 0)>0) {
-    redirect(`/sitzungen/${meetingId}/protokoll?error=protocol_attendance`);
-  }
-  if (Number(validation.unfinished_agenda ?? 0)>0) {
-    redirect(`/sitzungen/${meetingId}/protokoll?error=protocol_agenda`);
-  }
-  if (Number(validation.decision_without_resolution ?? 0)>0) {
-    redirect(`/sitzungen/${meetingId}/protokoll?error=protocol_decision`);
-  }
-  if (Number(validation.invalid_votes ?? 0)>0) {
-    redirect(`/sitzungen/${meetingId}/protokoll?error=protocol_votes`);
-  }
-  if (Number(validation.spontaneous_without_basis ?? 0)>0) {
-    redirect(`/sitzungen/${meetingId}/protokoll?error=protocol_spontaneous`);
-  }
-  if (Number(validation.resolution_count ?? 0)>0 && validation.quorum_confirmed!==true) {
-    redirect(`/sitzungen/${meetingId}/protokoll?error=protocol_quorum`);
-  }
-
-  await sql`
-    INSERT INTO meeting_minutes_revisions (
-      meeting_id,version,status,intro,closing,return_note,changed_by,change_note
-    )
-    VALUES (
-      ${meetingId}::uuid,
-      ${Number(meeting.minutes_version ?? 1)}::int,
-      'review',
-      ${meeting.minutes_intro ?? null},
-      ${meeting.minutes_closing ?? null},
-      NULL,
-      ${actor.id}::uuid,
-      'Zur Prüfung eingereicht'
-    )
-  `;
-
-  await sql`
-    UPDATE meetings
-    SET
-      minutes_status='review',
-      minutes_return_note=NULL,
-      minutes_submitted_at=now(),
-      minutes_submitted_by=${actor.id}::uuid,
-      updated_at=now()
-    WHERE id=${meetingId}::uuid
-  `;
-
-  await sql`
-    INSERT INTO documents (
-      title,category,storage_type,storage_ref,status,
-      document_date,meeting_id,notes
+    INSERT INTO meeting_v3_agenda_items (
+      meeting_id,position,title,agenda_type,description,status,
+      announced_with_invitation,created_by,updated_by
     )
     SELECT
-      'Protokoll · ' || m.title,
-      'Protokoll',
-      'internal',
-      '/sitzungen/' || m.id::text || '/protokoll',
-      'review',
-      (m.starts_at AT TIME ZONE 'Europe/Berlin')::date,
       m.id,
-      'Protokoll zur Freigabe eingereicht.'
-    FROM meetings m
-    WHERE m.id=${meetingId}::uuid
-      AND m.deleted_at IS NULL
-      AND NOT EXISTS (
-        SELECT 1
-        FROM documents d
-        WHERE d.meeting_id=m.id
-          AND d.category='Protokoll'
-          AND d.deleted_at IS NULL
-      )
-  `;
-
-  await sql`
-    UPDATE documents
-    SET
-      status='review',
-      archived_at=NULL,
-      archived_by=NULL,
-      notes='Protokoll zur Freigabe eingereicht.',
-      updated_at=now()
-    WHERE meeting_id=${meetingId}::uuid
-      AND category='Protokoll'
-      AND deleted_at IS NULL
-  `;
-
-  await writeAudit(actor.id,"meeting.minutes_submitted","meeting",meetingId,{});
-  revalidatePath(`/sitzungen/${meetingId}`);
-  revalidatePath(`/sitzungen/${meetingId}/protokoll`);
-  revalidatePath("/dokumente");
-  redirect(`/sitzungen/${meetingId}/protokoll?submitted=1`);
-}
-
-export async function returnMeetingMinutesAction(formData: FormData) {
-  const actor=await requirePermission("meetings.write");
-  if (!canApproveMinutes(actor.roles)) redirect("/sitzungen?error=forbidden");
-
-  const sql=getDb();
-  if (!sql) redirect("/sitzungen?error=database");
-
-  const meetingId=value(formData,"meetingId");
-  const returnNote=value(formData,"returnNote");
-  if (!returnNote) redirect(`/sitzungen/${meetingId}/protokoll?error=return_note`);
-
-  const rows=await sql`
-    UPDATE meetings
-    SET
-      minutes_status='draft',
-      minutes_return_note=${returnNote},
-      minutes_version=minutes_version+1,
-      minutes_approved_at=NULL,
-      minutes_approved_by=NULL,
-      updated_at=now()
-    WHERE id=${meetingId}::uuid
-      AND minutes_status='review'
-      AND deleted_at IS NULL
-    RETURNING minutes_version,minutes_intro,minutes_closing
-  `;
-
-  const meeting=rows[0];
-  if (!meeting) redirect(`/sitzungen/${meetingId}/protokoll?error=minutes_locked`);
-
-  await sql`
-    INSERT INTO meeting_minutes_revisions (
-      meeting_id,version,status,intro,closing,return_note,changed_by,change_note
-    )
-    VALUES (
-      ${meetingId}::uuid,
-      ${Number(meeting.minutes_version ?? 1)}::int,
-      'draft',
-      ${meeting.minutes_intro ?? null},
-      ${meeting.minutes_closing ?? null},
-      ${returnNote},
-      ${actor.id}::uuid,
-      'Zur Überarbeitung zurückgegeben'
-    )
-  `;
-
-  await sql`
-    UPDATE documents
-    SET
-      status='draft',
-      archived_at=NULL,
-      archived_by=NULL,
-      notes='Protokoll zur Überarbeitung zurückgegeben · ' || ${returnNote},
-      updated_at=now()
-    WHERE meeting_id=${meetingId}::uuid
-      AND category='Protokoll'
-      AND deleted_at IS NULL
-  `;
-
-  await writeAudit(actor.id,"meeting.minutes_returned","meeting",meetingId,{returnNote});
-  revalidatePath(`/sitzungen/${meetingId}`);
-  revalidatePath(`/sitzungen/${meetingId}/protokoll`);
-  redirect(`/sitzungen/${meetingId}/protokoll?returned=1`);
-}
-
-export async function approveMeetingMinutesAction(formData: FormData) {
-  const actor=await requirePermission("meetings.write");
-  if (!canApproveMinutes(actor.roles)) redirect("/sitzungen?error=forbidden");
-
-  const sql=getDb();
-  if (!sql) redirect("/sitzungen?error=database");
-
-  const meetingId=value(formData,"meetingId");
-
-  const rows=await sql`
-    UPDATE meetings
-    SET
-      minutes_status='archived',
-      minutes_return_note=NULL,
-      minutes_approved_at=now(),
-      minutes_approved_by=${actor.id}::uuid,
-      minutes_archived_at=now(),
-      minutes_archived_by=${actor.id}::uuid,
-      updated_at=now()
-    WHERE id=${meetingId}::uuid
-      AND minutes_status='review'
-      AND deleted_at IS NULL
-    RETURNING minutes_version,minutes_intro,minutes_closing
-  `;
-
-  const meeting=rows[0];
-  if (!meeting) redirect(`/sitzungen/${meetingId}/protokoll?error=minutes_locked`);
-
-  await sql`
-    INSERT INTO meeting_minutes_revisions (
-      meeting_id,version,status,intro,closing,changed_by,change_note
-    )
-    VALUES (
-      ${meetingId}::uuid,
-      ${Number(meeting.minutes_version ?? 1)}::int,
-      'archived',
-      ${meeting.minutes_intro ?? null},
-      ${meeting.minutes_closing ?? null},
-      ${actor.id}::uuid,
-      'Protokoll freigegeben und automatisch archiviert'
-    )
-  `;
-
-  await sql`
-    UPDATE documents
-    SET
-      status='archived',
-      archived_at=now(),
-      archived_by=${actor.id}::uuid,
-      notes='Freigegebenes Sitzungsprotokoll · automatisch archiviert.',
-      updated_at=now()
-    WHERE meeting_id=${meetingId}::uuid
-      AND category='Protokoll'
-      AND deleted_at IS NULL
-  `;
-
-  await writeAudit(actor.id,"meeting.minutes_approved_and_archived","meeting",meetingId,{});
-  revalidatePath(`/sitzungen/${meetingId}`);
-  revalidatePath(`/sitzungen/${meetingId}/protokoll`);
-  revalidatePath("/dokumente");
-  revalidatePath("/archiv");
-  redirect(`/sitzungen/${meetingId}/protokoll?archived=1`);
-}
-
-export async function updateMeetingFormalitiesAction(formData:FormData) {
-  const actor=await requirePermission("meetings.write");
-  const sql=getDb();
-  if (!sql) redirect("/sitzungen?error=database");
-
-  const meetingId=value(formData,"meetingId");
-  const meetingModeRaw=value(formData,"meetingMode");
-  const meetingMode=["in_person","hybrid","online"].includes(meetingModeRaw) ? meetingModeRaw : "in_person";
-  const invitedAt=value(formData,"invitedAt");
-  const invitationMethod=value(formData,"invitationMethod");
-  const invitationTimelyRaw=value(formData,"invitationTimely");
-  const agendaSentRaw=value(formData,"agendaSentWithInvitation");
-  const formalitiesNote=value(formData,"formalitiesNote");
-
-  const boolOrNull=(raw:string) => raw==="yes" ? true : raw==="no" ? false : null;
-  const invitationTimely=boolOrNull(invitationTimelyRaw);
-  const agendaSentWithInvitation=boolOrNull(agendaSentRaw);
-
-  const rows=await sql`
-    UPDATE meetings
-    SET
-      meeting_mode=${meetingMode},
-      invited_at=CASE WHEN ${invitedAt}='' THEN NULL ELSE (${invitedAt}::timestamp AT TIME ZONE 'Europe/Berlin') END,
-      invitation_method=${invitationMethod || null},
-      invitation_timely=${invitationTimely},
-      agenda_sent_with_invitation=${agendaSentWithInvitation},
-      formalities_note=${formalitiesNote || null},
-      updated_at=now()
-    WHERE id=${meetingId}::uuid
-      AND deleted_at IS NULL
-      AND status IN ('planned','running')
-    RETURNING id::text
-  `;
-
-  if (!rows.length) redirect(`/sitzungen/${meetingId}?error=meeting_locked`);
-
-  await writeAudit(actor.id,"meeting.formalities_updated","meeting",meetingId,{
-    meetingMode,invitationTimely,agendaSentWithInvitation,
-  });
-
-  revalidatePath(`/sitzungen/${meetingId}`);
-  revalidatePath(`/sitzungen/${meetingId}/protokoll`);
-  redirect(`/sitzungen/${meetingId}?formalities=1`);
-}
-
-export async function addMeetingGuestAction(formData:FormData) {
-  const actor=await requirePermission("meetings.write");
-  const sql=getDb();
-  if (!sql) redirect("/sitzungen?error=database");
-
-  const meetingId=value(formData,"meetingId");
-  const name=value(formData,"name");
-  const organization=value(formData,"organization");
-  const note=value(formData,"note");
-  if (!meetingId || !name) redirect(`/sitzungen/${meetingId}?error=guest_missing`);
-
-  const rows=await sql`
-    INSERT INTO meeting_guests(meeting_id,name,organization,note,attendance)
-    SELECT
-      ${meetingId}::uuid,
-      ${name},
-      ${organization || null},
-      ${note || null},
-      CASE WHEN m.status='running' THEN 'present' ELSE 'invited' END
-    FROM meetings m
-    WHERE m.id=${meetingId}::uuid
-      AND m.deleted_at IS NULL
-      AND m.status IN ('planned','running')
-    RETURNING id::text
-  `;
-
-  if (!rows.length) redirect(`/sitzungen/${meetingId}?error=meeting_locked`);
-  await writeAudit(actor.id,"meeting.guest_added","meeting",meetingId,{name,organization});
-  revalidatePath(`/sitzungen/${meetingId}`);
-  revalidatePath(`/sitzungen/${meetingId}/protokoll`);
-  redirect(`/sitzungen/${meetingId}?guest=1`);
-}
-
-export async function updateMeetingGuestAttendanceAction(formData:FormData) {
-  const actor=await requirePermission("meetings.write");
-  const sql=getDb();
-  if (!sql) redirect("/sitzungen?error=database");
-
-  const meetingId=value(formData,"meetingId");
-  const guestId=value(formData,"guestId");
-  const attendanceRaw=value(formData,"attendance");
-  const attendance=["invited","present","absent"].includes(attendanceRaw) ? attendanceRaw : "invited";
-
-  const rows=await sql`
-    UPDATE meeting_guests g
-    SET attendance=${attendance}
-    FROM meetings m
-    WHERE g.id=${guestId}::uuid
-      AND g.meeting_id=${meetingId}::uuid
-      AND m.id=g.meeting_id
-      AND m.deleted_at IS NULL
-      AND m.status IN ('planned','running')
-    RETURNING g.name
-  `;
-
-  if (!rows.length) redirect(`/sitzungen/${meetingId}?error=meeting_locked`);
-
-  await writeAudit(actor.id,"meeting.guest_attendance_changed","meeting",meetingId,{
-    guestId,
-    attendance,
-    name:String(rows[0].name ?? ""),
-  });
-
-  revalidatePath(`/sitzungen/${meetingId}`);
-  revalidatePath(`/sitzungen/${meetingId}/protokoll`);
-  redirect(`/sitzungen/${meetingId}?guest=1`);
-}
-
-export async function deleteMeetingGuestAction(formData:FormData) {
-  const actor=await requirePermission("meetings.write");
-  const sql=getDb();
-  if (!sql) redirect("/sitzungen?error=database");
-
-  const meetingId=value(formData,"meetingId");
-  const guestId=value(formData,"guestId");
-
-  const rows=await sql`
-    DELETE FROM meeting_guests g
-    USING meetings m
-    WHERE g.id=${guestId}::uuid
-      AND g.meeting_id=${meetingId}::uuid
-      AND m.id=g.meeting_id
-      AND m.deleted_at IS NULL
-      AND m.status IN ('planned','running')
-    RETURNING g.name
-  `;
-
-  if (!rows.length) redirect(`/sitzungen/${meetingId}?error=meeting_locked`);
-  await writeAudit(actor.id,"meeting.guest_removed","meeting",meetingId,{name:String(rows[0].name)});
-  revalidatePath(`/sitzungen/${meetingId}`);
-  revalidatePath(`/sitzungen/${meetingId}/protokoll`);
-  redirect(`/sitzungen/${meetingId}?guest=1`);
-}
-
-export async function addVoteExclusionAction(formData:FormData) {
-  const actor=await requirePermission("meetings.write");
-  const sql=getDb();
-  if (!sql) redirect("/sitzungen?error=database");
-
-  const meetingId=value(formData,"meetingId");
-  const agendaItemId=value(formData,"agendaItemId");
-  const memberId=value(formData,"memberId");
-  const reason=value(formData,"reason");
-  if (!meetingId || !agendaItemId || !memberId || !reason) {
-    redirect(`/sitzungen/${meetingId}?top=${agendaItemId}&error=exclusion_missing`);
-  }
-
-  await sql`
-    INSERT INTO agenda_vote_exclusions(agenda_item_id,member_id,reason,created_by)
-    SELECT ${agendaItemId}::uuid,${memberId}::uuid,${reason},${actor.id}::uuid
-    WHERE EXISTS (
-      SELECT 1
-      FROM agenda_items ai
-      JOIN meetings m ON m.id=ai.meeting_id
-      JOIN meeting_attendees ma
-        ON ma.meeting_id=m.id
-       AND ma.member_id=${memberId}::uuid
-       AND ma.attendance='present'
-       AND ma.voting_eligible=true
-      WHERE ai.id=${agendaItemId}::uuid
-        AND ai.meeting_id=${meetingId}::uuid
-        AND m.status='running'
-        AND m.deleted_at IS NULL
-    )
-    ON CONFLICT (agenda_item_id,member_id)
-    WHERE member_id IS NOT NULL
-    DO UPDATE SET reason=EXCLUDED.reason,created_by=EXCLUDED.created_by,created_at=now()
-  `;
-
-  await writeAudit(actor.id,"agenda.vote_exclusion_added","agenda_item",agendaItemId,{memberId,reason});
-  revalidatePath(`/sitzungen/${meetingId}`);
-  revalidatePath(`/sitzungen/${meetingId}/protokoll`);
-  redirect(`/sitzungen/${meetingId}?top=${agendaItemId}&exclusion=1`);
-}
-
-export async function deleteVoteExclusionAction(formData:FormData) {
-  const actor=await requirePermission("meetings.write");
-  const sql=getDb();
-  if (!sql) redirect("/sitzungen?error=database");
-
-  const meetingId=value(formData,"meetingId");
-  const agendaItemId=value(formData,"agendaItemId");
-  const exclusionId=value(formData,"exclusionId");
-
-  await sql`
-    DELETE FROM agenda_vote_exclusions ave
-    USING agenda_items ai,meetings m
-    WHERE ave.id=${exclusionId}::uuid
-      AND ave.agenda_item_id=${agendaItemId}::uuid
-      AND ai.id=ave.agenda_item_id
-      AND ai.meeting_id=${meetingId}::uuid
-      AND m.id=ai.meeting_id
-      AND m.status='running'
-      AND m.deleted_at IS NULL
-  `;
-
-  await writeAudit(actor.id,"agenda.vote_exclusion_removed","agenda_item",agendaItemId,{exclusionId});
-  revalidatePath(`/sitzungen/${meetingId}`);
-  revalidatePath(`/sitzungen/${meetingId}/protokoll`);
-  redirect(`/sitzungen/${meetingId}?top=${agendaItemId}&exclusion=1`);
-}
-
-export async function carryForwardAgendaItemAction(formData:FormData) {
-  const actor=await requirePermission("meetings.write");
-  const sql=getDb();
-  if (!sql) redirect("/sitzungen?error=database");
-
-  const meetingId=value(formData,"meetingId");
-  const sourceAgendaItemId=value(formData,"sourceAgendaItemId");
-
-  const rows=await sql`
-    INSERT INTO agenda_items(
-      meeting_id,position,title,description,status,
-      announced_with_invitation,carried_from_agenda_item_id
-    )
-    SELECT
-      ${meetingId}::uuid,
-      COALESCE((SELECT max(position) FROM agenda_items WHERE meeting_id=${meetingId}::uuid),0)+1,
-      source.title,
-      COALESCE(source.notes,source.description),
+      COALESCE((
+        SELECT MAX(ai.position)
+        FROM meeting_v3_agenda_items ai
+        WHERE ai.meeting_id=m.id
+      ),0)+1,
+      ${title},
+      ${agendaType},
+      ${description || null},
       'open',
-      true,
-      source.id
-    FROM agenda_items source
-    WHERE source.id=${sourceAgendaItemId}::uuid
-      AND EXISTS (
-        SELECT 1 FROM meetings target
-        WHERE target.id=${meetingId}::uuid
-          AND target.deleted_at IS NULL
-          AND target.status IN ('planned','running')
-      )
-      AND NOT EXISTS (
-        SELECT 1 FROM agenda_items existing
-        WHERE existing.meeting_id=${meetingId}::uuid
-          AND existing.carried_from_agenda_item_id=source.id
-      )
-    RETURNING id::text
+      (m.invited_at IS NULL),
+      ${actor.id}::uuid,
+      ${actor.id}::uuid
+    FROM meeting_v3_meetings m
+    WHERE m.id=${meetingId}::uuid
+      AND m.lifecycle_state='preparation'
+    RETURNING id::text,position
   `;
 
-  if (!rows.length) redirect(`/sitzungen/${meetingId}?error=carryover_exists`);
-  await writeAudit(actor.id,"agenda.carried_forward","agenda_item",String(rows[0].id),{sourceAgendaItemId});
-  revalidatePath(`/sitzungen/${meetingId}`);
-  redirect(`/sitzungen/${meetingId}?top=${String(rows[0].id)}&agenda=1`);
-}
+  if (!rows.length) redirect(`/sitzungen/${meetingId}?error=locked`);
 
-export async function carryForwardTaskAction(formData:FormData) {
-  const actor=await requirePermission("meetings.write");
-  const sql=getDb();
-  if (!sql) redirect("/sitzungen?error=database");
-
-  const meetingId=value(formData,"meetingId");
-  const sourceTaskId=value(formData,"sourceTaskId");
-
-  const rows=await sql`
-    INSERT INTO agenda_items(
-      meeting_id,position,title,description,status,
-      announced_with_invitation,carried_from_task_id
-    )
-    SELECT
-      ${meetingId}::uuid,
-      COALESCE((SELECT max(position) FROM agenda_items WHERE meeting_id=${meetingId}::uuid),0)+1,
-      'Offener Punkt: ' || task.title,
-      task.description,
-      'open',
-      true,
-      task.id
-    FROM tasks task
-    WHERE task.id=${sourceTaskId}::uuid
-      AND task.deleted_at IS NULL
-      AND EXISTS (
-        SELECT 1 FROM meetings target
-        WHERE target.id=${meetingId}::uuid
-          AND target.deleted_at IS NULL
-          AND target.status IN ('planned','running')
-      )
-      AND task.status IN ('open','in_progress','blocked')
-      AND NOT EXISTS (
-        SELECT 1 FROM agenda_items existing
-        WHERE existing.meeting_id=${meetingId}::uuid
-          AND existing.carried_from_task_id=task.id
-      )
-    RETURNING id::text
-  `;
-
-  if (!rows.length) redirect(`/sitzungen/${meetingId}?error=carryover_exists`);
-  await writeAudit(actor.id,"task.carried_to_agenda","agenda_item",String(rows[0].id),{sourceTaskId});
-  revalidatePath(`/sitzungen/${meetingId}`);
-  redirect(`/sitzungen/${meetingId}?top=${String(rows[0].id)}&agenda=1`);
-}
-
-
-export async function updateAgendaFormalAction(formData:FormData) {
-  const actor=await requirePermission("meetings.write");
-  const sql=getDb();
-  if (!sql) redirect("/sitzungen?error=database");
-
-  const meetingId=value(formData,"meetingId");
-  const agendaItemId=value(formData,"agendaItemId");
-  const announcementStatus=value(formData,"announcementStatus");
-  const announcedWithInvitation=announcementStatus!=="spontaneous";
-  const decisionBasisNote=value(formData,"decisionBasisNote");
-
-  const rows=await sql`
-    UPDATE agenda_items ai
-    SET
-      announced_with_invitation=${announcedWithInvitation},
-      decision_basis_note=${decisionBasisNote || null}
-    FROM meetings m
-    WHERE ai.id=${agendaItemId}::uuid
-      AND ai.meeting_id=${meetingId}::uuid
-      AND m.id=ai.meeting_id
-      AND m.deleted_at IS NULL
-      AND m.status IN ('planned','running')
-      AND NOT EXISTS (
-        SELECT 1 FROM resolutions r WHERE r.agenda_item_id=ai.id
-      )
-    RETURNING ai.id::text
-  `;
-
-  if (!rows.length) redirect(`/sitzungen/${meetingId}?top=${agendaItemId}&error=meeting_locked`);
-
-  await writeAudit(actor.id,"agenda.formal_status_updated","agenda_item",agendaItemId,{
-    announcedWithInvitation,
-    decisionBasisNote:decisionBasisNote || null,
+  const agendaId=String(rows[0].id);
+  await writeMeetingV3Audit(meetingId,actor.id,"agenda.created","agenda_item",agendaId,{
+    title,agendaType,position:Number(rows[0].position),
   });
 
   revalidatePath(`/sitzungen/${meetingId}`);
-  revalidatePath(`/sitzungen/${meetingId}/protokoll`);
-  redirect(`/sitzungen/${meetingId}?top=${agendaItemId}&formal=1`);
+  redirect(`/sitzungen/${meetingId}?agenda=1`);
 }
 
-
-export async function reorderAgendaItemsAction(
-  meetingId:string,
-  orderedIds:string[],
-) {
+export async function markMeetingV3ReadyAction(formData: FormData) {
   const actor=await requirePermission("meetings.write");
   const sql=getDb();
-  if (!sql) return {ok:false,error:"database"};
+  if (!sql) redirect("/sitzungen?error=database");
 
-  if (!meetingId || orderedIds.length===0 || new Set(orderedIds).size!==orderedIds.length) {
-    return {ok:false,error:"invalid"};
-  }
+  const meetingId=value(formData,"meetingId");
+  if (!meetingId) redirect("/sitzungen?error=missing");
 
-  const meetingRows=await sql`
-    SELECT id::text
-    FROM meetings
-    WHERE id=${meetingId}::uuid
-      AND deleted_at IS NULL
-      AND status='planned'
+  const rows=await sql`
+    SELECT
+      m.id::text,
+      m.chair_member_id::text AS chair_member_id,
+      m.minute_taker_member_id::text AS minute_taker_member_id,
+      m.invited_at,m.invitation_method,m.invitation_timely,m.agenda_sent_with_invitation,
+      (SELECT count(*)::int FROM meeting_v3_participants p WHERE p.meeting_id=m.id) AS participant_count,
+      (SELECT count(*)::int FROM meeting_v3_agenda_items ai WHERE ai.meeting_id=m.id) AS agenda_count
+    FROM meeting_v3_meetings m
+    WHERE m.id=${meetingId}::uuid
+      AND m.lifecycle_state='preparation'
     LIMIT 1
   `;
-  if (!meetingRows.length) return {ok:false,error:"locked"};
 
-  const existing=await sql`
-    SELECT id::text
-    FROM agenda_items
-    WHERE meeting_id=${meetingId}::uuid
-    ORDER BY position
-  `;
-  const existingIds=existing.map((row)=>String(row.id));
-  if (
-    existingIds.length!==orderedIds.length ||
-    existingIds.some((id)=>!orderedIds.includes(id))
-  ) {
-    return {ok:false,error:"mismatch"};
+  const meeting=rows[0];
+  if (!meeting) redirect(`/sitzungen/${meetingId}?error=locked`);
+
+  const readiness=getMeetingV3Readiness({
+    chairMemberId: meeting.chair_member_id ? String(meeting.chair_member_id) : null,
+    minuteTakerMemberId: meeting.minute_taker_member_id ? String(meeting.minute_taker_member_id) : null,
+    invitedAt: meeting.invited_at,
+    invitationMethod: meeting.invitation_method ? String(meeting.invitation_method) : null,
+    invitationTimely: meeting.invitation_timely as boolean | null,
+    agendaSentWithInvitation: meeting.agenda_sent_with_invitation as boolean | null,
+    participantCount: Number(meeting.participant_count ?? 0),
+    agendaCount: Number(meeting.agenda_count ?? 0),
+  });
+
+  if (!readiness.ready) {
+    redirect(`/sitzungen/${meetingId}?error=not_ready`);
   }
 
   await sql`
-    UPDATE agenda_items
-    SET position=position+10000
-    WHERE meeting_id=${meetingId}::uuid
+    UPDATE meeting_v3_meetings
+    SET
+      lifecycle_state='ready',
+      row_version=row_version+1,
+      updated_by=${actor.id}::uuid
+    WHERE id=${meetingId}::uuid
+      AND lifecycle_state='preparation'
   `;
 
-  for (let index=0;index<orderedIds.length;index++) {
-    await sql`
-      UPDATE agenda_items
-      SET position=${index+1},updated_at=now()
-      WHERE id=${orderedIds[index]}::uuid
-        AND meeting_id=${meetingId}::uuid
-    `;
-  }
-
-  await writeAudit(actor.id,"agenda.reordered","meeting",meetingId,{
-    orderedIds,
+  await writeMeetingV3Audit(meetingId,actor.id,"meeting.marked_ready","meeting",meetingId,{
+    readiness:readiness.checks,
   });
 
   revalidatePath(`/sitzungen/${meetingId}`);
-  return {ok:true};
+  revalidatePath("/sitzungen");
+  redirect(`/sitzungen/${meetingId}?ready=1`);
+}
+
+export async function reopenMeetingV3PreparationAction(formData: FormData) {
+  const actor=await requirePermission("meetings.write");
+  const sql=getDb();
+  if (!sql) redirect("/sitzungen?error=database");
+  const meetingId=value(formData,"meetingId");
+
+  const rows=await sql`
+    UPDATE meeting_v3_meetings
+    SET
+      lifecycle_state='preparation',
+      row_version=row_version+1,
+      updated_by=${actor.id}::uuid
+    WHERE id=${meetingId}::uuid
+      AND lifecycle_state='ready'
+    RETURNING id::text
+  `;
+  if (!rows.length) redirect(`/sitzungen/${meetingId}?error=locked`);
+
+  await writeMeetingV3Audit(meetingId,actor.id,"meeting.returned_to_preparation","meeting",meetingId);
+  revalidatePath(`/sitzungen/${meetingId}`);
+  revalidatePath("/sitzungen");
+  redirect(`/sitzungen/${meetingId}?preparation=1`);
 }

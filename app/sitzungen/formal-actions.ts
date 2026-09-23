@@ -18,7 +18,7 @@ function value(formData:FormData,key:string){
 }
 
 function livePath(meetingId:string,query?:string){
-  return `/sitzungen-neu/${meetingId}/live${query ? `?${query}` : ""}`;
+  return `/sitzungen/${meetingId}/live${query ? `?${query}` : ""}`;
 }
 
 function positiveInteger(raw:string){
@@ -52,7 +52,7 @@ async function writeMeetingV3Audit(
 export async function addSpontaneousMeetingV3AgendaAction(formData:FormData){
   const actor=await requirePermission("meetings.write");
   const sql=getDb();
-  if(!sql) redirect("/sitzungen-neu?error=database");
+  if(!sql) redirect("/sitzungen?error=database");
 
   const meetingId=value(formData,"meetingId");
   const title=value(formData,"title");
@@ -95,7 +95,7 @@ export async function addSpontaneousMeetingV3AgendaAction(formData:FormData){
 export async function addMeetingV3VoteExclusionAction(formData:FormData){
   const actor=await requirePermission("meetings.write");
   const sql=getDb();
-  if(!sql) redirect("/sitzungen-neu?error=database");
+  if(!sql) redirect("/sitzungen?error=database");
 
   const meetingId=value(formData,"meetingId");
   const agendaItemId=value(formData,"agendaItemId");
@@ -144,7 +144,7 @@ export async function addMeetingV3VoteExclusionAction(formData:FormData){
 export async function endMeetingV3VoteExclusionAction(formData:FormData){
   const actor=await requirePermission("meetings.write");
   const sql=getDb();
-  if(!sql) redirect("/sitzungen-neu?error=database");
+  if(!sql) redirect("/sitzungen?error=database");
 
   const meetingId=value(formData,"meetingId");
   const exclusionId=value(formData,"exclusionId");
@@ -175,7 +175,7 @@ export async function endMeetingV3VoteExclusionAction(formData:FormData){
 export async function createMeetingV3ResolutionAction(formData:FormData){
   const actor=await requirePermission("resolutions.write");
   const sql=getDb();
-  if(!sql) redirect("/sitzungen-neu?error=database");
+  if(!sql) redirect("/sitzungen?error=database");
 
   const meetingId=value(formData,"meetingId");
   const agendaItemId=value(formData,"agendaItemId");

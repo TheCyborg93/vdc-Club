@@ -51,17 +51,17 @@ async function writeMeetingV3Audit(
 }
 
 function startPath(meetingId:string,error?:string) {
-  return `/sitzungen-neu/${meetingId}/start${error ? `?error=${error}` : ""}`;
+  return `/sitzungen/${meetingId}/start${error ? `?error=${error}` : ""}`;
 }
 
 function livePath(meetingId:string,query?:string) {
-  return `/sitzungen-neu/${meetingId}/live${query ? `?${query}` : ""}`;
+  return `/sitzungen/${meetingId}/live${query ? `?${query}` : ""}`;
 }
 
 export async function updateMeetingV3ParticipantAction(formData:FormData) {
   const actor=await requirePermission("meetings.write");
   const sql=getDb();
-  if (!sql) redirect("/sitzungen-neu?error=database");
+  if (!sql) redirect("/sitzungen?error=database");
 
   const meetingId=value(formData,"meetingId");
   const participantId=value(formData,"participantId");
@@ -73,7 +73,7 @@ export async function updateMeetingV3ParticipantAction(formData:FormData) {
   const note=value(formData,"note");
   const returnTo=value(formData,"returnTo")==="live" ? "live" : "start";
 
-  if (!meetingId || !participantId) redirect("/sitzungen-neu?error=missing");
+  if (!meetingId || !participantId) redirect("/sitzungen?error=missing");
 
   const rows=await sql`
     UPDATE meeting_v3_participants p
@@ -107,8 +107,8 @@ export async function updateMeetingV3ParticipantAction(formData:FormData) {
     attendance,votingEligible,note:note || null,
   });
 
-  revalidatePath(`/sitzungen-neu/${meetingId}/start`);
-  revalidatePath(`/sitzungen-neu/${meetingId}/live`);
+  revalidatePath(`/sitzungen/${meetingId}/start`);
+  revalidatePath(`/sitzungen/${meetingId}/live`);
 
   redirect(returnTo==="live" ? livePath(meetingId,"participant=1") : startPath(meetingId,"participant"));
 }
@@ -116,7 +116,7 @@ export async function updateMeetingV3ParticipantAction(formData:FormData) {
 export async function updateMeetingV3QuorumAction(formData:FormData) {
   const actor=await requirePermission("meetings.write");
   const sql=getDb();
-  if (!sql) redirect("/sitzungen-neu?error=database");
+  if (!sql) redirect("/sitzungen?error=database");
 
   const meetingId=value(formData,"meetingId");
   const confirmed=booleanChoice(value(formData,"quorumConfirmed"));
@@ -145,18 +145,18 @@ export async function updateMeetingV3QuorumAction(formData:FormData) {
     quorumConfirmed:confirmed,quorumBasis:basis || null,quorumNote:note || null,
   });
 
-  revalidatePath(`/sitzungen-neu/${meetingId}/start`);
-  revalidatePath(`/sitzungen-neu/${meetingId}/live`);
+  revalidatePath(`/sitzungen/${meetingId}/start`);
+  revalidatePath(`/sitzungen/${meetingId}/live`);
   redirect(returnTo==="live" ? livePath(meetingId,"quorum=1") : startPath(meetingId,"quorum"));
 }
 
 export async function startMeetingV3Action(formData:FormData) {
   const actor=await requirePermission("meetings.write");
   const sql=getDb();
-  if (!sql) redirect("/sitzungen-neu?error=database");
+  if (!sql) redirect("/sitzungen?error=database");
 
   const meetingId=value(formData,"meetingId");
-  if (!meetingId) redirect("/sitzungen-neu?error=missing");
+  if (!meetingId) redirect("/sitzungen?error=missing");
 
   const rows=await sql`
     SELECT
@@ -245,17 +245,17 @@ export async function startMeetingV3Action(formData:FormData) {
     presentCount:Number(meeting.present_count ?? 0),
   });
 
-  revalidatePath(`/sitzungen-neu/${meetingId}`);
-  revalidatePath(`/sitzungen-neu/${meetingId}/start`);
-  revalidatePath(`/sitzungen-neu/${meetingId}/live`);
-  revalidatePath("/sitzungen-neu");
+  revalidatePath(`/sitzungen/${meetingId}`);
+  revalidatePath(`/sitzungen/${meetingId}/start`);
+  revalidatePath(`/sitzungen/${meetingId}/live`);
+  revalidatePath("/sitzungen");
   redirect(livePath(meetingId,"started=1"));
 }
 
 export async function activateMeetingV3AgendaAction(formData:FormData) {
   const actor=await requirePermission("meetings.write");
   const sql=getDb();
-  if (!sql) redirect("/sitzungen-neu?error=database");
+  if (!sql) redirect("/sitzungen?error=database");
 
   const meetingId=value(formData,"meetingId");
   const agendaItemId=value(formData,"agendaItemId");
@@ -369,7 +369,7 @@ export async function saveMeetingV3NoteAction(
 export async function completeMeetingV3AgendaAction(formData:FormData) {
   const actor=await requirePermission("meetings.write");
   const sql=getDb();
-  if (!sql) redirect("/sitzungen-neu?error=database");
+  if (!sql) redirect("/sitzungen?error=database");
 
   const meetingId=value(formData,"meetingId");
   const agendaItemId=value(formData,"agendaItemId");
@@ -438,6 +438,6 @@ export async function completeMeetingV3AgendaAction(formData:FormData) {
   });
 
   revalidatePath(livePath(meetingId));
-  revalidatePath(`/sitzungen-neu/${meetingId}`);
+  revalidatePath(`/sitzungen/${meetingId}`);
   redirect(livePath(meetingId,rows[0].next_id ? "advanced=1" : "agenda_complete=1"));
 }

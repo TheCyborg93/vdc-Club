@@ -7,7 +7,7 @@ import {
   correctMeetingV3MinutesAgendaAction,
   correctMeetingV3MinutesFormalitiesAction,
   correctMeetingV3MinutesParticipantAction,
-} from "@/app/sitzungen-neu/minutes-correction-actions";
+} from "@/app/sitzungen/minutes-correction-actions";
 
 export const dynamic="force-dynamic";
 
@@ -91,11 +91,11 @@ export default async function MeetingV3MinutesCorrectionPage({
   if(!meeting) notFound();
 
   if(String(meeting.lifecycle_state)!=="minutes_draft" || String(meeting.minutes_status)!=="draft"){
-    redirect("/sitzungen-neu/"+id+"/minutes");
+    redirect("/sitzungen/"+id+"/minutes");
   }
 
   const canWrite=hasPermission(actor.roles,"meetings.write");
-  if(!canWrite) redirect("/sitzungen-neu/"+id+"/minutes");
+  if(!canWrite) redirect("/sitzungen/"+id+"/minutes");
 
   const rawSnapshot=typeof meeting.snapshot==="string"
     ? JSON.parse(String(meeting.snapshot))
@@ -113,7 +113,7 @@ export default async function MeetingV3MinutesCorrectionPage({
           <h1>{String(meeting.title)}</h1>
           <p>Aktuelle Revision {Number(meeting.current_minutes_revision)} · Jede gespeicherte Korrektur erzeugt eine neue Revision.</p>
         </div>
-        <Link href={"/sitzungen-neu/"+id+"/minutes"} className="ghost-button">Zur Protokollansicht</Link>
+        <Link href={"/sitzungen/"+id+"/minutes"} className="ghost-button">Zur Protokollansicht</Link>
       </section>
 
       {query.error && <p className="form-error">{errors[query.error] ?? "Die Korrektur konnte nicht gespeichert werden."}</p>}
