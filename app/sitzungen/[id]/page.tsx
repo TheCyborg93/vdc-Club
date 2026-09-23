@@ -16,12 +16,14 @@ import {
 import {
   addMeetingV3AgendaAction,
   addMeetingV3ParticipantAction,
+  cancelMeetingV3Action,
   carryForwardMeetingV3AgendaAction,
   deleteMeetingV3AgendaAction,
   markMeetingV3ReadyAction,
   moveMeetingV3AgendaAction,
   removeMeetingV3ParticipantAction,
   reopenMeetingV3PreparationAction,
+  restoreMeetingV3CancelledAction,
   updateMeetingV3AgendaAction,
   updateMeetingV3BasicsAction,
   updateMeetingV3InvitationAction,
@@ -29,6 +31,7 @@ import {
 } from "@/app/sitzungen/actions";
 import {
   addMeetingV3GuestAction,
+  removeMeetingV3AttachmentAction,
   removeMeetingV3GuestAction,
   uploadMeetingV3AttachmentAction,
 } from "@/app/sitzungen/support-actions";
@@ -54,6 +57,8 @@ const errors:Record<string,string>={
   participant_officer:"Sitzungsleitung oder Protokollführung kann nicht entfernt werden. Ändere zuerst die Verantwortlichen.",
   agenda_linked:"Dieser TOP hat bereits Anlagen und kann deshalb nicht gelöscht werden.",
   carryover:"Der vertagte TOP konnte nicht übernommen werden oder wurde bereits übernommen.",
+  cancel_reason:"Bitte einen Grund für die Absage angeben.",
+  attachment_remove:"Die Anlage konnte nicht entfernt werden.",
 };
 
 function formatDateTime(value:unknown){
@@ -84,7 +89,7 @@ export default async function MeetingV3DetailPage({
   searchParams,
 }:{
   params:Promise<{id:string}>;
-  searchParams:Promise<{error?:string;created?:string;saved?:string;invitation?:string;officers?:string;agenda?:string;participant?:string;carryover?:string;ready?:string;preparation?:string;guest?:string;guest_removed?:string;attachment?:string}>;
+  searchParams:Promise<{error?:string;created?:string;saved?:string;invitation?:string;officers?:string;agenda?:string;participant?:string;carryover?:string;ready?:string;preparation?:string;guest?:string;guest_removed?:string;attachment?:string;attachment_removed?:string;cancelled?:string;restored?:string}>;
 }){
   const actor=await requirePermission("meetings.read");
   const {id}=await params;
@@ -216,16 +221,33 @@ export default async function MeetingV3DetailPage({
         </div>
         <div className="meeting-v3-hero-state">
           <span className={`meeting-v3-state ${state}`}>{meetingV3StateLabels[state]}</span>
-          
+          {canWrite && ["preparation","ready"].includes(state) && (
+            <details className="meeting-v3-cancel">
+              <summary>Sitzung absagen</summary>
+              <form action={cancelMeetingV3Action} className="form-stack">
+                <input type="hidden" name="meetingId" value={id}/>
+                <label>Grund<textarea name="reason" rows={2} required placeholder="Warum wird die Sitzung abgesagt?"/></label>
+                <button className="ghost-button" type="submit">Absage bestätigen</button>
+              </form>
+            </details>
+          )}
+          {canWrite && state==="cancelled" && (
+            <form action={restoreMeetingV3CancelledAction}>
+              <input type="hidden" name="meetingId" value={id}/>
+              <button className="ghost-button" type="submit">Sitzung wieder öffnen</button>
+            </form>
+          )}
         </div>
       </section>
 
       {query.error && <p className="form-error">{errors[query.error] ?? "Die Aktion konnte nicht ausgeführt werden."}</p>}
-      {(query.created || query.saved || query.invitation || query.officers || query.agenda || query.participant || query.carryover || query.ready || query.preparation || query.guest || query.guest_removed || query.attachment) && (
+      {(query.created || query.saved || query.invitation || query.officers || query.agenda || query.participant || query.carryover || query.ready || query.preparation || query.guest || query.guest_removed || query.attachment || query.attachment_removed || query.cancelled || query.restored) && (
         <p className="form-success">
           {query.created ? "Sitzung wurde angelegt und automatisch vorbereitet." :
            query.ready ? "Die Sitzung ist jetzt bereit für den Startcheck." :
-           query.preparation ? "Die Sitzung ist wieder in Vorbereitung." :
+           query.preparation || query.restored ? "Die Sitzung ist wieder in Vorbereitung." :
+           query.cancelled ? "Die Sitzung wurde abgesagt." :
+           query.attachment_removed ? "Die Anlage wurde entfernt." :
            "Änderungen wurden gespeichert."}
         </p>
       )}
@@ -570,7 +592,7 @@ export default async function MeetingV3DetailPage({
         </div>
 
         {attachments.length===0 ? (
-          <p className="empty-state">Noch keine V3-Sitzungsanlagen hinterlegt.</p>
+          <p className="empty-state">Noch keine Sitzungsanlagen hinterlegt.</p>
         ) : (
           <div className="meeting-v3-attachment-list">
             {attachments.map((attachment)=>{
@@ -584,9 +606,19 @@ export default async function MeetingV3DetailPage({
                     <span>{linkedTop ? "TOP "+String(linkedTop.position)+" · "+String(linkedTop.title) : "Allgemeine Sitzungsanlage"}</span>
                     {attachment.original_filename && <small>{String(attachment.original_filename)}</small>}
                   </div>
-                  {attachment.document_id && (
-                    <Link href={"/api/documents/"+String(attachment.document_id)+"/file"} target="_blank" className="mini-button">Öffnen</Link>
-                  )}
+                  <div className="meeting-v3-attachment-actions">
+                    {attachment.document_id && (
+                      <Link href={"/api/documents/"+String(attachment.document_id)+"/file"} target="_blank" className="mini-button">Öffnen</Link>
+                    )}
+                    {editable && canWrite && canDocuments && (
+                      <form action={removeMeetingV3AttachmentAction}>
+                        <input type="hidden" name="meetingId" value={id}/>
+                        <input type="hidden" name="attachmentId" value={String(attachment.id)}/>
+                        <input type="hidden" name="returnTo" value={"/sitzungen/"+id}/>
+                        <button className="mini-button" type="submit">Entfernen</button>
+                      </form>
+                    )}
+                  </div>
                 </div>
               );
             })}
