@@ -170,8 +170,16 @@ export default async function MeetingV3Dashboard({
           <p className="empty-state">Noch keine aktive V3-Sitzung vorhanden.</p>
         ) : (
           <div className="meeting-v3-list">
-            {active.map((meeting)=>(
-              <Link href={`/sitzungen-neu/${String(meeting.id)}`} className="meeting-v3-card" key={String(meeting.id)}>
+            {active.map((meeting)=>{
+              const meetingId=String(meeting.id);
+              const lifecycle=String(meeting.lifecycle_state);
+              const href=lifecycle==="live"
+                ? `/sitzungen-neu/${meetingId}/live`
+                : lifecycle==="ready"
+                  ? `/sitzungen-neu/${meetingId}/start`
+                  : `/sitzungen-neu/${meetingId}`;
+              return (
+              <Link href={href} className="meeting-v3-card" key={meetingId}>
                 <div className="meeting-v3-card-main">
                   <span className="meeting-v3-type">
                     {String(meeting.meeting_type)==="custom"
@@ -190,7 +198,8 @@ export default async function MeetingV3Dashboard({
                   {meetingV3StateLabels[String(meeting.lifecycle_state) as MeetingV3State] ?? String(meeting.lifecycle_state)}
                 </span>
               </Link>
-            ))}
+              );
+            })}
           </div>
         )}
       </section>
