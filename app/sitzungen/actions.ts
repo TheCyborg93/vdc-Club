@@ -805,33 +805,6 @@ export async function updateMeetingStatusAction(formData: FormData) {
                FROM agenda_vote_exclusions ave
                WHERE ave.agenda_item_id=ai.id
              )
-             OR r.eligible_voters <> GREATEST(
-               0,
-               (
-                 SELECT count(*)::int
-                 FROM meeting_attendees ma
-                 WHERE ma.meeting_id=m.id
-                   AND ma.attendance='present'
-                   AND ma.voting_eligible=true
-               ) - (
-                 SELECT count(*)::int
-                 FROM agenda_vote_exclusions ave
-                 WHERE ave.agenda_item_id=ai.id
-               )
-             )
-             OR EXISTS(
-               SELECT 1
-               FROM agenda_vote_exclusions ave
-               LEFT JOIN meeting_attendees ma
-                 ON ma.meeting_id=m.id
-                AND ma.member_id=ave.member_id
-               WHERE ave.agenda_item_id=ai.id
-                 AND (
-                   ma.member_id IS NULL
-                   OR ma.attendance<>'present'
-                   OR ma.voting_eligible IS NOT TRUE
-                 )
-             )
              OR (r.vote_method='roll_call' AND NULLIF(trim(r.vote_details),'') IS NULL)
         )::int AS incomplete_votes,
         count(r.id) FILTER (
@@ -1483,33 +1456,6 @@ export async function submitMeetingMinutesAction(formData: FormData) {
              SELECT count(*)::int
              FROM agenda_vote_exclusions ave
              WHERE ave.agenda_item_id=ai.id
-           )
-           OR r.eligible_voters<>GREATEST(
-             0,
-             (
-               SELECT count(*)::int
-               FROM meeting_attendees ma2
-               WHERE ma2.meeting_id=m.id
-                 AND ma2.attendance='present'
-                 AND ma2.voting_eligible=true
-             ) - (
-               SELECT count(*)::int
-               FROM agenda_vote_exclusions ave2
-               WHERE ave2.agenda_item_id=ai.id
-             )
-           )
-           OR EXISTS(
-             SELECT 1
-             FROM agenda_vote_exclusions ave
-             LEFT JOIN meeting_attendees ma
-               ON ma.meeting_id=m.id
-              AND ma.member_id=ave.member_id
-             WHERE ave.agenda_item_id=ai.id
-               AND (
-                 ma.member_id IS NULL
-                 OR ma.attendance<>'present'
-                 OR ma.voting_eligible IS NOT TRUE
-               )
            )
            OR (r.vote_method='roll_call' AND NULLIF(trim(r.vote_details),'') IS NULL)
       )::int AS invalid_votes,
