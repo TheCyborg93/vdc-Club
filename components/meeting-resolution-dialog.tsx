@@ -36,6 +36,15 @@ export function MeetingResolutionDialog({
   const dialogRef=useRef<HTMLElement|null>(null);
 
   useEffect(()=>{
+    setVoteMethod("show_of_hands");
+    setOutcome("");
+    setYes(0);
+    setNo(0);
+    setAbstain(0);
+    setCreateTask(false);
+  },[agendaItemId,eligibleVoters]);
+
+  useEffect(()=>{
     if (!open) return;
 
     const previous=document.activeElement instanceof HTMLElement
@@ -87,12 +96,38 @@ export function MeetingResolutionDialog({
   },[open]);
 
   const total=yes+no+abstain;
-  const validTotal=total===eligibleVoters;
+  const remaining=eligibleVoters-total;
+  const hasEligibleVoters=eligibleVoters>0;
+  const validTotal=hasEligibleVoters && total===eligibleVoters;
+
+  function normalizeVote(raw:string) {
+    const parsed=Number(raw);
+    if (!Number.isFinite(parsed)) return 0;
+    return Math.min(eligibleVoters,Math.max(0,Math.trunc(parsed)));
+  }
+
+  function setAll(kind:"yes"|"no"|"abstain") {
+    setYes(kind==="yes" ? eligibleVoters : 0);
+    setNo(kind==="no" ? eligibleVoters : 0);
+    setAbstain(kind==="abstain" ? eligibleVoters : 0);
+  }
+
+  function resetVotes() {
+    setYes(0);
+    setNo(0);
+    setAbstain(0);
+  }
 
   return (
     <>
-      <button type="button" className="meeting-action danger" onClick={()=>setOpen(true)}>
-        Beschluss
+      <button
+        type="button"
+        className="meeting-action danger"
+        onClick={()=>setOpen(true)}
+        disabled={!hasEligibleVoters}
+        title={!hasEligibleVoters ? "Es ist aktuell niemand stimmberechtigt anwesend." : undefined}
+      >
+        Abstimmung
       </button>
 
       {open && (
@@ -108,7 +143,7 @@ export function MeetingResolutionDialog({
             <header>
               <div>
                 <span className="eyebrow">TOP {agendaPosition}</span>
-                <h2 id="meeting-resolution-title">Beschluss erfassen</h2>
+                <h2 id="meeting-resolution-title">Abstimmung & Beschluss</h2>
                 <p>{title}</p>
               </div>
               <button type="button" className="meeting-modal-close" onClick={()=>setOpen(false)} aria-label="Schließen">×</button>
@@ -167,26 +202,80 @@ export function MeetingResolutionDialog({
                   <div><span>Ausgeschlossen</span><strong>{excludedCount}</strong></div>
                   <div>
                     <span>Für diesen TOP</span>
-                    <input
-                      name="eligibleVoters"
-                      type="number"
-                      min="0"
-                      value={eligibleVoters}
-                      readOnly
-                      aria-readonly="true"
-                    />
+                    <strong>{eligibleVoters}</strong>
+                    <input name="eligibleVoters" type="hidden" value={eligibleVoters} />
                   </div>
                 </div>
 
-                <div className="vote-input-grid">
-                  <label>Ja<input name="votesYes" type="number" min="0" value={yes} onChange={(event)=>setYes(Math.max(0,Number(event.target.value)||0))} /></label>
-                  <label>Nein<input name="votesNo" type="number" min="0" value={no} onChange={(event)=>setNo(Math.max(0,Number(event.target.value)||0))} /></label>
-                  <label>Enthaltung<input name="votesAbstain" type="number" min="0" value={abstain} onChange={(event)=>setAbstain(Math.max(0,Number(event.target.value)||0))} /></label>
+                {!hasEligibleVoters && (
+                  <div className="meeting-vote-empty" role="alert">
+                    Keine stimmberechtigte Person ist für diesen TOP verfügbar. Prüfe Anwesenheit und Stimmrecht.
+                  </div>
+                )}
+
+                <div className="meeting-vote-quick" aria-label="Schnelle Abstimmung">
+                  <button type="button" className="mini-button" onClick={()=>setAll("yes")}>Alle Ja</button>
+                  <button type="button" className="mini-button" onClick={()=>setAll("no")}>Alle Nein</button>
+                  <button type="button" className="mini-button" onClick={()=>setAll("abstain")}>Alle Enthaltung</button>
+                  <button type="button" className="mini-button" onClick={resetVotes}>Zurücksetzen</button>
                 </div>
 
-                <div className={validTotal ? "meeting-vote-check is-valid" : "meeting-vote-check is-invalid"}>
+                <div className="vote-input-grid">
+                  <label>
+                    Ja
+                    <input
+                      name="votesYes"
+                      type="number"
+                      min="0"
+                      max={eligibleVoters}
+                      step="1"
+                      inputMode="numeric"
+                      value={yes}
+                      onChange={(event)=>setYes(normalizeVote(event.target.value))}
+                    />
+                  </label>
+                  <label>
+                    Nein
+                    <input
+                      name="votesNo"
+                      type="number"
+                      min="0"
+                      max={eligibleVoters}
+                      step="1"
+                      inputMode="numeric"
+                      value={no}
+                      onChange={(event)=>setNo(normalizeVote(event.target.value))}
+                    />
+                  </label>
+                  <label>
+                    Enthaltung
+                    <input
+                      name="votesAbstain"
+                      type="number"
+                      min="0"
+                      max={eligibleVoters}
+                      step="1"
+                      inputMode="numeric"
+                      value={abstain}
+                      onChange={(event)=>setAbstain(normalizeVote(event.target.value))}
+                    />
+                  </label>
+                </div>
+
+                <div
+                  className={validTotal ? "meeting-vote-check is-valid" : "meeting-vote-check is-invalid"}
+                  aria-live="polite"
+                >
                   <strong>{yes} + {no} + {abstain} = {total}</strong>
-                  <span>{validTotal ? "✓ passt zu "+eligibleVoters+" Stimmberechtigten" : "Stimmen müssen zusammen "+eligibleVoters+" ergeben"}</span>
+                  <span>
+                    {validTotal
+                      ? "✓ Alle "+eligibleVoters+" Stimmen sind erfasst"
+                      : remaining>0
+                        ? "Noch "+remaining+" Stimme"+(remaining===1 ? "" : "n")+" erfassen"
+                        : remaining<0
+                          ? Math.abs(remaining)+" Stimme"+(Math.abs(remaining)===1 ? "" : "n")+" zu viel"
+                          : "Stimmen vollständig erfassen"}
+                  </span>
                 </div>
               </section>
 
@@ -217,8 +306,12 @@ export function MeetingResolutionDialog({
 
               <footer>
                 <button type="button" className="ghost-button" onClick={()=>setOpen(false)}>Abbrechen</button>
-                <button className="primary-button" type="submit" disabled={!validTotal || !outcome}>
-                  Beschluss speichern
+                <button
+                  className="primary-button"
+                  type="submit"
+                  disabled={!validTotal || !outcome || !hasEligibleVoters}
+                >
+                  Abstimmung speichern
                 </button>
               </footer>
             </form>
