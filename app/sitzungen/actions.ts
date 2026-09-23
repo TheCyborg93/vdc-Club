@@ -666,14 +666,23 @@ export async function moveMeetingV3AgendaAction(formData: FormData) {
   if(!current[0]) redirect(`/sitzungen/${meetingId}?error=locked`);
 
   const currentPosition=Number(current[0].position);
-  const target=await sql`
-    SELECT id::text,position
-    FROM meeting_v3_agenda_items
-    WHERE meeting_id=${meetingId}::uuid
-      AND position ${direction==="up" ? sql`< ${currentPosition}` : sql`> ${currentPosition}`}
-    ORDER BY position ${direction==="up" ? sql`DESC` : sql`ASC`}
-    LIMIT 1
-  `;
+  const target=direction==="up"
+    ? await sql`
+        SELECT id::text,position
+        FROM meeting_v3_agenda_items
+        WHERE meeting_id=${meetingId}::uuid
+          AND position<${currentPosition}
+        ORDER BY position DESC
+        LIMIT 1
+      `
+    : await sql`
+        SELECT id::text,position
+        FROM meeting_v3_agenda_items
+        WHERE meeting_id=${meetingId}::uuid
+          AND position>${currentPosition}
+        ORDER BY position ASC
+        LIMIT 1
+      `;
   if(!target[0]) redirect(`/sitzungen/${meetingId}?agenda=1`);
 
   const targetId=String(target[0].id);
