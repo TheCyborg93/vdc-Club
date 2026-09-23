@@ -828,3 +828,57 @@ export async function restoreMeetingV3CancelledAction(formData: FormData) {
   revalidatePath("/sitzungen");
   redirect(`/sitzungen/${meetingId}?restored=1`);
 }
+
+
+export async function reorderMeetingV3AgendaAction(
+  meetingId:string,
+  orderedIds:string[],
+){
+  const actor=await requirePermission("meetings.write");
+  const sql=getDb();
+  if(!sql) return {ok:false,error:"database"};
+
+  if(!meetingId || !Array.isArray(orderedIds) || orderedIds.length<1){
+    return {ok:false,error:"invalid"};
+  }
+  const unique=[...new Set(orderedIds.filter((id)=>/^[0-9a-f-]{36}$/i.test(id)))];
+  if(unique.length!==orderedIds.length) return {ok:false,error:"invalid"};
+
+  const rows=await sql`
+    SELECT ai.id::text
+    FROM meeting_v3_agenda_items ai
+    JOIN meeting_v3_meetings m ON m.id=ai.meeting_id
+    WHERE ai.meeting_id=${meetingId}::uuid
+      AND m.lifecycle_state='preparation'
+    ORDER BY ai.position
+  `;
+  const existing=rows.map((row)=>String(row.id));
+  if(existing.length!==unique.length || existing.some((id)=>!unique.includes(id))){
+    return {ok:false,error:"changed"};
+  }
+
+  await sql`
+    UPDATE meeting_v3_agenda_items
+    SET position=position+10000,
+        updated_by=${actor.id}::uuid,
+        row_version=row_version+1
+    WHERE meeting_id=${meetingId}::uuid
+  `;
+
+  for(let index=0;index<unique.length;index+=1){
+    await sql`
+      UPDATE meeting_v3_agenda_items
+      SET position=${index+1},
+          updated_by=${actor.id}::uuid,
+          row_version=row_version+1
+      WHERE meeting_id=${meetingId}::uuid
+        AND id=${unique[index]}::uuid
+    `;
+  }
+
+  await writeMeetingV3Audit(meetingId,actor.id,"agenda.reordered_bulk","meeting",meetingId,{
+    orderedIds:unique,
+  });
+  revalidatePath(`/sitzungen/${meetingId}`);
+  return {ok:true};
+}
