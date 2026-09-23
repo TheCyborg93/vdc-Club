@@ -306,3 +306,57 @@ export async function uploadMeetingV3AttachmentAction(formData:FormData){
   revalidatePath("/dokumente");
   redirect(v3Path(meetingId,returnTo,"attachment=1"));
 }
+
+
+export async function removeMeetingV3AttachmentAction(formData:FormData){
+  const actor=await requirePermission("meetings.write");
+  if(!hasPermission(actor.roles,"documents.write")) redirect("/sitzungen?error=permission");
+  const sql=getDb();
+  if(!sql) redirect("/sitzungen?error=database");
+
+  const meetingId=value(formData,"meetingId");
+  const attachmentId=value(formData,"attachmentId");
+  const returnTo=value(formData,"returnTo");
+  if(!meetingId || !attachmentId) redirect(v3Path(meetingId,returnTo,"error=attachment_remove"));
+
+  const rows=await sql`
+    DELETE FROM meeting_v3_attachments a
+    USING meeting_v3_meetings m,documents d
+    WHERE a.id=${attachmentId}::uuid
+      AND a.meeting_id=m.id
+      AND m.id=${meetingId}::uuid
+      AND m.lifecycle_state='preparation'
+      AND d.id=a.document_id
+    RETURNING a.id::text,a.document_id::text,a.title
+  `;
+
+  if(!rows.length) redirect(v3Path(meetingId,returnTo,"error=locked"));
+
+  const documentId=String(rows[0].document_id ?? "");
+  if(documentId){
+    await sql`
+      UPDATE documents
+      SET
+        deleted_at=COALESCE(deleted_at,now()),
+        deleted_by=${actor.id}::uuid,
+        delete_reason='Sitzungsanlage aus Vorbereitung entfernt'
+      WHERE id=${documentId}::uuid
+        AND NOT EXISTS (
+          SELECT 1 FROM meeting_v3_attachments other
+          WHERE other.document_id=${documentId}::uuid
+        )
+    `;
+  }
+
+  await writeMeetingV3Audit(meetingId,actor.id,"attachment.removed","attachment",attachmentId,{
+    documentId:documentId || null,
+    title:String(rows[0].title),
+  });
+  await writeAudit(actor.id,"meeting_v3.attachment_removed","meeting_v3_attachment",attachmentId,{
+    meetingId,documentId:documentId || null,
+  });
+
+  revalidatePath(`/sitzungen/${meetingId}`);
+  revalidatePath("/dokumente");
+  redirect(v3Path(meetingId,returnTo,"attachment_removed=1"));
+}
