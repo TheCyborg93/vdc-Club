@@ -16,6 +16,7 @@ import {
 import {
   addMeetingV3AgendaAction,
   addMeetingV3ParticipantAction,
+  carryForwardMeetingV3AgendaAction,
   deleteMeetingV3AgendaAction,
   markMeetingV3ReadyAction,
   moveMeetingV3AgendaAction,
@@ -52,6 +53,7 @@ const errors:Record<string,string>={
   participant:"Der Teilnehmer konnte nicht hinzugefügt werden.",
   participant_officer:"Sitzungsleitung oder Protokollführung kann nicht entfernt werden. Ändere zuerst die Verantwortlichen.",
   agenda_linked:"Dieser TOP hat bereits Anlagen und kann deshalb nicht gelöscht werden.",
+  carryover:"Der vertagte TOP konnte nicht übernommen werden oder wurde bereits übernommen.",
 };
 
 function formatDateTime(value:unknown){
@@ -82,7 +84,7 @@ export default async function MeetingV3DetailPage({
   searchParams,
 }:{
   params:Promise<{id:string}>;
-  searchParams:Promise<{error?:string;created?:string;saved?:string;invitation?:string;officers?:string;agenda?:string;participant?:string;ready?:string;preparation?:string;guest?:string;guest_removed?:string;attachment?:string}>;
+  searchParams:Promise<{error?:string;created?:string;saved?:string;invitation?:string;officers?:string;agenda?:string;participant?:string;carryover?:string;ready?:string;preparation?:string;guest?:string;guest_removed?:string;attachment?:string}>;
 }){
   const actor=await requirePermission("meetings.read");
   const {id}=await params;
@@ -90,7 +92,7 @@ export default async function MeetingV3DetailPage({
   const sql=getDb();
   if(!sql) notFound();
 
-  const [rows,participants,agenda,guests,attachments,availableMembers]=await Promise.all([
+  const [rows,participants,agenda,guests,attachments,availableMembers,carryovers]=await Promise.all([
     sql`
       SELECT
         m.*,
@@ -152,6 +154,26 @@ export default async function MeetingV3DetailPage({
         )
       ORDER BY m.last_name,m.first_name
     `,
+    sql`
+      SELECT
+        ai.id::text,ai.position,ai.title,ai.description,ai.agenda_type,
+        source.id::text AS source_meeting_id,source.title AS source_meeting_title,
+        source.starts_at AS source_meeting_starts_at
+      FROM meeting_v3_agenda_items ai
+      JOIN meeting_v3_meetings source ON source.id=ai.meeting_id
+      JOIN meeting_v3_meetings target ON target.id=${id}::uuid
+      WHERE ai.status='deferred'
+        AND source.id<>target.id
+        AND source.starts_at<target.starts_at
+        AND NOT EXISTS (
+          SELECT 1
+          FROM meeting_v3_agenda_items current
+          WHERE current.meeting_id=target.id
+            AND current.carried_from_agenda_item_id=ai.id
+        )
+      ORDER BY source.starts_at DESC,ai.position
+      LIMIT 20
+    `,
   ]);
 
   const meeting=rows[0];
@@ -199,7 +221,7 @@ export default async function MeetingV3DetailPage({
       </section>
 
       {query.error && <p className="form-error">{errors[query.error] ?? "Die Aktion konnte nicht ausgeführt werden."}</p>}
-      {(query.created || query.saved || query.invitation || query.officers || query.agenda || query.participant || query.ready || query.preparation || query.guest || query.guest_removed || query.attachment) && (
+      {(query.created || query.saved || query.invitation || query.officers || query.agenda || query.participant || query.carryover || query.ready || query.preparation || query.guest || query.guest_removed || query.attachment) && (
         <p className="form-success">
           {query.created ? "Sitzung wurde angelegt und automatisch vorbereitet." :
            query.ready ? "Die Sitzung ist jetzt bereit für den Startcheck." :
@@ -499,6 +521,26 @@ export default async function MeetingV3DetailPage({
               </div>
             ))}
           </div>
+
+          {editable && canWrite && carryovers.length>0 && (
+            <details className="meeting-v3-add-top">
+              <summary>Vertagten TOP übernehmen</summary>
+              <div className="meeting-v3-carryover-list">
+                {carryovers.map((item)=>(
+                  <form action={carryForwardMeetingV3AgendaAction} className="meeting-v3-carryover-item" key={String(item.id)}>
+                    <input type="hidden" name="meetingId" value={id}/>
+                    <input type="hidden" name="sourceAgendaItemId" value={String(item.id)}/>
+                    <div>
+                      <strong>{String(item.title)}</strong>
+                      <span>{String(item.source_meeting_title)} · {formatDateTime(item.source_meeting_starts_at)}</span>
+                      {Boolean(item.description) && <small>{String(item.description)}</small>}
+                    </div>
+                    <button className="mini-button" type="submit">Übernehmen</button>
+                  </form>
+                ))}
+              </div>
+            </details>
+          )}
 
           {editable && canWrite && (
             <details className="meeting-v3-add-top">
