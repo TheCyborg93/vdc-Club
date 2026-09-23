@@ -700,3 +700,67 @@ export async function moveMeetingV3AgendaAction(formData: FormData) {
   revalidatePath(`/sitzungen/${meetingId}`);
   redirect(`/sitzungen/${meetingId}?agenda=1`);
 }
+
+
+export async function carryForwardMeetingV3AgendaAction(formData: FormData) {
+  const actor=await requirePermission("meetings.write");
+  const sql=getDb();
+  if(!sql) redirect("/sitzungen?error=database");
+
+  const meetingId=value(formData,"meetingId");
+  const sourceAgendaItemId=value(formData,"sourceAgendaItemId");
+  if(!meetingId || !sourceAgendaItemId) redirect(`/sitzungen/${meetingId}?error=agenda`);
+
+  const rows=await sql`
+    INSERT INTO meeting_v3_agenda_items (
+      meeting_id,position,title,agenda_type,description,estimated_minutes,
+      responsible_member_id,status,result_code,spontaneous,announced_with_invitation,
+      carried_from_agenda_item_id,created_by,updated_by
+    )
+    SELECT
+      target.id,
+      COALESCE((
+        SELECT MAX(current.position)
+        FROM meeting_v3_agenda_items current
+        WHERE current.meeting_id=target.id
+      ),0)+1,
+      source.title,
+      source.agenda_type,
+      source.description,
+      source.estimated_minutes,
+      source.responsible_member_id,
+      'open',
+      NULL,
+      false,
+      (target.invited_at IS NULL),
+      source.id,
+      ${actor.id}::uuid,
+      ${actor.id}::uuid
+    FROM meeting_v3_meetings target
+    JOIN meeting_v3_agenda_items source ON source.id=${sourceAgendaItemId}::uuid
+    JOIN meeting_v3_meetings source_meeting ON source_meeting.id=source.meeting_id
+    WHERE target.id=${meetingId}::uuid
+      AND target.lifecycle_state='preparation'
+      AND source.status='deferred'
+      AND source_meeting.id<>target.id
+      AND NOT EXISTS (
+        SELECT 1
+        FROM meeting_v3_agenda_items existing
+        WHERE existing.meeting_id=target.id
+          AND existing.carried_from_agenda_item_id=source.id
+      )
+    RETURNING id::text,position,title
+  `;
+
+  if(!rows.length) redirect(`/sitzungen/${meetingId}?error=carryover`);
+
+  const newId=String(rows[0].id);
+  await writeMeetingV3Audit(meetingId,actor.id,"agenda.carried_forward","agenda_item",newId,{
+    sourceAgendaItemId,
+    position:Number(rows[0].position),
+    title:String(rows[0].title),
+  });
+
+  revalidatePath(`/sitzungen/${meetingId}`);
+  redirect(`/sitzungen/${meetingId}?carryover=1`);
+}
