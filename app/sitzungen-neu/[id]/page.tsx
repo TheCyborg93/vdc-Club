@@ -343,6 +343,47 @@ export default async function MeetingV3DetailPage({
               </div>
             ))}
           </div>
+
+          <div className="meeting-v3-guest-section">
+            <div className="meeting-v3-subhead">
+              <div><span className="eyebrow">Gäste</span><strong>{guests.length} eingetragen</strong></div>
+            </div>
+
+            {guests.length>0 && (
+              <div className="meeting-v3-guest-list">
+                {guests.map((guest)=>(
+                  <div className="meeting-v3-guest" key={String(guest.id)}>
+                    <div>
+                      <strong>{String(guest.name)}</strong>
+                      <span>{guest.organization ? String(guest.organization) : "Gast"} · {String(guest.attendance)}</span>
+                    </div>
+                    {editable && canWrite && (
+                      <form action={removeMeetingV3GuestAction}>
+                        <input type="hidden" name="meetingId" value={id}/>
+                        <input type="hidden" name="guestId" value={String(guest.id)}/>
+                        <input type="hidden" name="returnTo" value={"/sitzungen-neu/"+id}/>
+                        <button className="mini-button" type="submit">Entfernen</button>
+                      </form>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {editable && canWrite && (
+              <details className="meeting-v3-add-guest">
+                <summary>Gast hinzufügen</summary>
+                <form action={addMeetingV3GuestAction} className="form-stack">
+                  <input type="hidden" name="meetingId" value={id}/>
+                  <input type="hidden" name="returnTo" value={"/sitzungen-neu/"+id}/>
+                  <label>Name<input name="name" required placeholder="Vor- und Nachname"/></label>
+                  <label>Organisation / Funktion<input name="organization" placeholder="Optional"/></label>
+                  <label>Notiz<input name="note" placeholder="Optional"/></label>
+                  <button className="ghost-button" type="submit">Gast hinzufügen</button>
+                </form>
+              </details>
+            )}
+          </div>
         </article>
 
         <article className="panel">
@@ -382,6 +423,57 @@ export default async function MeetingV3DetailPage({
             </details>
           )}
         </article>
+      </section>
+
+      <section className="panel meeting-v3-attachments-panel">
+        <div className="panel-head">
+          <div><span className="eyebrow">6 · Unterlagen</span><h2>Sitzungsanlagen</h2></div>
+          <span className="count-chip">{attachments.length}</span>
+        </div>
+
+        {attachments.length===0 ? (
+          <p className="empty-state">Noch keine V3-Sitzungsanlagen hinterlegt.</p>
+        ) : (
+          <div className="meeting-v3-attachment-list">
+            {attachments.map((attachment)=>{
+              const linkedTop=attachment.agenda_item_id
+                ? agenda.find((item)=>String(item.id)===String(attachment.agenda_item_id))
+                : null;
+              return (
+                <div className="meeting-v3-attachment" key={String(attachment.id)}>
+                  <div>
+                    <strong>{String(attachment.title)}</strong>
+                    <span>{linkedTop ? "TOP "+String(linkedTop.position)+" · "+String(linkedTop.title) : "Allgemeine Sitzungsanlage"}</span>
+                    {attachment.original_filename && <small>{String(attachment.original_filename)}</small>}
+                  </div>
+                  {attachment.document_id && (
+                    <Link href={"/api/documents/"+String(attachment.document_id)+"/file"} target="_blank" className="mini-button">Öffnen</Link>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {editable && canWrite && canDocuments && (
+          <details className="meeting-v3-upload-attachment">
+            <summary>Anlage hochladen</summary>
+            <form action={uploadMeetingV3AttachmentAction} className="form-stack" encType="multipart/form-data">
+              <input type="hidden" name="meetingId" value={id}/>
+              <input type="hidden" name="returnTo" value={"/sitzungen-neu/"+id}/>
+              <label>Titel<input name="title" placeholder="Optional – sonst Dateiname"/></label>
+              <label>Zuordnung
+                <select name="agendaItemId" defaultValue="">
+                  <option value="">Allgemeine Sitzungsanlage</option>
+                  {agenda.map((item)=><option key={String(item.id)} value={String(item.id)}>TOP {Number(item.position)} · {String(item.title)}</option>)}
+                </select>
+              </label>
+              <label>Datei<input name="file" type="file" required accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.jpg,.jpeg,.png,.webp"/></label>
+              <small className="muted-copy">Maximal 8 MB · die Datei wird im privaten Dokumentenspeicher abgelegt.</small>
+              <button className="ghost-button" type="submit">Anlage hochladen</button>
+            </form>
+          </details>
+        )}
       </section>
     </div>
   );
