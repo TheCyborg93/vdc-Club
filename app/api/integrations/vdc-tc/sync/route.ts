@@ -21,6 +21,25 @@ type PlayerPayload = {
   active?: boolean;
 };
 
+type OpponentTeamPayload = {
+  externalId: string;
+  name: string;
+  league?: string | null;
+  season?: string | null;
+  venue?: string | null;
+  active?: boolean;
+};
+
+type OpponentPlayerPayload = {
+  externalId: string;
+  name: string;
+  opponentTeamExternalId: string;
+  active?: boolean;
+  currentStats?: unknown;
+  historicalStats?: unknown[];
+  updatedAt?: string | null;
+};
+
 type MatchPayload = {
   externalId: string;
   title: string;
@@ -35,6 +54,8 @@ type SyncPayload = {
   source?: string;
   teams?: TeamPayload[];
   players?: PlayerPayload[];
+  opponentTeams?: OpponentTeamPayload[];
+  opponentPlayers?: OpponentPlayerPayload[];
   matches?: MatchPayload[];
 };
 
@@ -74,6 +95,8 @@ export async function POST(request: Request) {
 
   const teams = Array.isArray(payload.teams) ? payload.teams : [];
   const players = Array.isArray(payload.players) ? payload.players : [];
+  const opponentTeams = Array.isArray(payload.opponentTeams) ? payload.opponentTeams : [];
+  const opponentPlayers = Array.isArray(payload.opponentPlayers) ? payload.opponentPlayers : [];
   const matches = Array.isArray(payload.matches) ? payload.matches : [];
 
   try {
@@ -232,6 +255,106 @@ export async function POST(request: Request) {
       }
     }
 
+    for (const team of opponentTeams) {
+      if (!team.externalId || !team.name) continue;
+
+      const rows = await sql`
+        INSERT INTO tc_opponent_teams (
+          external_source, external_id, name, league, season, venue, is_active
+        )
+        VALUES (
+          'vdc_tc', ${team.externalId}, ${team.name}, ${team.league ?? null},
+          ${team.season ?? null}, ${team.venue ?? null}, ${team.active !== false}
+        )
+        ON CONFLICT (external_source, external_id)
+        DO UPDATE SET
+          name = EXCLUDED.name,
+          league = EXCLUDED.league,
+          season = EXCLUDED.season,
+          venue = EXCLUDED.venue,
+          is_active = EXCLUDED.is_active,
+          updated_at = now()
+        RETURNING id::text
+      `;
+
+      const localId = rows[0]?.id ? String(rows[0].id) : "";
+      if (localId) {
+        await sql`
+          INSERT INTO integration_entity_links (
+            integration_key, entity_type, external_id, local_id, metadata, last_synced_at
+          )
+          VALUES (
+            'vdc_tc', 'opponent_team', ${team.externalId}, ${localId}::uuid,
+            jsonb_build_object('season', ${team.season ?? null}::text), now()
+          )
+          ON CONFLICT (integration_key, entity_type, external_id)
+          DO UPDATE SET
+            local_id = EXCLUDED.local_id,
+            metadata = EXCLUDED.metadata,
+            last_synced_at = now()
+        `;
+      }
+    }
+
+    for (const player of opponentPlayers) {
+      if (!player.externalId || !player.name || !player.opponentTeamExternalId) continue;
+
+      const teamRows = await sql`
+        SELECT id::text
+        FROM tc_opponent_teams
+        WHERE external_source = 'vdc_tc'
+          AND external_id = ${player.opponentTeamExternalId}
+        LIMIT 1
+      `;
+      const opponentTeamId = teamRows[0]?.id ? String(teamRows[0].id) : "";
+      if (!opponentTeamId) continue;
+
+      const currentStats = JSON.stringify(player.currentStats ?? null);
+      const historicalStats = JSON.stringify(
+        Array.isArray(player.historicalStats) ? player.historicalStats : [],
+      );
+
+      const rows = await sql`
+        INSERT INTO tc_opponent_players (
+          opponent_team_id, external_source, external_id, name, is_active,
+          current_stats, historical_stats, source_updated_at
+        )
+        VALUES (
+          ${opponentTeamId}::uuid, 'vdc_tc', ${player.externalId}, ${player.name},
+          ${player.active !== false}, ${currentStats}::jsonb, ${historicalStats}::jsonb,
+          ${player.updatedAt ?? null}::timestamptz
+        )
+        ON CONFLICT (external_source, external_id)
+        DO UPDATE SET
+          opponent_team_id = EXCLUDED.opponent_team_id,
+          name = EXCLUDED.name,
+          is_active = EXCLUDED.is_active,
+          current_stats = EXCLUDED.current_stats,
+          historical_stats = EXCLUDED.historical_stats,
+          source_updated_at = EXCLUDED.source_updated_at,
+          updated_at = now()
+        RETURNING id::text
+      `;
+
+      const localId = rows[0]?.id ? String(rows[0].id) : "";
+      if (localId) {
+        await sql`
+          INSERT INTO integration_entity_links (
+            integration_key, entity_type, external_id, local_id, metadata, last_synced_at
+          )
+          VALUES (
+            'vdc_tc', 'opponent_player', ${player.externalId}, ${localId}::uuid,
+            jsonb_build_object('opponent_team_external_id', ${player.opponentTeamExternalId}::text), now()
+          )
+          ON CONFLICT (integration_key, entity_type, external_id)
+          DO UPDATE SET
+            local_id = EXCLUDED.local_id,
+            metadata = EXCLUDED.metadata,
+            last_synced_at = now()
+        `;
+      }
+    }
+
     for (const match of matches) {
       if (!match.externalId || !match.title || !match.startsAt || !match.teamExternalId) continue;
       const teamRows = await sql`
@@ -295,7 +418,13 @@ export async function POST(request: Request) {
       INSERT INTO integration_sync_runs (integration_key,direction,status,summary)
       VALUES (
         'vdc_tc','inbound','success',
-        jsonb_build_object('teams',${teams.length}::int,'players',${players.length}::int,'matches',${matches.length}::int)
+        jsonb_build_object(
+          'teams',${teams.length}::int,
+          'players',${players.length}::int,
+          'opponentTeams',${opponentTeams.length}::int,
+          'opponentPlayers',${opponentPlayers.length}::int,
+          'matches',${matches.length}::int
+        )
       )
     `;
 
@@ -303,6 +432,8 @@ export async function POST(request: Request) {
       ok: true,
       teams: teams.length,
       players: players.length,
+      opponentTeams: opponentTeams.length,
+      opponentPlayers: opponentPlayers.length,
       matches: matches.length,
     });
   } catch (error) {
