@@ -170,11 +170,11 @@ export default async function MeetingV3MinutesPage({
           <div><span>Beschlussfähig</span><strong>{meetingSnapshot.quorumConfirmed===true ? "Ja" : meetingSnapshot.quorumConfirmed===false ? "Nein" : "Nicht dokumentiert"}</strong></div>
         </section>
 
-        {(meetingSnapshot.quorumBasis || meetingSnapshot.quorumNote) && (
+        {(Boolean(meetingSnapshot.quorumBasis) || Boolean(meetingSnapshot.quorumNote)) && (
           <section className="meeting-v3-minutes-note">
             <strong>Beschlussfähigkeit</strong>
-            {meetingSnapshot.quorumBasis && <p>Grundlage: {textValue(meetingSnapshot.quorumBasis)}</p>}
-            {meetingSnapshot.quorumNote && <p>{textValue(meetingSnapshot.quorumNote)}</p>}
+            {Boolean(meetingSnapshot.quorumBasis) && <p>Grundlage: {textValue(meetingSnapshot.quorumBasis)}</p>}
+            {Boolean(meetingSnapshot.quorumNote) && <p>{textValue(meetingSnapshot.quorumNote)}</p>}
           </section>
         )}
 
@@ -213,8 +213,8 @@ export default async function MeetingV3MinutesPage({
                     </div>
                   </header>
 
-                  {item.description && <p className="meeting-v3-minutes-description">{textValue(item.description)}</p>}
-                  {item.note && <div className="meeting-v3-minutes-top-note">{textValue(item.note)}</div>}
+                  {Boolean(item.description) && <p className="meeting-v3-minutes-description">{textValue(item.description)}</p>}
+                  {Boolean(item.note) && <div className="meeting-v3-minutes-top-note">{textValue(item.note)}</div>}
                   {item.spontaneous===true && (
                     <div className="meeting-v3-minutes-spontaneous">Spontan ergänzt · {textValue(item.spontaneousReason)}</div>
                   )}
