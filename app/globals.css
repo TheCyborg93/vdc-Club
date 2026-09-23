@@ -900,3 +900,37 @@ body.meeting-focus-mode .meeting-control-hero{position:sticky;top:0;z-index:18;b
   .meeting-resolution-modal-form{padding:13px 11px calc(13px + env(safe-area-inset-bottom))}
   .meeting-resolution-modal>header{padding:13px 11px}
 }
+
+
+/* Meeting voting reliability */
+.meeting-vote-quick{
+  display:flex;
+  flex-wrap:wrap;
+  gap:6px;
+  align-items:center;
+}
+.meeting-vote-quick .mini-button{
+  min-height:32px;
+}
+.meeting-vote-empty{
+  padding:9px 10px;
+  border:1px solid rgba(255,138,91,.2);
+  border-radius:9px;
+  background:rgba(255,138,91,.06);
+  color:#ffb08f;
+  font-size:clamp(8px,.52vw,10px);
+  line-height:1.45;
+}
+.meeting-action:disabled{
+  cursor:not-allowed;
+  opacity:.38;
+}
+@media(max-width:560px){
+  .meeting-vote-quick{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+  }
+  .meeting-vote-quick .mini-button{
+    width:100%;
+  }
+}
