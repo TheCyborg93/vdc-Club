@@ -21,6 +21,11 @@ import {
   updateMeetingV3InvitationAction,
   updateMeetingV3OfficersAction,
 } from "@/app/sitzungen-neu/actions";
+import {
+  addMeetingV3GuestAction,
+  removeMeetingV3GuestAction,
+  uploadMeetingV3AttachmentAction,
+} from "@/app/sitzungen-neu/support-actions";
 
 export const dynamic="force-dynamic";
 
@@ -32,6 +37,13 @@ const errors:Record<string,string>={
   agenda:"Der TOP konnte nicht angelegt werden.",
   locked:"Dieser Bereich ist in der aktuellen Phase gesperrt.",
   not_ready:"Die Sitzung erfüllt noch nicht alle Voraussetzungen für „Bereit“.",
+  guest:"Bitte mindestens einen Namen für den Gast angeben.",
+  attachment:"Bitte eine Datei auswählen.",
+  attachment_size:"Die Anlage ist zu groß. Maximal 8 MB.",
+  attachment_type:"Dieser Dateityp ist nicht erlaubt.",
+  attachment_upload:"Die Anlage konnte nicht hochgeladen werden.",
+  storage:"Der Dokumentenspeicher ist nicht konfiguriert.",
+  permission:"Für Anlagen fehlt die Dokumentberechtigung.",
 };
 
 function formatDateTime(value:unknown){
@@ -62,7 +74,7 @@ export default async function MeetingV3DetailPage({
   searchParams,
 }:{
   params:Promise<{id:string}>;
-  searchParams:Promise<{error?:string;created?:string;saved?:string;invitation?:string;officers?:string;agenda?:string;ready?:string;preparation?:string}>;
+  searchParams:Promise<{error?:string;created?:string;saved?:string;invitation?:string;officers?:string;agenda?:string;ready?:string;preparation?:string;guest?:string;guest_removed?:string;attachment?:string}>;
 }){
   const actor=await requirePermission("meetings.read");
   const {id}=await params;
@@ -70,7 +82,7 @@ export default async function MeetingV3DetailPage({
   const sql=getDb();
   if(!sql) notFound();
 
-  const [rows,participants,agenda]=await Promise.all([
+  const [rows,participants,agenda,guests,attachments]=await Promise.all([
     sql`
       SELECT
         m.*,
@@ -105,6 +117,21 @@ export default async function MeetingV3DetailPage({
       WHERE ai.meeting_id=${id}::uuid
       ORDER BY ai.position
     `,
+    sql`
+      SELECT id::text,name,organization,attendance,note
+      FROM meeting_v3_guests
+      WHERE meeting_id=${id}::uuid
+      ORDER BY name
+    `,
+    sql`
+      SELECT
+        a.id::text,a.title,a.attachment_kind,a.agenda_item_id::text,
+        a.document_id::text,d.original_filename,d.file_size_bytes
+      FROM meeting_v3_attachments a
+      LEFT JOIN documents d ON d.id=a.document_id
+      WHERE a.meeting_id=${id}::uuid
+      ORDER BY a.created_at
+    `,
   ]);
 
   const meeting=rows[0];
@@ -112,6 +139,7 @@ export default async function MeetingV3DetailPage({
 
   const state=String(meeting.lifecycle_state) as MeetingV3State;
   const canWrite=hasPermission(actor.roles,"meetings.write");
+  const canDocuments=hasPermission(actor.roles,"documents.write");
   const editable=state==="preparation";
 
   const readiness=getMeetingV3Readiness({
@@ -151,7 +179,7 @@ export default async function MeetingV3DetailPage({
       </section>
 
       {query.error && <p className="form-error">{errors[query.error] ?? "Die Aktion konnte nicht ausgeführt werden."}</p>}
-      {(query.created || query.saved || query.invitation || query.officers || query.agenda || query.ready || query.preparation) && (
+      {(query.created || query.saved || query.invitation || query.officers || query.agenda || query.ready || query.preparation || query.guest || query.guest_removed || query.attachment) && (
         <p className="form-success">
           {query.created ? "Sitzung wurde angelegt und automatisch vorbereitet." :
            query.ready ? "Die Sitzung ist jetzt bereit für den Startcheck." :
