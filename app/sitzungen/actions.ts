@@ -764,3 +764,67 @@ export async function carryForwardMeetingV3AgendaAction(formData: FormData) {
   revalidatePath(`/sitzungen/${meetingId}`);
   redirect(`/sitzungen/${meetingId}?carryover=1`);
 }
+
+
+export async function cancelMeetingV3Action(formData: FormData) {
+  const actor=await requirePermission("meetings.write");
+  const sql=getDb();
+  if(!sql) redirect("/sitzungen?error=database");
+
+  const meetingId=value(formData,"meetingId");
+  const reason=value(formData,"reason");
+  if(!meetingId || !reason) redirect(`/sitzungen/${meetingId}?error=cancel_reason`);
+
+  const rows=await sql`
+    UPDATE meeting_v3_meetings
+    SET
+      lifecycle_state='cancelled',
+      row_version=row_version+1,
+      updated_by=${actor.id}::uuid
+    WHERE id=${meetingId}::uuid
+      AND lifecycle_state IN ('preparation','ready')
+    RETURNING id::text,title
+  `;
+
+  if(!rows.length) redirect(`/sitzungen/${meetingId}?error=locked`);
+
+  await writeMeetingV3Audit(meetingId,actor.id,"meeting.cancelled","meeting",meetingId,{
+    title:String(rows[0].title),
+  },reason);
+  await writeAudit(actor.id,"meeting_v3.cancelled","meeting_v3",meetingId,{
+    title:String(rows[0].title),reason,
+  });
+
+  revalidatePath(`/sitzungen/${meetingId}`);
+  revalidatePath("/sitzungen");
+  redirect(`/sitzungen/${meetingId}?cancelled=1`);
+}
+
+export async function restoreMeetingV3CancelledAction(formData: FormData) {
+  const actor=await requirePermission("meetings.write");
+  const sql=getDb();
+  if(!sql) redirect("/sitzungen?error=database");
+
+  const meetingId=value(formData,"meetingId");
+  if(!meetingId) redirect("/sitzungen?error=missing");
+
+  const rows=await sql`
+    UPDATE meeting_v3_meetings
+    SET
+      lifecycle_state='preparation',
+      row_version=row_version+1,
+      updated_by=${actor.id}::uuid
+    WHERE id=${meetingId}::uuid
+      AND lifecycle_state='cancelled'
+    RETURNING id::text,title
+  `;
+
+  if(!rows.length) redirect(`/sitzungen/${meetingId}?error=locked`);
+
+  await writeMeetingV3Audit(meetingId,actor.id,"meeting.cancelled_restored","meeting",meetingId,{
+    title:String(rows[0].title),
+  });
+  revalidatePath(`/sitzungen/${meetingId}`);
+  revalidatePath("/sitzungen");
+  redirect(`/sitzungen/${meetingId}?restored=1`);
+}
