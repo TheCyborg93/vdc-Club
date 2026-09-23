@@ -1279,3 +1279,88 @@ body.meeting-focus-mode .meeting-control-hero{position:sticky;top:0;z-index:18;b
     padding:11px;
   }
 }
+
+
+/* Meeting route states */
+.meeting-route-state{
+  width:min(100%,780px);
+  margin:0 auto;
+  padding-top:28px;
+}
+.meeting-route-state-card{
+  display:grid;
+  gap:10px;
+  padding:22px;
+  border-radius:17px;
+  background:
+    linear-gradient(135deg,rgba(68,224,176,.045),rgba(255,255,255,.008)),
+    var(--panel);
+}
+.meeting-route-state-card h1{
+  margin:2px 0 0;
+  font-size:clamp(22px,1.55vw,30px);
+}
+.meeting-route-state-card p{
+  margin:0!important;
+  max-width:620px;
+  color:var(--muted);
+  line-height:1.55;
+}
+.meeting-route-state-card>small{
+  width:max-content;
+  max-width:100%;
+  padding:5px 7px;
+  border:1px solid var(--line);
+  border-radius:7px;
+  color:var(--muted);
+  overflow-wrap:anywhere;
+}
+.meeting-route-state-actions{
+  display:flex;
+  gap:7px;
+  flex-wrap:wrap;
+  margin-top:4px;
+}
+.meeting-route-loading-bars{
+  display:grid;
+  gap:7px;
+  margin-top:5px;
+}
+.meeting-route-loading-bars i{
+  display:block;
+  height:10px;
+  border-radius:999px;
+  background:linear-gradient(
+    90deg,
+    rgba(255,255,255,.025),
+    rgba(68,224,176,.14),
+    rgba(255,255,255,.025)
+  );
+  background-size:200% 100%;
+  animation:meeting-loading-shimmer 1.35s linear infinite;
+}
+.meeting-route-loading-bars i:nth-child(1){width:100%}
+.meeting-route-loading-bars i:nth-child(2){width:78%}
+.meeting-route-loading-bars i:nth-child(3){width:58%}
+@keyframes meeting-loading-shimmer{
+  from{background-position:200% 0}
+  to{background-position:-200% 0}
+}
+@media(prefers-reduced-motion:reduce){
+  .meeting-route-loading-bars i{animation:none}
+}
+@media(max-width:560px){
+  .meeting-route-state{
+    padding-top:8px;
+  }
+  .meeting-route-state-card{
+    padding:15px;
+  }
+  .meeting-route-state-actions{
+    display:grid;
+    grid-template-columns:1fr;
+  }
+  .meeting-route-state-actions>*{
+    width:100%;
+  }
+}
