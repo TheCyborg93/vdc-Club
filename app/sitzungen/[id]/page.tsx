@@ -410,11 +410,6 @@ export default async function MeetingDetailPage({
   const missingDecisionVoteCount=agenda.filter(
     (row)=>row.agenda_type==="decision" && row.status==="done" && !row.resolution_id,
   ).length;
-  const presentVotingIds=new Set(
-    attendees
-      .filter((row)=>row.attendance==="present" && row.voting_eligible===true)
-      .map((row)=>String(row.member_id)),
-  );
   const incompleteVoteCount=agenda.filter((row)=>{
     if (!row.resolution_id) return false;
     const eligible=row.eligible_voters==null ? null : Number(row.eligible_voters);
@@ -422,17 +417,11 @@ export default async function MeetingDetailPage({
     const itemExclusions=exclusions.filter(
       (entry)=>String(entry.agenda_item_id)===String(row.id),
     );
-    const invalidExclusion=itemExclusions.some(
-      (entry)=>!presentVotingIds.has(String(entry.member_id)),
-    );
-    const expectedEligible=Math.max(0,presentVoterCount-itemExclusions.length);
     return !row.vote_method ||
       !row.decision_outcome ||
       eligible==null ||
       eligible!==total ||
-      eligible!==expectedEligible ||
       Number(row.excluded_voters ?? 0)!==itemExclusions.length ||
-      invalidExclusion ||
       (row.vote_method==="roll_call" && !String(row.vote_details ?? "").trim());
   }).length;
   const spontaneousBasisMissing=agenda.filter(
