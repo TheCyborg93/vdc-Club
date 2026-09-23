@@ -1345,25 +1345,82 @@ export async function updateMeetingOfficersAction(formData: FormData) {
   const meetingId=value(formData,"meetingId");
   const chairMemberId=value(formData,"chairMemberId");
   const minuteTakerMemberId=value(formData,"minuteTakerMemberId");
+  if (!meetingId || !chairMemberId || !minuteTakerMemberId) {
+    redirect(`/sitzungen/${meetingId}?error=officers_missing`);
+  }
+
+  const requiredOfficerCount=chairMemberId===minuteTakerMemberId ? 1 : 2;
+  const validation=await sql`
+    SELECT
+      m.status,
+      (
+        SELECT count(DISTINCT member.id)::int
+        FROM members member
+        WHERE member.id IN (${chairMemberId}::uuid,${minuteTakerMemberId}::uuid)
+          AND member.status='active'
+      ) AS active_officers,
+      (
+        SELECT count(DISTINCT ma.member_id)::int
+        FROM meeting_attendees ma
+        WHERE ma.meeting_id=m.id
+          AND ma.member_id IN (${chairMemberId}::uuid,${minuteTakerMemberId}::uuid)
+          AND ma.attendance='present'
+      ) AS present_officers
+    FROM meetings m
+    WHERE m.id=${meetingId}::uuid
+      AND m.deleted_at IS NULL
+      AND m.status IN ('planned','running')
+      AND m.minutes_status='draft'
+    LIMIT 1
+  `;
+
+  const current=validation[0];
+  if (!current) redirect(`/sitzungen/${meetingId}?error=meeting_locked`);
+  if (Number(current.active_officers ?? 0)<requiredOfficerCount) {
+    redirect(`/sitzungen/${meetingId}?error=officers_invalid`);
+  }
+  if (String(current.status)==="running" && Number(current.present_officers ?? 0)<requiredOfficerCount) {
+    redirect(`/sitzungen/${meetingId}?error=officers_change_presence`);
+  }
 
   const rows=await sql`
-    UPDATE meetings
-    SET
-      chair_member_id=${chairMemberId || null}::uuid,
-      minute_taker_member_id=${minuteTakerMemberId || null}::uuid,
-      updated_at=now()
-    WHERE id=${meetingId}::uuid
-      AND deleted_at IS NULL
-      AND status='planned'
-      AND minutes_status='draft'
-    RETURNING id::text
+    WITH meeting_updated AS (
+      UPDATE meetings
+      SET
+        chair_member_id=${chairMemberId}::uuid,
+        minute_taker_member_id=${minuteTakerMemberId}::uuid,
+        updated_at=now()
+      WHERE id=${meetingId}::uuid
+        AND deleted_at IS NULL
+        AND status=${String(current.status)}
+        AND status IN ('planned','running')
+        AND minutes_status='draft'
+      RETURNING id,status
+    ),
+    officers(member_id) AS (
+      VALUES (${chairMemberId}::uuid),(${minuteTakerMemberId}::uuid)
+    ),
+    invited AS (
+      INSERT INTO meeting_attendees (
+        meeting_id,member_id,attendance,voting_eligible
+      )
+      SELECT mu.id,o.member_id,'invited',true
+      FROM meeting_updated mu
+      CROSS JOIN officers o
+      WHERE mu.status='planned'
+      ON CONFLICT (meeting_id,member_id) DO NOTHING
+      RETURNING member_id
+    )
+    SELECT id::text,status FROM meeting_updated
   `;
 
   if (!rows.length) redirect(`/sitzungen/${meetingId}?error=meeting_locked`);
 
   await writeAudit(actor.id,"meeting.officers_updated","meeting",meetingId,{
-    chairMemberId:chairMemberId || null,
-    minuteTakerMemberId:minuteTakerMemberId || null,
+    chairMemberId,
+    minuteTakerMemberId,
+    duringMeeting:String(rows[0].status)==="running",
+    autoInvited:String(rows[0].status)==="planned",
   });
 
   revalidatePath(`/sitzungen/${meetingId}`);
