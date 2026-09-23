@@ -189,10 +189,19 @@ export default async function MeetingV3DetailPage({
         )}
 
         {canWrite && state==="ready" && (
-          <form action={reopenMeetingV3PreparationAction}>
-            <input type="hidden" name="meetingId" value={id}/>
-            <button className="ghost-button" type="submit">Vorbereitung wieder öffnen</button>
-          </form>
+          <div className="meeting-v3-readiness-actions">
+            <Link href={`/sitzungen-neu/${id}/start`} className="primary-button">Startcheck öffnen</Link>
+            <form action={reopenMeetingV3PreparationAction}>
+              <input type="hidden" name="meetingId" value={id}/>
+              <button className="ghost-button" type="submit">Vorbereitung wieder öffnen</button>
+            </form>
+          </div>
+        )}
+
+        {state==="live" && (
+          <div className="meeting-v3-readiness-actions">
+            <Link href={`/sitzungen-neu/${id}/live`} className="primary-button">Live-Sitzung öffnen</Link>
+          </div>
         )}
       </section>
 
