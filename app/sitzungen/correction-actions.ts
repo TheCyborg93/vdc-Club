@@ -791,7 +791,7 @@ export async function addResolutionCorrectionAction(formData:FormData) {
   if (!meetingId || !agendaItemId || !reason || !title || !decisionText || !outcome) {
     redirect(`/sitzungen/${meetingId}/korrektur?error=missing`);
   }
-  if ([yes,no,abstain].some((number)=>!Number.isFinite(number) || number<0)) {
+  if ([yes,no,abstain].some((number)=>!Number.isFinite(number) || !Number.isInteger(number) || number<0)) {
     redirect(`/sitzungen/${meetingId}/korrektur?error=votes`);
   }
   if (voteMethod==="roll_call" && !voteDetails) {
@@ -816,7 +816,20 @@ export async function addResolutionCorrectionAction(formData:FormData) {
         SELECT count(*)::int
         FROM agenda_vote_exclusions ave
         WHERE ave.agenda_item_id=ai.id
-      ) AS excluded_voters
+      ) AS excluded_voters,
+      (
+        SELECT count(*)::int
+        FROM agenda_vote_exclusions ave
+        LEFT JOIN meeting_attendees ma
+          ON ma.meeting_id=ai.meeting_id
+         AND ma.member_id=ave.member_id
+        WHERE ave.agenda_item_id=ai.id
+          AND (
+            ma.member_id IS NULL
+            OR ma.attendance<>'present'
+            OR ma.voting_eligible IS NOT TRUE
+          )
+      ) AS invalid_exclusions
     FROM agenda_items ai
     WHERE ai.id=${agendaItemId}::uuid
       AND ai.meeting_id=${meetingId}::uuid
@@ -825,6 +838,9 @@ export async function addResolutionCorrectionAction(formData:FormData) {
   if (!agendaRows.length) redirect(`/sitzungen/${meetingId}/korrektur?error=missing`);
 
   const excluded=Number(agendaRows[0].excluded_voters ?? 0);
+  if (Number(agendaRows[0].invalid_exclusions ?? 0)>0) {
+    redirect(`/sitzungen/${meetingId}/korrektur?error=votes`);
+  }
   const eligible=Math.max(0,Number(agendaRows[0].present_voting_count ?? 0)-excluded);
   if (yes+no+abstain!==eligible) {
     redirect(`/sitzungen/${meetingId}/korrektur?error=votes`);
@@ -864,7 +880,7 @@ export async function addResolutionCorrectionAction(formData:FormData) {
 
   await sql`
     UPDATE agenda_items
-    SET agenda_type='decision',status='done',result_code='completed',
+    SET agenda_type='decision',status='done',result_code='resolution',
         completed_at=COALESCE(completed_at,now()),updated_at=now()
     WHERE id=${agendaItemId}::uuid
   `;
@@ -963,7 +979,7 @@ export async function correctResolutionAction(formData:FormData) {
   if (!meetingId || !resolutionId || !reason || !title || !decisionText || !outcome) {
     redirect(`/sitzungen/${meetingId}/korrektur?error=missing`);
   }
-  if ([yes,no,abstain].some((number)=>!Number.isFinite(number) || number<0)) {
+  if ([yes,no,abstain].some((number)=>!Number.isFinite(number) || !Number.isInteger(number) || number<0)) {
     redirect(`/sitzungen/${meetingId}/korrektur?error=votes`);
   }
   if (voteMethod==="roll_call" && !voteDetails) {
@@ -999,9 +1015,25 @@ export async function correctResolutionAction(formData:FormData) {
         SELECT count(*)::int
         FROM agenda_vote_exclusions ave
         WHERE ave.agenda_item_id=${String(before.agenda_item_id)}::uuid
-      ) AS excluded_voters
+      ) AS excluded_voters,
+      (
+        SELECT count(*)::int
+        FROM agenda_vote_exclusions ave
+        LEFT JOIN meeting_attendees ma
+          ON ma.meeting_id=${meetingId}::uuid
+         AND ma.member_id=ave.member_id
+        WHERE ave.agenda_item_id=${String(before.agenda_item_id)}::uuid
+          AND (
+            ma.member_id IS NULL
+            OR ma.attendance<>'present'
+            OR ma.voting_eligible IS NOT TRUE
+          )
+      ) AS invalid_exclusions
   `;
   const excluded=Number(voterRows[0]?.excluded_voters ?? 0);
+  if (Number(voterRows[0]?.invalid_exclusions ?? 0)>0) {
+    redirect(`/sitzungen/${meetingId}/korrektur?error=votes`);
+  }
   const eligible=Math.max(0,Number(voterRows[0]?.present_voting_count ?? 0)-excluded);
   if (yes+no+abstain!==eligible) {
     redirect(`/sitzungen/${meetingId}/korrektur?error=votes`);
