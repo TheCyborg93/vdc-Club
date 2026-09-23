@@ -2101,3 +2101,113 @@ export async function reorderAgendaItemsAction(
   revalidatePath(`/sitzungen/${meetingId}`);
   return {ok:true};
 }
+
+
+export async function cloneMeetingAsTemplateAction(formData:FormData) {
+  const actor=await requirePermission("meetings.write");
+  const sql=getDb();
+  if(!sql) redirect("/sitzungen?error=database");
+
+  const sourceMeetingId=value(formData,"sourceMeetingId");
+  const title=value(formData,"title");
+  const startsAt=value(formData,"startsAt");
+  const location=value(formData,"location");
+  const copyParticipants=formData.get("copyParticipants")==="on";
+  const copyAgenda=formData.get("copyAgenda")==="on";
+
+  if(!sourceMeetingId || !title || !startsAt){
+    redirect(`/sitzungen/${sourceMeetingId}?error=template_missing`);
+  }
+
+  const rows=await sql`
+    WITH source_meeting AS (
+      SELECT *
+      FROM meetings
+      WHERE id=${sourceMeetingId}::uuid
+        AND deleted_at IS NULL
+      LIMIT 1
+    ),
+    new_event AS (
+      INSERT INTO club_events (
+        title,event_type,starts_at,location,source,description
+      )
+      SELECT
+        ${title},
+        'board',
+        (${startsAt}::timestamp AT TIME ZONE 'Europe/Berlin'),
+        ${location || null},
+        'club',
+        NULL
+      FROM source_meeting
+      RETURNING id,title,starts_at,location
+    ),
+    new_meeting AS (
+      INSERT INTO meetings (
+        event_id,title,starts_at,location,status,notes,
+        meeting_mode,chair_member_id,minute_taker_member_id
+      )
+      SELECT
+        ne.id,ne.title,ne.starts_at,ne.location,'planned',NULL,
+        COALESCE(sm.meeting_mode,'in_person'),
+        sm.chair_member_id,
+        sm.minute_taker_member_id
+      FROM new_event ne
+      CROSS JOIN source_meeting sm
+      RETURNING id
+    ),
+    copied_participants AS (
+      INSERT INTO meeting_attendees (
+        meeting_id,member_id,attendance,voting_eligible
+      )
+      SELECT
+        nm.id,
+        ma.member_id,
+        'invited',
+        ma.voting_eligible
+      FROM new_meeting nm
+      JOIN meeting_attendees ma ON ma.meeting_id=${sourceMeetingId}::uuid
+      JOIN members m ON m.id=ma.member_id AND m.status='active'
+      WHERE ${copyParticipants}
+      ON CONFLICT (meeting_id,member_id) DO NOTHING
+    ),
+    copied_agenda AS (
+      INSERT INTO agenda_items (
+        meeting_id,position,title,description,status,
+        announced_with_invitation,decision_basis_note,agenda_type
+      )
+      SELECT
+        nm.id,
+        ai.position,
+        ai.title,
+        ai.description,
+        'open',
+        true,
+        NULL,
+        ai.agenda_type
+      FROM new_meeting nm
+      JOIN agenda_items ai ON ai.meeting_id=${sourceMeetingId}::uuid
+      WHERE ${copyAgenda}
+      ORDER BY ai.position
+    )
+    SELECT id::text FROM new_meeting
+  `;
+
+  const newMeetingId=rows[0]?.id ? String(rows[0].id) : "";
+  if(!newMeetingId){
+    redirect(`/sitzungen/${sourceMeetingId}?error=template_copy`);
+  }
+
+  await writeAudit(actor.id,"meeting.cloned_as_template","meeting",newMeetingId,{
+    sourceMeetingId,
+    title,
+    startsAt,
+    location:location || null,
+    copyParticipants,
+    copyAgenda,
+  });
+
+  revalidatePath("/sitzungen");
+  revalidatePath("/kalender");
+  revalidatePath("/");
+  redirect(`/sitzungen/${newMeetingId}?created=1&template=1`);
+}
