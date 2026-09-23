@@ -16,6 +16,7 @@ export async function updateResolutionStatusAction(formData: FormData) {
   if (!sql) redirect("/beschluesse?error=database");
 
   const id=value(formData,"id");
+  const sourceSystem=value(formData,"sourceSystem")==="v3" ? "v3" : "legacy";
   const statusRaw=value(formData,"status");
   const status=["open","in_progress","implemented","withdrawn"].includes(statusRaw)
     ? statusRaw
@@ -23,12 +24,19 @@ export async function updateResolutionStatusAction(formData: FormData) {
 
   if (!id) redirect("/beschluesse?error=missing");
 
-  const beforeRows=await sql`
-    SELECT id::text,title,status,decision_outcome
-    FROM resolutions
-    WHERE id=${id}::uuid
-    LIMIT 1
-  `;
+  const beforeRows=sourceSystem==="v3"
+    ? await sql`
+        SELECT id::text,title,implementation_status AS status,decision_outcome
+        FROM meeting_v3_resolutions
+        WHERE id=${id}::uuid
+        LIMIT 1
+      `
+    : await sql`
+        SELECT id::text,title,status,decision_outcome
+        FROM resolutions
+        WHERE id=${id}::uuid
+        LIMIT 1
+      `;
   const before=beforeRows[0];
   if (!before) redirect("/beschluesse?error=missing");
 
@@ -39,22 +47,36 @@ export async function updateResolutionStatusAction(formData: FormData) {
     redirect("/beschluesse?error=withdrawn");
   }
 
-  await sql`
-    UPDATE resolutions
-    SET
-      status=${status},
-      implemented_at=CASE
-        WHEN ${status}='implemented' THEN COALESCE(implemented_at,now())
-        ELSE NULL
-      END
-    WHERE id=${id}::uuid
-  `;
+  if(sourceSystem==="v3"){
+    await sql`
+      UPDATE meeting_v3_resolutions
+      SET
+        implementation_status=${status},
+        implemented_at=CASE
+          WHEN ${status}='implemented' THEN COALESCE(implemented_at,now())
+          ELSE NULL
+        END
+      WHERE id=${id}::uuid
+    `;
+  }else{
+    await sql`
+      UPDATE resolutions
+      SET
+        status=${status},
+        implemented_at=CASE
+          WHEN ${status}='implemented' THEN COALESCE(implemented_at,now())
+          ELSE NULL
+        END
+      WHERE id=${id}::uuid
+    `;
+  }
 
+  const taskSource=sourceSystem==="v3" ? "meeting_v3_resolution" : "resolution";
   if (status==="implemented") {
     await sql`
       UPDATE tasks
       SET status='done',completed_at=COALESCE(completed_at,now())
-      WHERE source_type='resolution'
+      WHERE source_type=${taskSource}
         AND source_id=${id}::uuid
         AND deleted_at IS NULL
         AND status<>'cancelled'
@@ -63,7 +85,7 @@ export async function updateResolutionStatusAction(formData: FormData) {
     await sql`
       UPDATE tasks
       SET status='cancelled',completed_at=NULL
-      WHERE source_type='resolution'
+      WHERE source_type=${taskSource}
         AND source_id=${id}::uuid
         AND deleted_at IS NULL
         AND status<>'done'
@@ -72,7 +94,7 @@ export async function updateResolutionStatusAction(formData: FormData) {
     await sql`
       UPDATE tasks
       SET status='in_progress',completed_at=NULL
-      WHERE source_type='resolution'
+      WHERE source_type=${taskSource}
         AND source_id=${id}::uuid
         AND deleted_at IS NULL
         AND status<>'cancelled'
@@ -81,14 +103,15 @@ export async function updateResolutionStatusAction(formData: FormData) {
     await sql`
       UPDATE tasks
       SET status='open',completed_at=NULL
-      WHERE source_type='resolution'
+      WHERE source_type=${taskSource}
         AND source_id=${id}::uuid
         AND deleted_at IS NULL
         AND status<>'cancelled'
     `;
   }
 
-  await writeAudit(actor.id,"resolution.status_changed","resolution",id,{
+  await writeAudit(actor.id,"resolution.status_changed",sourceSystem==="v3" ? "meeting_v3_resolution" : "resolution",id,{
+    sourceSystem,
     title:String(before.title ?? ""),
     before:String(before.status ?? ""),
     after:status,
@@ -107,20 +130,30 @@ export async function updateResolutionImplementationAction(formData: FormData) {
   if (!sql) redirect("/beschluesse?error=database");
 
   const id=value(formData,"id");
+  const sourceSystem=value(formData,"sourceSystem")==="v3" ? "v3" : "legacy";
   const implementationNotes=value(formData,"implementationNotes");
   if (!id) redirect("/beschluesse?error=missing");
 
-  const rows=await sql`
-    UPDATE resolutions
-    SET implementation_notes=${implementationNotes || null}
-    WHERE id=${id}::uuid
-      AND COALESCE(decision_outcome,'accepted')<>'rejected'
-    RETURNING title
-  `;
+  const rows=sourceSystem==="v3"
+    ? await sql`
+        UPDATE meeting_v3_resolutions
+        SET implementation_notes=${implementationNotes || null}
+        WHERE id=${id}::uuid
+          AND decision_outcome<>'rejected'
+        RETURNING title
+      `
+    : await sql`
+        UPDATE resolutions
+        SET implementation_notes=${implementationNotes || null}
+        WHERE id=${id}::uuid
+          AND COALESCE(decision_outcome,'accepted')<>'rejected'
+        RETURNING title
+      `;
 
   if (!rows.length) redirect("/beschluesse?error=missing");
 
-  await writeAudit(actor.id,"resolution.implementation_updated","resolution",id,{
+  await writeAudit(actor.id,"resolution.implementation_updated",sourceSystem==="v3" ? "meeting_v3_resolution" : "resolution",id,{
+    sourceSystem,
     title:String(rows[0].title),
     hasNotes:Boolean(implementationNotes),
   });
@@ -137,6 +170,7 @@ export async function createResolutionTaskAction(formData: FormData) {
   if (!sql) redirect("/beschluesse?error=database");
 
   const resolutionId=value(formData,"resolutionId");
+  const sourceSystem=value(formData,"sourceSystem")==="v3" ? "v3" : "legacy";
   const title=value(formData,"title");
   const ownerMemberId=value(formData,"ownerMemberId");
   const dueDate=value(formData,"dueDate");
@@ -144,55 +178,83 @@ export async function createResolutionTaskAction(formData: FormData) {
 
   if (!resolutionId || !title) redirect("/beschluesse?error=missing");
 
-  const rows=await sql`
-    INSERT INTO tasks (
-      title,description,category,status,priority,
-      due_date,owner_member_id,source_type,source_id
-    )
-    SELECT
-      ${title},
-      ${description || null},
-      'Beschluss',
-      'open',
-      'medium',
-      ${dueDate || null}::date,
-      ${ownerMemberId || null}::uuid,
-      'resolution',
-      ${resolutionId}::uuid
-    WHERE EXISTS (
-      SELECT 1 FROM resolutions r
-      WHERE r.id=${resolutionId}::uuid
-        AND COALESCE(r.decision_outcome,'accepted')='accepted'
-        AND r.status NOT IN ('implemented','withdrawn')
-    )
-    AND NOT EXISTS (
-      SELECT 1
-      FROM tasks
-      WHERE source_type='resolution'
-        AND source_id=${resolutionId}::uuid
-        AND status<>'cancelled'
-    )
-    RETURNING id::text
-  `;
+  const taskSource=sourceSystem==="v3" ? "meeting_v3_resolution" : "resolution";
+  const rows=sourceSystem==="v3"
+    ? await sql`
+        INSERT INTO tasks (
+          title,description,category,status,priority,
+          due_date,owner_member_id,source_type,source_id
+        )
+        SELECT
+          ${title},${description || null},'Beschluss','open','medium',
+          ${dueDate || null}::date,${ownerMemberId || null}::uuid,
+          ${taskSource},${resolutionId}::uuid
+        WHERE EXISTS (
+          SELECT 1 FROM meeting_v3_resolutions r
+          WHERE r.id=${resolutionId}::uuid
+            AND r.decision_outcome='accepted'
+            AND r.implementation_status NOT IN ('implemented','withdrawn')
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM tasks
+          WHERE source_type=${taskSource}
+            AND source_id=${resolutionId}::uuid
+            AND status<>'cancelled'
+            AND deleted_at IS NULL
+        )
+        RETURNING id::text
+      `
+    : await sql`
+        INSERT INTO tasks (
+          title,description,category,status,priority,
+          due_date,owner_member_id,source_type,source_id
+        )
+        SELECT
+          ${title},${description || null},'Beschluss','open','medium',
+          ${dueDate || null}::date,${ownerMemberId || null}::uuid,
+          ${taskSource},${resolutionId}::uuid
+        WHERE EXISTS (
+          SELECT 1 FROM resolutions r
+          WHERE r.id=${resolutionId}::uuid
+            AND COALESCE(r.decision_outcome,'accepted')='accepted'
+            AND r.status NOT IN ('implemented','withdrawn')
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM tasks
+          WHERE source_type=${taskSource}
+            AND source_id=${resolutionId}::uuid
+            AND status<>'cancelled'
+            AND deleted_at IS NULL
+        )
+        RETURNING id::text
+      `;
 
   if (!rows.length) {
     redirect("/beschluesse?error=task_unavailable");
   }
 
-  if (rows.length) {
+  if(sourceSystem==="v3"){
+    await sql`
+      UPDATE meeting_v3_resolutions
+      SET implementation_status='in_progress'
+      WHERE id=${resolutionId}::uuid
+        AND implementation_status='open'
+    `;
+  }else{
     await sql`
       UPDATE resolutions
       SET status='in_progress'
       WHERE id=${resolutionId}::uuid
         AND status='open'
     `;
-
-    await writeAudit(actor.id,"resolution.task_created","resolution",resolutionId,{
-      taskId:String(rows[0].id),
-      ownerMemberId:ownerMemberId || null,
-      dueDate:dueDate || null,
-    });
   }
+
+  await writeAudit(actor.id,"resolution.task_created",sourceSystem==="v3" ? "meeting_v3_resolution" : "resolution",resolutionId,{
+    sourceSystem,
+    taskId:String(rows[0].id),
+    ownerMemberId:ownerMemberId || null,
+    dueDate:dueDate || null,
+  });
 
   revalidatePath("/beschluesse");
   revalidatePath("/aufgaben");
