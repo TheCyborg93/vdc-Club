@@ -994,3 +994,50 @@ body.meeting-focus-mode .meeting-control-hero{position:sticky;top:0;z-index:18;b
     width:100%;
   }
 }
+
+
+/* Live officer handover */
+.meeting-live-officers{
+  overflow:hidden;
+}
+.meeting-live-officers>summary{
+  list-style:none;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:14px;
+  padding:13px 15px;
+  cursor:pointer;
+}
+.meeting-live-officers>summary::-webkit-details-marker{display:none}
+.meeting-live-officers>summary>div>strong,
+.meeting-live-officers>summary>div>small{display:block}
+.meeting-live-officers>summary>div>strong{margin-top:3px}
+.meeting-live-officers>summary>div>small{
+  margin-top:4px;
+  color:var(--muted);
+  font-size:clamp(8px,.5vw,10px);
+}
+.meeting-live-officers>summary>b{
+  width:28px;
+  height:28px;
+  display:grid;
+  place-items:center;
+  border-radius:8px;
+  background:rgba(68,224,176,.06);
+  color:var(--accent);
+}
+.meeting-live-officers[open]>summary{
+  border-bottom:1px solid var(--line);
+}
+.meeting-live-officer-form{
+  padding:13px 15px 15px;
+}
+@media(max-width:640px){
+  .meeting-live-officer-form{
+    grid-template-columns:1fr;
+  }
+  .meeting-live-officer-form button{
+    width:100%;
+  }
+}
