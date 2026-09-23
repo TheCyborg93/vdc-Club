@@ -1105,7 +1105,7 @@ export async function createResolutionFromAgendaAction(formData: FormData) {
     redirect(`/sitzungen/${meetingId}?top=${agendaItemId}&error=roll_call_details`);
   }
 
-  if ([yes,no,abstain].some((number)=>!Number.isFinite(number) || number<0)) {
+  if ([yes,no,abstain].some((number)=>!Number.isFinite(number) || !Number.isInteger(number) || number<0)) {
     redirect(`/sitzungen/${meetingId}?top=${agendaItemId}&error=vote_mismatch`);
   }
   const safeYes=yes;
@@ -1116,6 +1116,11 @@ export async function createResolutionFromAgendaAction(formData: FormData) {
     SELECT
       ai.announced_with_invitation,
       ai.decision_basis_note,
+      ai.agenda_type,
+      EXISTS(
+        SELECT 1 FROM resolutions existing
+        WHERE existing.agenda_item_id=ai.id
+      ) AS has_resolution,
       m.quorum_confirmed,
       (
         SELECT count(*)::int
@@ -1152,6 +1157,12 @@ export async function createResolutionFromAgendaAction(formData: FormData) {
   `;
   const formal=formalRows[0];
   if (!formal) redirect(`/sitzungen/${meetingId}?error=meeting_locked`);
+  if (String(formal.agenda_type)!=="decision") {
+    redirect(`/sitzungen/${meetingId}?top=${agendaItemId}&error=resolution_not_decision`);
+  }
+  if (formal.has_resolution) {
+    redirect(`/sitzungen/${meetingId}?top=${agendaItemId}&error=resolution_exists`);
+  }
   if (formal.quorum_confirmed!==true) {
     redirect(`/sitzungen/${meetingId}?top=${agendaItemId}&error=not_quorate_for_resolutions`);
   }
@@ -1172,7 +1183,7 @@ export async function createResolutionFromAgendaAction(formData: FormData) {
     createTaskRequested &&
     hasPermission(actor.roles, "tasks.write");
 
-  await sql`
+  const created=await sql`
     WITH counter AS (
       INSERT INTO resolution_counters (year, last_number)
       VALUES (EXTRACT(YEAR FROM CURRENT_DATE)::int, 1)
@@ -1221,6 +1232,10 @@ export async function createResolutionFromAgendaAction(formData: FormData) {
           AND m.deleted_at IS NULL
           AND m.status='running'
       )
+      AND NOT EXISTS (
+        SELECT 1 FROM resolutions existing
+        WHERE existing.agenda_item_id=${agendaItemId}::uuid
+      )
       RETURNING id, title
     ),
     new_task AS (
@@ -1234,30 +1249,32 @@ export async function createResolutionFromAgendaAction(formData: FormData) {
         'Beschluss',
         'open',
         'medium',
-        ${taskDueDate || null}::date,
-        ${taskOwner || null}::uuid,
+        NULLIF(${taskDueDate}, '')::date,
+        NULLIF(${taskOwner}, '')::uuid,
         'resolution',
         id
       FROM new_resolution
       WHERE ${createTask}
       RETURNING id
+    ),
+    agenda_done AS (
+      UPDATE agenda_items
+      SET
+        status='done',
+        result_code='resolution',
+        completed_at=now(),
+        updated_at=now()
+      WHERE id=${agendaItemId}::uuid
+        AND meeting_id=${meetingId}::uuid
+        AND EXISTS (SELECT 1 FROM new_resolution)
+      RETURNING id
     )
-    UPDATE agenda_items
-    SET status = 'done'
-    WHERE id = ${agendaItemId}::uuid
-      AND meeting_id = ${meetingId}::uuid
-      AND EXISTS (SELECT 1 FROM new_resolution)
+    SELECT id::text FROM new_resolution
   `;
 
-  const created=await sql`
-    SELECT id::text
-    FROM resolutions
-    WHERE meeting_id=${meetingId}::uuid
-      AND agenda_item_id=${agendaItemId}::uuid
-    ORDER BY created_at DESC
-    LIMIT 1
-  `;
-  if (!created.length) redirect(`/sitzungen/${meetingId}?error=meeting_locked`);
+  if (!created.length) {
+    redirect(`/sitzungen/${meetingId}?top=${agendaItemId}&error=resolution_exists`);
+  }
 
   await writeAudit(actor.id,"resolution.created","resolution",String(created[0].id),{
     meetingId,
@@ -1711,7 +1728,7 @@ export async function updateMeetingFormalitiesAction(formData:FormData) {
     UPDATE meetings
     SET
       meeting_mode=${meetingMode},
-      invited_at=CASE WHEN ${invitedAt}='' THEN NULL ELSE (${invitedAt}::timestamp AT TIME ZONE 'Europe/Berlin') END,
+      invited_at=(${invitedAt || null}::timestamp AT TIME ZONE 'Europe/Berlin'),
       invitation_method=${invitationMethod || null},
       invitation_timely=${invitationTimely},
       agenda_sent_with_invitation=${agendaSentWithInvitation},
