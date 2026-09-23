@@ -5,5 +5,8 @@
       "path": "/api/cron/club-sync",
       "schedule": "0 5 * * *"
     }
-  ]
+  ],
+  "git": {
+    "deploymentEnabled": false
+  }
 }
