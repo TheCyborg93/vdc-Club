@@ -108,12 +108,15 @@ export async function createMeetingV3Action(formData: FormData) {
       WHERE is_active=true
         AND meeting_type=${meetingType}
         AND (
-          (${templateId || null}::uuid IS NOT NULL AND id=${templateId || null}::uuid)
-          OR
-          (${templateId || null}::uuid IS NULL AND is_default=true)
+          id=${templateId || null}::uuid
+          OR is_default=true
         )
       ORDER BY
-        CASE WHEN id=${templateId || null}::uuid THEN 0 ELSE 1 END,
+        CASE
+          WHEN id=${templateId || null}::uuid THEN 0
+          WHEN is_default=true THEN 1
+          ELSE 2
+        END,
         created_at
       LIMIT 1
     ),
